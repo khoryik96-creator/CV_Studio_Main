@@ -14800,7 +14800,7 @@ def _linkedin_sourcer_provider_call(model, brief, task, schema, observed):
         raise error from None
 
 
-from cvstudio_people import SourcerCandidates, PeopleError, workbook as _people_workbook, CANDIDATE_FIELDS
+from cvstudio_people import SourcerCandidates, PeopleError, workbook as _people_workbook
 _SOURCER_CANDIDATES = SourcerCandidates(load=lambda:_cv_secure_load('sourcer_candidates'),save=lambda value:_cv_secure_save('sourcer_candidates',value))
 _LINKEDIN_SOURCER = LinkedInSourcerService(
     key_available=lambda: bool(_resolve_request_api_key({"provider": "deepseek"})),

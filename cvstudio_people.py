@@ -97,8 +97,9 @@ def filter_candidates(rows, query='', search='', *, min_score=0, read='', sort='
     ``folder`` is '*' for every folder, '' for Unfiled, '!trash' for Trash or
     one folder's name; Trash only appears when it is chosen.
     """
-    if (type(min_score) is not int or not 0 <= min_score <= 100 or read not in CANDIDATE_READS or
-            sort not in CANDIDATE_SORTS or order not in {'asc', 'desc'} or not isinstance(shortlisted, bool)):
+    if (type(min_score) is not int or not 0 <= min_score <= 100 or not isinstance(read, str) or read not in CANDIDATE_READS or
+            not isinstance(sort, str) or sort not in CANDIDATE_SORTS or order not in ('asc', 'desc') or
+            not isinstance(shortlisted, bool) or not isinstance(folder, str)):
         raise PeopleError('Choose a valid candidate sort or filter.')
     if folder not in {'*', '!trash'}:
         folder = _folder(folder, allow_unfiled=True)
@@ -134,6 +135,12 @@ def employment_label(person):
     return start+(' to Present' if person.get('current') is True else ' to '+label(person['left']) if person.get('current') is False else '') if start else 'Not confirmed' if person.get('employment_status')=='not_shown' else 'Not checked'
 
 
+# How the owner organised a candidate; a new assessment keeps every field.
+_ORGANISATION = {'folder': '', 'shortlisted': False, 'deleted': False, 'deleted_at': ''}
+# Folder names shown by the dashboard itself, so they cannot also be folders.
+_BUILT_IN_FOLDERS = {'unfiled', 'trash', 'all folders'}
+
+
 class SourcerCandidates:
     MAX_ROWS = 5000
     MAX_BYTES = 8 * 1024 * 1024
@@ -143,19 +150,23 @@ class SourcerCandidates:
         self.load, self.save = load, save
         self.lock = threading.RLock()
 
-    def _read(self):
-        return self._load()[0]
+    @staticmethod
+    def _size(value):
+        # Keys starting with '_' are added by the secure loader (for example
+        # '_storage'), never saved, so reads and writes measure the same bytes.
+        return len(json.dumps({key: item for key, item in value.items() if not str(key).startswith('_')}).encode())
 
     def _load(self):
-        """Saved rows and folders. Folders, shortlist and Trash are optional
-        additions to version 1, so earlier saved dashboards still read."""
+        """Saved rows and folders. Version 1 is a dashboard nobody organised;
+        version 2 adds folders, shortlist and Trash, so an older CV Studio
+        refuses it instead of rewriting it without them."""
         try:
             value = self.load()
             if not value:
                 return {}, []
             rows, folders = value['rows'], value.get('folders', [])
-            if (value['version'] != 1 or not isinstance(rows, dict) or len(rows) > self.MAX_ROWS or
-                    len(json.dumps(value).encode()) > self.MAX_BYTES or not isinstance(folders, list) or
+            if (type(value['version']) is not int or value['version'] not in (1, 2) or not isinstance(rows, dict) or len(rows) > self.MAX_ROWS or
+                    self._size(value) > self.MAX_BYTES or not isinstance(folders, list) or
                     len(folders) > self.MAX_FOLDERS or len(set(map(str, folders))) != len(folders) or
                     any(not isinstance(name, str) or not name or _folder(name) != name for name in folders)):
                 raise ValueError()
@@ -189,8 +200,10 @@ class SourcerCandidates:
             raise PeopleError('Saved candidates could not be read securely. Keep the existing files and check local storage.') from None
 
     def _write(self, rows, folders):
-        value = {'version':1,'rows':rows,'folders':folders}
-        if len(rows) > self.MAX_ROWS or len(json.dumps(value).encode()) > self.MAX_BYTES:
+        organised = bool(folders) or any(row.get(name, default) != default for row in rows.values()
+                                         for name, default in _ORGANISATION.items())
+        value = {'version': 2 if organised else 1, 'rows': rows, 'folders': folders}
+        if len(rows) > self.MAX_ROWS or self._size(value) > self.MAX_BYTES:
             raise PeopleError('The candidate dashboard is full. Export the current search; its results are still shown in Search.')
         try:
             self.save(value)
@@ -213,15 +226,31 @@ class SourcerCandidates:
                     saved_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
                     notes=old['notes'] if old else '', revision=old['revision']+1 if old else 1)
                 # A new assessment keeps how the owner organised this candidate.
-                for name, default in (('folder', ''), ('shortlisted', False), ('deleted', False), ('deleted_at', '')):
+                for name, default in _ORGANISATION.items():
                     rows[key][name] = old.get(name, default) if old else default
             if candidates:
                 self._write(rows, folders)
 
+    @staticmethod
+    def _listed(rows):
+        return sorted(({**row,'key':key} for key,row in rows.items()),
+                      key=lambda r:(r['saved_at'],r['run_id'],r['score']), reverse=True)
+
+    @staticmethod
+    def _folder_names(rows, folders):
+        named = set(folders) | {row.get('folder', '') for row in rows.values()}
+        # The name itself breaks ties, so the order is the same on every run.
+        return sorted(named - {''}, key=lambda name: (_sort_key(name), name))
+
     def list(self):
         with self.lock:
-            return sorted(({**row,'key':key} for key,row in self._read().items()),
-                          key=lambda r:(r['saved_at'],r['run_id'],r['score']), reverse=True)
+            return self._listed(self._load()[0])
+
+    def snapshot(self):
+        """Candidates and folders from one read of the store."""
+        with self.lock:
+            rows, folders = self._load()
+            return {'candidates': self._listed(rows), 'folders': self._folder_names(rows, folders)}
 
     def note(self, key, revision, notes):
         if not isinstance(key,str) or not re.fullmatch(r'[a-f0-9]{64}',key) or type(revision) is not int or not isinstance(notes,str) or len(notes)>2000 or '\x00' in notes:
@@ -238,9 +267,7 @@ class SourcerCandidates:
 
     def folders(self):
         with self.lock:
-            rows, folders = self._load()
-            named = set(folders) | {row.get('folder', '') for row in rows.values()}
-            return sorted(named - {''}, key=_sort_key)
+            return self._folder_names(*self._load())
 
     def _selected(self, rows, items, allow_empty=False):
         """Selected keys and revisions; every one must still be current."""
@@ -258,6 +285,8 @@ class SourcerCandidates:
 
     def create_folder(self, name):
         name = _folder(name)
+        if name.casefold() in _BUILT_IN_FOLDERS:
+            raise PeopleError('Unfiled, Trash and All folders are built in. Choose another folder name.')
         with self.lock:
             rows, folders = self._load()
             if name not in folders:

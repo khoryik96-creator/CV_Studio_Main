@@ -1,4 +1,5 @@
 import copy
+import json
 from io import BytesIO
 from types import SimpleNamespace
 import pytest
@@ -351,3 +352,53 @@ def test_candidate_organising_actions_and_export_through_the_route():
         assert post(action='export_candidates',folder='a\nb').status_code==400
         assert post(action='candidate_folder_delete',name='Finance',items=[{'key':first['key'],'revision':current()['revision']}]).get_json()=={'changed':1}
         assert post(action='candidates').get_json()['folders']==[]
+
+
+def test_reads_and_writes_measure_the_same_bytes_near_the_limit(archive):
+    # The secure loader adds '_storage', which is never saved, so a dashboard
+    # written just under the limit must read back.
+    store,data=archive;run=SimpleNamespace(id='a'*32,brief='SAP')
+    store.remember(run,[candidate()],'screen')
+    loaded=SourcerCandidates(load=lambda:{**copy.deepcopy(data),'_storage':'machine_bound_file'},save=lambda value:(data.clear(),data.update(copy.deepcopy(value))))
+    loaded.MAX_BYTES=len(json.dumps(data).encode())
+    assert loaded.list()[0]['name']=='Example Person','a dashboard exactly at the limit reads'
+    row=loaded.list()[0]
+    with pytest.raises(PeopleError,match='full'):loaded.note(row['key'],row['revision'],'x'*5)
+    assert loaded.list()[0]['notes']=='','a write over the limit is refused and the dashboard still reads'
+
+
+def test_organised_dashboards_are_version_two_so_older_builds_refuse_them(archive):
+    store,data=archive;run=SimpleNamespace(id='a'*32,brief='SAP')
+    store.remember(run,[candidate()],'screen')
+    assert data['version']==1,'a dashboard nobody organised stays readable by older builds'
+    store.create_folder('Finance');assert data['version']==2
+    store.delete_folder('Finance',[]);assert data['version']==1
+    row=store.list()[0];store.shortlist(row['key'],row['revision'],True);assert data['version']==2
+    for version in (0,3,'2',True):
+        broken={**copy.deepcopy(data),'version':version}
+        with pytest.raises(PeopleError,match='read securely'):
+            SourcerCandidates(load=lambda broken=broken:copy.deepcopy(broken),save=lambda _:pytest.fail('must not overwrite')).list()
+
+
+def test_built_in_names_one_read_and_a_stable_folder_order(archive):
+    store,data=archive;run=SimpleNamespace(id='a'*32,brief='SAP')
+    store.remember(run,[candidate()],'screen')
+    for name in ['Unfiled','trash',' TRASH ','All folders']:
+        with pytest.raises(PeopleError,match='built in'):store.create_folder(name)
+    for name in ['finance','Finance','FINANCE','Team 01','Team 1','Café','Cafe']:
+        store.create_folder(name)
+    assert store.folders()==['Cafe','Café','FINANCE','Finance','finance','Team 01','Team 1'],'equal sort keys fall back to the name itself'
+    loads=[]
+    counted=SourcerCandidates(load=lambda:(loads.append(1),copy.deepcopy(data))[1],save=lambda _:None)
+    snapshot=counted.snapshot()
+    assert len(loads)==1 and snapshot['folders']==store.folders() and [row['key'] for row in snapshot['candidates']]==[row['key'] for row in store.list()]
+
+
+def test_non_text_filters_and_actions_are_input_errors():
+    for bad in [dict(folder=[]),dict(folder={}),dict(read=[]),dict(sort={}),dict(order=['asc']),dict(folder=None)]:
+        with pytest.raises(PeopleError):filter_candidates([],**bad)
+    from isolated_app import load_app
+    app=load_app();browser=app.app.test_client();browser.get('/');headers={'X-CV-Studio-Request':'1'}
+    for body in [{'action':'export_candidates','folder':[]},{'action':'export_candidates','read':{}},{'action':['candidates']},{'action':{'x':1}}]:
+        response=browser.post('/linkedin-sourcer',json=body,headers=headers)
+        assert response.status_code==400,body

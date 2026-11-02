@@ -342,31 +342,35 @@ class JobAdderClientsService:
             raise JobAdderClientsError("JobAdder returned an unexpected company list.", "JOBADDER_CLIENTS_SERVICE", 502)
         total = data.get("totalCount")
         total = total if type(total) is int and total >= 0 else None
-        signed, base, rows = set(entry["statuses"]), self.web_base(), []
+        signed, base, rows, unsigned = set(entry["statuses"]), self.web_base(), [], 0
         for item in data["items"]:
             if not isinstance(item, dict) or type(item.get("companyId")) is not int or item["companyId"] <= 0:
                 continue
             status = item.get("status") if isinstance(item.get("status"), dict) else {}
-            # JobAdder already filtered by the chosen statuses. A company listed
-            # with another status is still left out in case the filter was
-            # ignored, and only a chosen status is ever shown as its label. A
-            # company listed without a status is shown unlabelled: Follow reads
-            # it again and refuses it unless its status is a chosen one.
-            listed = status.get("statusId")
-            if listed is not None and listed not in signed:
+            # JobAdder's list always carries each company's status (StatusModel
+            # requires statusId), so only a chosen status counts, even if the
+            # status filter were ignored upstream.
+            if status.get("statusId") not in signed:
+                unsigned += 1
                 continue
             name = _text(item.get("name"), 200)
             if not name:
                 continue
             owner = item.get("owner") if isinstance(item.get("owner"), dict) else {}
-            rows.append({"company_id": item["companyId"], "name": name, "status": _text(status.get("name"), 100) if listed is not None else "",
+            rows.append({"company_id": item["companyId"], "name": name, "status": _text(status.get("name"), 100),
                          "owner": " ".join(part for part in (_text(owner.get("firstName"), 60), _text(owner.get("lastName"), 60)) if part),
                          "followed": str(item["companyId"]) in entry["followed"],
                          "jobadder_url": base + "/companies/" + str(item["companyId"])})
         returned = len(data["items"])
+        if returned and unsigned == returned:
+            # With the status filter applied, every listed company has a chosen
+            # status. A full page with none means JobAdder ignored the filter,
+            # so paging through it would only show unrelated companies.
+            raise JobAdderClientsError("JobAdder returned companies without your signed statuses, so the list could not be "
+                                       "trusted. Try again later; nothing was changed.", "JOBADDER_CLIENTS_SERVICE", 502)
         more = returned > 0 and (offset + returned < total if total is not None else returned >= PAGE_SIZE)
-        # ``checked`` lets the page explain a page where JobAdder listed
-        # companies but none had a chosen status.
+        # ``checked`` is how many companies JobAdder listed on this page, for
+        # the page range when an occasional one was left out.
         return {"account": scope, "companies": rows, "offset": offset, "total": total, "checked": returned,
                 "next_offset": offset + returned if more and offset + returned <= MAX_OFFSET else None}
 

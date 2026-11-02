@@ -261,6 +261,18 @@ REVIEW_REF_SCHEMA = {'type':'object', 'properties':{'candidates':{'type':'array'
     'required':['candidates'],'additionalProperties':False}
 
 
+# Saved-candidate dashboard actions; each name maps to exactly one store call.
+_CANDIDATE_ACTIONS = {
+    'candidates': lambda store, data: store.snapshot(),
+    'candidate_note': lambda store, data: {'candidate': store.note(data.get('key'), data.get('revision'), data.get('notes'))},
+    'candidate_shortlist': lambda store, data: {'candidate': store.shortlist(data.get('key'), data.get('revision'), data.get('shortlisted'))},
+    'candidate_move': lambda store, data: store.move(data.get('items'), data.get('folder')),
+    'candidate_trash': lambda store, data: store.trash(data.get('items'), data.get('deleted')),
+    'candidate_folder_create': lambda store, data: store.create_folder(data.get('name')),
+    'candidate_folder_delete': lambda store, data: store.delete_folder(data.get('name'), data.get('items')),
+}
+
+
 @dataclass
 class Run:
     brief: str
@@ -299,26 +311,14 @@ class LinkedInSourcerService:
         if not isinstance(data, dict):
             raise SourcerError("A JSON request is required.")
         action = data.get("action")
-        if action in {'candidates', 'candidate_note', 'candidate_shortlist', 'candidate_move', 'candidate_trash',
-                      'candidate_folder_create', 'candidate_folder_delete'}:
+        if not isinstance(action, str):
+            raise SourcerError("This sourcing action is not supported.")
+        if action in _CANDIDATE_ACTIONS:
             if not self.candidates:
                 raise SourcerError('The candidate dashboard is unavailable.')
             from cvstudio_people import PeopleError
-            store = self.candidates
             try:
-                if action == 'candidate_note':
-                    return {'candidate':store.note(data.get('key'),data.get('revision'),data.get('notes'))}
-                if action == 'candidate_shortlist':
-                    return {'candidate':store.shortlist(data.get('key'),data.get('revision'),data.get('shortlisted'))}
-                if action == 'candidate_move':
-                    return store.move(data.get('items'),data.get('folder'))
-                if action == 'candidate_trash':
-                    return store.trash(data.get('items'),data.get('deleted'))
-                if action == 'candidate_folder_create':
-                    return store.create_folder(data.get('name'))
-                if action == 'candidate_folder_delete':
-                    return store.delete_folder(data.get('name'),data.get('items'))
-                return {'candidates':store.list(),'folders':store.folders()}
+                return _CANDIDATE_ACTIONS[action](self.candidates, data)
             except PeopleError as exc:
                 raise SourcerError(str(exc)) from None
         if action == "start":

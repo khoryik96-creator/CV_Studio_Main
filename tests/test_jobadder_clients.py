@@ -298,24 +298,27 @@ def test_company_list_needs_a_status_choice_and_uses_the_chosen_status_filter():
         assert error.value.status == 502
 
 
-def test_a_company_listed_without_a_status_is_shown_unlabelled_and_checked_on_follow():
+def test_only_chosen_statuses_are_listed_and_an_unfiltered_page_is_an_error():
     service, client, _vault, _state = setup()
     signed(service, client)
-    bare, nameless = company(15, name="Unlabelled Client"), company(16, name="Status Without Id")
+    bare, nameless = company(15, name="No Status"), company(16, name="Status Without Id")
     del bare["status"]
     nameless["status"] = {"name": "Signed Client"}
-    client.replies["companies"] = {"items": [bare, nameless, company(12, status_id=1, name="Not Signed")], "totalCount": 3}
+    # JobAdder's StatusModel always has a statusId, so a company without one
+    # is never counted as signed, even when others on the page are.
+    client.replies["companies"] = {"items": [bare, nameless, company(12, status_id=1, name="Not Signed"), company(11)], "totalCount": 4}
     result = run(service, {"action": "companies"})
-    # JobAdder filtered the list by the chosen statuses; only an unconfirmed
-    # status is left unlabelled, and another listed status is still left out.
-    assert [(row["name"], row["status"]) for row in result["companies"]] == [("Unlabelled Client", ""), ("Status Without Id", "")]
-    assert result["checked"] == 3
-    client.replies["companies/15"] = company(15, status_id=1, name="Unlabelled Client")
+    assert [row["name"] for row in result["companies"]] == ["Example Client"] and result["checked"] == 4
+    # A page where no company has a chosen status means JobAdder ignored the
+    # filter: a visible error instead of pages of unrelated companies.
+    client.replies["companies"] = {"items": [bare, company(12, status_id=1, name="Not Signed")], "totalCount": 4000}
     with pytest.raises(JobAdderClientsError) as error:
-        run(service, {"action": "follow", "company_id": 15})
-    assert error.value.code == "JOBADDER_CLIENTS_STALE", "Follow refuses it unless its own status is a chosen one"
-    client.replies["companies/15"] = company(15, name="Unlabelled Client")
-    assert [row["company_id"] for row in run(service, {"action": "follow", "company_id": 15})["followed"]] == [15]
+        run(service, {"action": "companies"})
+    assert (error.value.status, error.value.code) == (502, "JOBADDER_CLIENTS_SERVICE")
+    assert "without your signed statuses" in str(error.value)
+    # A page whose only company has no usable name is simply empty.
+    client.replies["companies"] = {"items": [company(13, name="")], "totalCount": 1}
+    assert run(service, {"action": "companies"})["companies"] == []
 
 
 def test_follow_reads_the_company_and_keeps_its_linkedin_page():

@@ -87,3 +87,55 @@ star with a "Shortlisted only" filter was added.
 - **Node:** all test files pass. `test_apollo_broker.js` failed once while the
   demo server and browser ran at the same time, then passed 3 of 3 alone; it
   is not touched by this change.
+
+## Code review round (same version)
+
+A maximum-effort review of v528 and v529 raised 15 findings. All are fixed,
+each with a test that fails when the fix is removed (30 deliberate breaks, all
+caught after three test gaps were closed).
+
+1. **Near-cap dashboards could become unreadable.** The read size check counted
+   the secure loader's `_storage` marker, which is never saved. Reads and
+   writes now measure the same saved keys.
+2. **Reload statuses could revert another window's choice.** It now keeps only
+   ticks the owner changed; untouched boxes follow the saved choice.
+3. **A failed reload after a change was hidden, and an in-flight search refresh
+   left stale folders.** A refresh asked for during another read now waits for
+   a fresh read, and a failed reload is added to the message with the
+   selection cleared.
+4. **Un-starring in "Shortlisted only" left a hidden candidate selected.** Only
+   candidates in the current view stay selected.
+5. **A note save made the selection stale.** The selection now keeps keys and
+   sends the latest revision this window has seen, as Job Leads does.
+6. **Companies without a status were listed as signed.** Reverted to the strict
+   rule; JobAdder ignoring the filter is now a visible error.
+7. **Search used the saved statuses while unsaved ticks were shown.** Search and
+   paging wait for Save statuses.
+8. **Create folder could pick Unfiled in Move to** when the service trimmed the
+   name differently. Move to uses the saved name from the reply.
+9. **A star could be undone by an older read.** Saving a star discards reads in
+   flight, which are repeated.
+10. **An older build could rewrite an organised dashboard and drop folders.**
+    Organised dashboards are saved as version 2, which older builds refuse.
+11. **A list or object folder value caused a 500.** Filters and actions must be
+    text; a bad value is a 400.
+12. **The first-open list's failure mentioned followed clients that did not
+    exist,** and the list was read again on every open. Fixed; it runs once.
+13. **"No more signed clients" contradicted a next page.** An empty page with a
+    next page says "No signed clients on this page."
+14. **`cvstudio_linkedin_sourcer.py` lost its CRLF line endings.** Restored; its
+    diff against master is the real change only.
+15. **Each dashboard refresh read the vault twice.** One `snapshot()` read now
+    returns the candidates and folders together.
+
+Also fixed in passing:
+- The Query/Search listeners drew twice per keystroke.
+- The candidate actions are now one table (no fall-through).
+- The dead `CANDIDATE_FIELDS` import is gone.
+- The module registry declares `people_dashboards` → `job_leads`.
+- After a refused note save, the next Save works once the newer note is shown.
+- Unfiled, Trash and All folders are built-in names.
+- Equal folder sort keys use a fixed order.
+- A stored version of `true` is refused.
+- The new frontend test has a hang guard.
+

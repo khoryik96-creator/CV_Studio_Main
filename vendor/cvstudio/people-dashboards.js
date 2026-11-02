@@ -5,7 +5,7 @@
   const text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;};
   const link=(value,url)=>{const a=text('a',value);if(/^https:\/\/www\.linkedin\.com\/(?:in\/[A-Za-z0-9_%~-]+(?:\/details\/experience\/|\/?)|talent\/(?:hire\/)?profile\/[^/?#]+|jobs\/view\/\d+\/?|company\/[A-Za-z0-9_-]+\/)$/u.test(url || '')){a.href=url;a.target='_blank';a.rel='noopener noreferrer';}return a;};
   let appBusy=false, dateBusy=false, initialized=false,dateOperation='',dateStopped=false,activeDateStop=null;
-  const noteDrafts=new Map(),selection=new Map();
+  const noteDrafts=new Map(),selection=new Set();
   let folderNames=[];
   const boards={HR:{rows:[],page:0,loading:false,exporting:false,generation:0},Candidates:{rows:[],page:0,loading:false,exporting:false,working:false,generation:0}};
   async function api(path,body) {
@@ -192,7 +192,7 @@
       if(kind==='Candidates') {
         const pick=text('td','','people-pick'),box=document.createElement('input'),star=text('button',row.shortlisted?'\u2605':'\u2606','sec');
         box.type='checkbox';box.checked=selection.has(row.key);box.dataset.organise='';box.setAttribute('aria-label','Select '+row.name);
-        box.addEventListener('change',()=>{if(box.checked)selection.set(row.key,row.revision);else selection.delete(row.key);controls('Candidates');});
+        box.addEventListener('change',()=>{if(box.checked)selection.add(row.key);else selection.delete(row.key);controls('Candidates');});
         star.type='button';star.dataset.organise=row.deleted?'trashed':'';star.setAttribute('aria-pressed',String(row.shortlisted===true));
         star.setAttribute('aria-label',(row.shortlisted?'Remove from shortlist: ':'Shortlist ')+row.name);star.title=row.shortlisted?'Shortlisted':'Shortlist';
         star.addEventListener('click',()=>shortlist(row));
@@ -231,7 +231,7 @@
             ++boards.Candidates.generation;Object.assign(boards.Candidates.rows.find(value=>value.key===row.key) || row,data.candidate);
             noteDrafts.delete(row.key);draw('Candidates');el('CandidatesMessage').textContent='Note saved.';
           }
-          catch(error){el('CandidatesMessage').textContent=error.message;save.disabled=false;}
+          catch(error){const draft=noteDrafts.get(row.key);if(draft)draft.refused=true;el('CandidatesMessage').textContent=error.message;save.disabled=false;}
           finally{input.disabled=false;}
         });editor.append(input,save);notes.append(editor);tr.append(notes);
       }
@@ -240,23 +240,43 @@
     el(kind+'Page').textContent=all.length?`${b.page*40+1}–${Math.min((b.page+1)*40,all.length)} of ${all.length}`:'';controls(kind);
     if(kind==='Candidates')markSort();
   }
+  // A refresh asked for while one is reading waits for a new read after it,
+  // so every caller sees data that includes its own change. Resolves true
+  // only when that data was shown.
   async function refresh(kind) {
-    const b=boards[kind];if(b.loading){b.again=true;return;}b.loading=true;const generation=++b.generation;controls(kind);el(kind+'Message').textContent='Loading…';
+    const b=boards[kind];
+    if(b.loading){b.again=true;return b.next || (b.next=new Promise(resolve=>{b.settle=resolve;}));}
+    b.loading=true;const generation=++b.generation;controls(kind);el(kind+'Message').textContent='Loading…';
+    let shown=false;
     try {
       const data=await api(kind==='HR'?'/apollo':'/linkedin-sourcer',{action:kind==='HR'?'hr_people':'candidates'});
-      if(generation!==b.generation)return;
-      b.rows=data[kind==='HR'?'people':'candidates'] || [];
-      if(kind==='Candidates'){folderNames=Array.isArray(data.folders)?data.folders.filter(name=>typeof name==='string'):[];reconcileCandidates();}
-      choices(kind);draw(kind);
-      el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';return true;
-    } catch(error){el(kind+'Message').textContent=error.message;return false;}
-    finally{b.loading=false;controls(kind);if(b.again){b.again=false;if(!el(kind+'Panel').hidden)void refresh(kind);}}
+      // A change saved in this window meanwhile is newer than this read: read again.
+      if(generation!==b.generation)b.again=true;
+      else {
+        b.rows=data[kind==='HR'?'people':'candidates'] || [];
+        if(kind==='Candidates'){folderNames=Array.isArray(data.folders)?data.folders.filter(name=>typeof name==='string'):[];reconcileCandidates();}
+        choices(kind);draw(kind);
+        el(kind+'Message').textContent=b.rows.length?'':kind==='HR'?'No saved HR people yet.':'Candidates from new searches are saved here automatically.';shown=true;
+      }
+    } catch(error){el(kind+'Message').textContent=error.message;}
+    b.loading=false;controls(kind);
+    if(b.again){
+      b.again=false;const settle=b.settle;b.next=b.settle=null;
+      shown=el(kind+'Panel').hidden?false:await refresh(kind);
+      settle?.(shown);
+    }
+    return shown;
   }
-  // Keep a selection or note draft only while its candidate is unchanged.
+  // Only candidates in the current view stay selected, as in Job Leads.
+  function pruneSelection() {
+    const visible=new Set(filtered('Candidates').map(row=>row.key));
+    for(const key of [...selection])if(!visible.has(key))selection.delete(key);
+  }
   function reconcileCandidates() {
     const rows=new Map(boards.Candidates.rows.map(row=>[row.key,row]));
-    for(const [key,revision] of selection)if(rows.get(key)?.revision!==revision)selection.delete(key);
-    for(const [key,draft] of noteDrafts){const row=rows.get(key);if(row && row.notes===draft.base)draft.revision=row.revision;}
+    // A draft follows its candidate while the saved note is unchanged. After a
+    // refused save the owner has seen the newer note, so the next Save replaces it.
+    for(const [key,draft] of noteDrafts){const row=rows.get(key);if(row && (row.notes===draft.base || draft.refused))Object.assign(draft,{revision:row.revision,base:row.notes,refused:false});}
     const counts=new Map([['*',0],['',0],['!trash',0]]);
     for(const row of boards.Candidates.rows){
       if(row.deleted===true){counts.set('!trash',counts.get('!trash')+1);continue;}
@@ -269,31 +289,36 @@
     filter.value=old==='*' || old==='' || old==='!trash' || folderNames.includes(old)?old:'*';
     target.replaceChildren(option('','Unfiled'),...folderNames.map(name=>option(name,name)));
     target.value=folderNames.includes(move)?move:'';
+    pruneSelection();
   }
-  const items=()=>[...selection].map(([key,revision])=>({key,revision}));
-  // One organising change, then a fresh list; nothing runs twice.
-  async function organise(body,done) {
-    const b=boards.Candidates;if(b.loading || b.working)return false;
+  // The selected candidates with the revisions this window last saw.
+  const items=()=>boards.Candidates.rows.filter(row=>selection.has(row.key)).map(row=>({key:row.key,revision:row.revision}));
+  // One organising change, then a fresh read. Resolves with the reply, or
+  // null when nothing changed; a failed reload is reported, never hidden.
+  // A finished change clears the selection, as in Job Leads, except a new
+  // folder, which keeps it ready for Move selected.
+  async function organise(body,done,keep=false) {
+    const b=boards.Candidates;if(b.loading || b.working)return null;
     b.working=true;controls('Candidates');el('CandidatesMessage').textContent='Saving…';
-    try {
-      const data=await api('/linkedin-sourcer',body);
-      // Changed candidates leave the selection when the list reloads; a new
-      // folder keeps it, ready for Move selected.
-      b.working=false;
-      await refresh('Candidates');el('CandidatesMessage').textContent=done(data);return true;
-    } catch(error){el('CandidatesMessage').textContent=error.message;return false;}
-    finally{b.working=false;controls('Candidates');}
+    let data;
+    try {data=await api('/linkedin-sourcer',body);}
+    catch(error){el('CandidatesMessage').textContent=error.message;b.working=false;controls('Candidates');return null;}
+    b.working=false;if(!keep)selection.clear();
+    const shown=await refresh('Candidates'),problem=shown?'':el('CandidatesMessage').textContent;
+    if(!shown)selection.clear();
+    el('CandidatesMessage').textContent=done(data)+(shown?'':' The list could not be reloaded'+(problem?' ('+problem+')':'')+'. Click Refresh.');
+    controls('Candidates');return data;
   }
   const plural=(count,word)=>count+' '+word+(count===1?'':'s');
   async function shortlist(row) {
-    const b=boards.Candidates;if(b.loading || b.working || row.deleted)return;
+    const b=boards.Candidates,current=b.rows.find(value=>value.key===row.key) || row;
+    if(b.loading || b.working || current.deleted)return;
     b.working=true;controls('Candidates');
     try {
-      const data=await api('/linkedin-sourcer',{action:'candidate_shortlist',key:row.key,revision:row.revision,shortlisted:row.shortlisted!==true});
-      // The owner's own change keeps this candidate selected.
-      if(selection.has(row.key))selection.set(row.key,data.candidate.revision);
-      Object.assign(b.rows.find(value=>value.key===row.key) || row,data.candidate);reconcileCandidates();
-      el('CandidatesMessage').textContent=data.candidate.shortlisted?row.name+' is shortlisted.':row.name+' was removed from the shortlist.';
+      const data=await api('/linkedin-sourcer',{action:'candidate_shortlist',key:current.key,revision:current.revision,shortlisted:current.shortlisted!==true});
+      // Newer than any read in progress, which is discarded and repeated.
+      ++b.generation;Object.assign(current,data.candidate);reconcileCandidates();
+      el('CandidatesMessage').textContent=data.candidate.shortlisted?current.name+' is shortlisted.':current.name+' was removed from the shortlist.';
     } catch(error){el('CandidatesMessage').textContent=error.message;}
     finally{b.working=false;draw('Candidates');}
   }
@@ -314,8 +339,9 @@
   };
   for(const kind of ['HR','Candidates']) {
     el(kind+'Refresh').addEventListener('click',()=>refresh(kind));el(kind+'Export').addEventListener('click',()=>exportRows(kind));
-    el(kind+'Query').addEventListener('input',()=>{boards[kind].page=0;draw(kind);});
-    el(kind+(kind==='HR'?'Company':'Search')).addEventListener('change',()=>{boards[kind].page=0;draw(kind);});
+    // A different set of candidates starts a new selection, as in Job Leads.
+    el(kind+'Query').addEventListener('input',()=>{boards[kind].page=0;if(kind==='Candidates')selection.clear();draw(kind);});
+    el(kind+(kind==='HR'?'Company':'Search')).addEventListener('change',()=>{boards[kind].page=0;if(kind==='Candidates')selection.clear();draw(kind);});
     for(const [suffix,delta] of [['Previous',-1],['Next',1]])el(kind+suffix).addEventListener('click',()=>{boards[kind].page+=delta;draw(kind);});
     draw(kind);
   }
@@ -336,36 +362,34 @@
     try{const saved=localStorage.getItem('cvstudio_candidates_'+name.toLowerCase());if(saved && [...el('Candidates'+name).options].some(option=>option.value===saved))el('Candidates'+name).value=saved;}catch{}
   }
   for(const name of ['MinScore','Read','Sort','Order','Folder','Shortlisted'])el('Candidates'+name).addEventListener('change',()=>{
-    if(name==='Sort' || name==='Order')try{localStorage.setItem('cvstudio_candidates_'+name.toLowerCase(),el('Candidates'+name).value);}catch{}
-    // A different set of candidates starts a new selection, as in Job Leads.
+    if(name==='Sort' || name==='Order'){try{localStorage.setItem('cvstudio_candidates_'+name.toLowerCase(),el('Candidates'+name).value);}catch{}}
     else selection.clear();
     boards.Candidates.page=0;draw('Candidates');
   });
-  for(const name of ['Query','Search'])el('Candidates'+name).addEventListener(name==='Query'?'input':'change',()=>{selection.clear();draw('Candidates');});
   el('CandidatesSelectPage').addEventListener('change',()=>{
     const page=filtered('Candidates').slice(boards.Candidates.page*40,(boards.Candidates.page+1)*40);
-    for(const row of page){if(el('CandidatesSelectPage').checked)selection.set(row.key,row.revision);else selection.delete(row.key);}
+    for(const row of page){if(el('CandidatesSelectPage').checked)selection.add(row.key);else selection.delete(row.key);}
     draw('Candidates');
   });
   el('CandidatesMove').addEventListener('click',()=>{
-    const folder=el('CandidatesMoveTo').value,count=selection.size;
-    if(count)void organise({action:'candidate_move',items:items(),folder},()=>`Moved ${plural(count,'candidate')} to ${folder || 'Unfiled'}.`);
+    const folder=el('CandidatesMoveTo').value,picked=items();
+    if(picked.length)void organise({action:'candidate_move',items:picked,folder},()=>`Moved ${plural(picked.length,'candidate')} to ${folder || 'Unfiled'}.`);
   });
   el('CandidatesTrash').addEventListener('click',()=>{
-    const count=selection.size;
-    if(count && window.confirm(`Move ${plural(count,'candidate')} to Trash? You can restore them from Trash in Folder.`))
-      void organise({action:'candidate_trash',items:items(),deleted:true},()=>`Moved ${plural(count,'candidate')} to Trash. Choose Trash in Folder to restore them.`);
+    const picked=items();
+    if(picked.length && window.confirm(`Move ${plural(picked.length,'candidate')} to Trash? You can restore them from Trash in Folder.`))
+      void organise({action:'candidate_trash',items:picked,deleted:true},()=>`Moved ${plural(picked.length,'candidate')} to Trash. Choose Trash in Folder to restore them.`);
   });
   el('CandidatesRestore').addEventListener('click',()=>{
-    const count=selection.size;
-    if(count)void organise({action:'candidate_trash',items:items(),deleted:false},()=>`Restored ${plural(count,'candidate')} to ${count===1?'its':'their'} folder.`);
+    const picked=items();
+    if(picked.length)void organise({action:'candidate_trash',items:picked,deleted:false},()=>`Restored ${plural(picked.length,'candidate')} to ${picked.length===1?'its':'their'} folder.`);
   });
   el('CandidatesNewFolder').addEventListener('input',()=>controls('Candidates'));
   el('CandidatesCreateFolder').addEventListener('click',async()=>{
     const name=el('CandidatesNewFolder').value.trim();if(!name)return;
-    if(await organise({action:'candidate_folder_create',name},data=>`Folder ${data.folder} created. Select candidates and choose it in Move to.`)){
-      el('CandidatesNewFolder').value='';el('CandidatesMoveTo').value=folderNames.includes(name)?name:'';controls('Candidates');
-    }
+    const data=await organise({action:'candidate_folder_create',name},reply=>`Folder ${reply.folder} created. Select candidates and choose it in Move to.`,true);
+    // Move to uses the name the service saved, which may be trimmed differently.
+    if(data){el('CandidatesNewFolder').value='';el('CandidatesMoveTo').value=folderNames.includes(data.folder)?data.folder:'';controls('Candidates');}
   });
   el('CandidatesDeleteFolder').addEventListener('click',()=>{
     const name=candidateView().folder;if(!folderNames.includes(name))return;

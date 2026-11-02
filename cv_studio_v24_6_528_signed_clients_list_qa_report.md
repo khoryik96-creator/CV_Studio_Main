@@ -51,3 +51,16 @@ Updating the app is enough; the companion needs no reload for this version.
   Reopening listed them again. No horizontal overflow at 390 px.
 - No live JobAdder or LinkedIn call, no paid call and no owner installation
   change was made.
+
+## Corrected in the v24.6.529 review round
+
+A later review, using the repository's JobAdder OpenAPI reference, showed that
+listed companies always carry a status with a `statusId`. Keeping companies
+without a status therefore only mattered when JobAdder ignored the filter, and
+then it listed companies that are not signed clients. That change was reverted:
+only chosen statuses are listed, and a page with none is shown as an error
+rather than an empty page to page through. Reload statuses now keeps only ticks
+the owner actually changed, so it follows a choice saved in another window, and
+Search waits for unsaved ticks to be saved. The first-open list runs once, and
+its failure message no longer mentions followed clients that do not exist.
+

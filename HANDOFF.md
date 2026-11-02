@@ -14,7 +14,9 @@ Folders (create, move selected, delete folder to Unfiled), a star shortlist
 with a filter, and recoverable Trash with Restore (no purge, as in Job Leads).
 Optional vault additions (`folders`; per-row `folder`, `shortlisted`,
 `deleted`, `deleted_at`), new actions on `/linkedin-sourcer` (still 124
-routes). See `LINKEDIN_SOURCER_NOTES.md` and the v529 QA report.
+routes). A review round then fixed 15 findings (see the QA report), including a
+size check that could lock a near-full dashboard and the v528 status-less
+company change, which was reverted. See `LINKEDIN_SOURCER_NOTES.md`.
 
 **Previous checkpoint: v24.6.528 Signed clients list fix (unmerged)**
 on `claude/job-leads-signed-clients`, restarted from merged v527 `3ea7880` /

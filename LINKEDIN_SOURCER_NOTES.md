@@ -21,17 +21,32 @@ The Candidates dashboard can be organised the way Job Leads ads are.
   purge, so Trash still counts toward the 5,000-candidate dashboard limit.
 - **Excel** exports the same view, including the folder and shortlist filters.
   Three new columns show Folder, Shortlisted and In Trash.
-- **Safety.** Every change sends the selected candidates' revisions. If one
-  changed in another window, nothing changes and the dashboard asks for a
-  refresh. Changing a filter starts a new selection; a refresh drops selected
-  candidates that changed elsewhere. A new assessment of the same candidate in
+- **Safety.** The selection remembers candidates, not versions: each change
+  sends the latest revision this window has seen, as Job Leads does, so the
+  owner's own note or star never makes a selection stale. If another window
+  changed a candidate since, nothing changes and the dashboard asks for a
+  refresh. Only candidates in the current view stay selected (changing a
+  filter starts a new selection, and un-starring in "Shortlisted only" drops
+  that candidate). A finished move, delete or restore clears the selection;
+  creating a folder keeps it, ready for Move selected. Each change waits for a
+  fresh list, even when a search refresh was already loading, and if that
+  reload fails the message says so. A new assessment of the same candidate in
   the same search keeps its folder, shortlist, Trash state and notes. A note
-  typed before the owner's own star, move or Trash change still saves.
+  typed before the owner's own change still saves; after a refused note save, a
+  refresh shows the newer note and the next Save replaces it.
+- **Names.** Unfiled, Trash and All folders are built in and cannot be folder
+  names. Folders are listed in a fixed order (case, accents and numbers as in
+  the candidate sort, then the exact name).
 
-Storage stays the protected `sourcer_candidates` vault, version 1. The folder
-list and the per-candidate `folder`, `shortlisted`, `deleted` and `deleted_at`
-fields are optional additions, so dashboards saved earlier still read, and any
-unreadable value fails closed without being overwritten. All changes use the
+Storage stays the protected `sourcer_candidates` vault. A dashboard nobody has
+organised is still saved as version 1; once it has a folder, a star or Trash it
+is saved as version 2, so an older CV Studio refuses it (fails closed) instead
+of rewriting it without them. The folder list and the per-candidate `folder`,
+`shortlisted`, `deleted` and `deleted_at` fields are optional, so dashboards
+saved earlier still read, and any unreadable value fails closed without being
+overwritten. The size limit measures exactly what is saved, never the secure
+loader's `_storage` marker, so a dashboard written under the limit always reads
+back. One read of the store returns both the candidates and the folders. All changes use the
 existing `/linkedin-sourcer` route (actions `candidate_shortlist`,
 `candidate_move`, `candidate_trash`, `candidate_folder_create` and
 `candidate_folder_delete`), so the route contract stays at 124. No AI or

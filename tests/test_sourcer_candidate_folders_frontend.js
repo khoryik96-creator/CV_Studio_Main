@@ -32,15 +32,27 @@ function fixture(){
     el('Candidates'+name).options=values.map(value=>({value}));
   const reply=data=>({ok:true,json:async()=>structuredClone(data)}),fail=error=>({ok:false,json:async()=>({error})});
   const current=(items)=>items.every(item=>server.rows.some(row=>row.key===item.key && row.revision===item.revision));
-  const fetch=async(url,init)=>{
+  // server.gate holds one action's request until server.open(): the change is
+  // applied then, standing for a request the service handles later.
+  const fetch=(url,init)=>{
+    const action=JSON.parse(init.body).action;
+    if(server.gate===action)return new Promise(resolve=>{server.open=()=>{server.gate=null;resolve(answer(url,init));};});
+    return answer(url,init);
+  };
+  const answer=async(url,init)=>{
     const body=JSON.parse(init.body);posts.push({url,body});
     if(body.action==='hr_people')return reply({people:[]});
     // The service returns folder names sorted, as SourcerCandidates.folders() does.
-    if(body.action==='candidates')return reply({candidates:server.rows,folders:[...server.folders].sort()});
+    if(body.action==='candidates'){
+      if(server.failList)return fail('Saved candidates could not be read securely. Keep the existing files and check local storage.');
+      // Copied now: a held read answers with what the service saw when asked.
+      const snapshot=reply(structuredClone({candidates:server.rows,folders:[...server.folders].sort()}));
+      return server.hold?new Promise(resolve=>{server.release=()=>resolve(snapshot);}):snapshot;
+    }
     if(body.action==='export_candidates')return {ok:true,blob:async()=>'xlsx'};
     if(server.reject)return fail(server.reject);
     const bump=row=>{row.revision++;return row;};
-    if(body.action==='candidate_folder_create'){if(!server.folders.includes(body.name))server.folders.push(body.name);return reply({folder:body.name});}
+    if(body.action==='candidate_folder_create'){const name=body.name.replace(/[\s\u0085]+$/u,'');if(!server.folders.includes(name))server.folders.push(name);return reply({folder:name});}
     if(body.action==='candidate_move'){
       if(!current(body.items))return fail('A selected candidate changed in another window. Refresh before trying again.');
       for(const item of body.items)bump(Object.assign(server.rows.find(row=>row.key===item.key),{folder:body.folder}));
@@ -79,9 +91,11 @@ function fixture(){
   const star=name=>row(name).children[0].children[1];
   const choose=async(name,value)=>{el('Candidates'+name).value=value;await el('Candidates'+name).dispatch('change');};
   const labels=name=>el('Candidates'+name).children.map(option=>option.textContent);
-  return {el,posts,confirms,server,names,row,select,star,choose,labels,last:action=>posts.filter(post=>post.body.action===action).at(-1)?.body};
+  return {el,posts,confirms,server,names,row,select,star,choose,labels,win:window,last:action=>posts.filter(post=>post.body.action===action).at(-1)?.body};
 }
 
+let finished=false;
+process.on('exit',()=>{if(!finished){console.error('Candidate folders test did not finish: a pending step never settled.');process.exitCode=1;}});
 (async()=>{
   const f=fixture();
   await f.el('CandidatesTab').click();await settle();
@@ -152,14 +166,20 @@ function fixture(){
   assert.equal(f.el('CandidatesSelected').textContent,'3 selected');
   await f.choose('MinScore','90');assert.equal(f.el('CandidatesSelected').textContent,'0 selected');await f.choose('MinScore','0');
 
-  await f.select('Demo Gamma');f.server.rows.find(row=>row.key==='c'.repeat(64)).revision+=5;
+  // A refresh drops a selected candidate that left the view and keeps one
+  // still in view, which then acts on the latest revision this window saw.
+  await f.select('Demo Gamma');await f.select('Demo Alpha');
+  const gamma=f.server.rows.find(row=>row.key==='c'.repeat(64)),alpha=f.server.rows.find(row=>row.key==='a'.repeat(64));
+  gamma.deleted=true;alpha.revision+=5;
   await f.el('CandidatesRefresh').click();await settle();
-  assert.equal(f.el('CandidatesSelected').textContent,'0 selected','a candidate changed elsewhere leaves the selection on refresh');
-  // A stale selection is refused without losing the selection.
-  await f.select('Demo Gamma');f.server.reject='A selected candidate changed in another window. Refresh before trying again.';
+  assert.equal(f.el('CandidatesSelected').textContent,'1 selected','a candidate trashed elsewhere leaves the selection');
+  gamma.deleted=false;gamma.revision++;await f.el('CandidatesRefresh').click();await settle();
+  // A refused change keeps the selection.
+  f.server.reject='A selected candidate changed in another window. Refresh before trying again.';
   await f.el('CandidatesMove').click();await settle();
+  assert.equal(f.last('candidate_move').items[0].revision,alpha.revision,'the latest revision this window saw is sent');
   assert.match(f.el('CandidatesMessage').textContent,/changed in another window/);assert.equal(f.el('CandidatesSelected').textContent,'1 selected');
-  f.server.reject=null;await f.select('Demo Gamma');
+  f.server.reject=null;await f.select('Demo Alpha');
 
   // Excel follows the folder and shortlist view.
   await f.choose('Folder','Controlling');await f.el('CandidatesExport').click();await settle();
@@ -172,5 +192,57 @@ function fixture(){
   assert.equal(f.last('candidate_folder_delete').name,'Controlling');
   assert.equal(f.el('CandidatesFolder').value,'*');assert.match(f.el('CandidatesMessage').textContent,/Folder Controlling deleted\. 2 candidates moved to Unfiled\./);
   assert.deepEqual(f.labels('Folder'),['All folders (2)','Unfiled (1)','Finance (1)','Trash (2)']);
-  console.log('Candidate folders: create, move selected, folder view with counts, shortlist and filter, note after own change, Trash and Restore, select page, stale selection, export view and folder deletion passed.');
+
+  // A note saved on a selected candidate does not make the selection stale.
+  {const n=fixture();await n.el('CandidatesTab').click();await settle();
+   await n.select('Demo Alpha');
+   const note=n.row('Demo Alpha').children.at(-1).children[0];note.children[1].value='Strong CO-PA';await note.children[1].dispatch('input');
+   await note.children[2].click();await settle();
+   n.el('CandidatesMoveTo').value='Finance';await n.el('CandidatesMove').click();await settle();
+   assert.deepEqual(n.last('candidate_move').items,[{key:'a'.repeat(64),revision:2}]);assert.match(n.el('CandidatesMessage').textContent,/Moved 1 candidate to Finance\./);}
+
+  // Un-starring in "Shortlisted only" hides the candidate, so it leaves the selection.
+  {const h=fixture();await h.el('CandidatesTab').click();await settle();
+   await h.star('Demo Alpha').click();await settle();
+   h.el('CandidatesShortlisted').checked=true;await h.el('CandidatesShortlisted').dispatch('change');
+   await h.select('Demo Alpha');await h.star('Demo Alpha').click();await settle();
+   assert.deepEqual(h.names(),[]);assert.equal(h.el('CandidatesSelected').textContent,'0 selected');assert(h.el('CandidatesTrash').disabled,'nothing hidden can be deleted');}
+
+  // A change whose reload fails says so, and the selection is cleared.
+  {const r=fixture();await r.el('CandidatesTab').click();await settle();
+   await r.select('Demo Alpha');r.el('CandidatesMoveTo').value='Finance';r.server.failList=true;
+   await r.el('CandidatesMove').click();await settle();
+   assert.match(r.el('CandidatesMessage').textContent,/^Moved 1 candidate to Finance\. The list could not be reloaded \(Saved candidates could not be read securely.*\)\. Click Refresh\.$/);
+   assert.equal(r.el('CandidatesSelected').textContent,'0 selected');}
+
+  // A search result refresh that starts while a folder is being created makes
+  // Create folder wait for a fresh list; Move to uses the name the service saved.
+  {const w=fixture();await w.el('CandidatesTab').click();await settle();
+   await w.select('Demo Alpha');
+   w.el('CandidatesNewFolder').value='Controlling\u0085';await w.el('CandidatesNewFolder').dispatch('input');
+   w.server.gate='candidate_folder_create';const created=w.el('CandidatesCreateFolder').click();await settle();
+   w.server.hold=true;w.win.cvStudioPeople.sourcerChanged();await settle();const release=w.server.release;w.server.hold=false;
+   w.server.open();await settle();release();await created;await settle();
+   assert.equal(w.el('CandidatesMoveTo').value,'Controlling','the saved folder name is chosen in Move to');
+   assert.match(w.el('CandidatesMessage').textContent,/Folder Controlling created/);assert.equal(w.el('CandidatesSelected').textContent,'1 selected');}
+
+  // A star saved after an older read began is not undone when that read arrives.
+  {const s=fixture();await s.el('CandidatesTab').click();await settle();
+   s.server.gate='candidate_shortlist';const starred=s.star('Demo Beta').click();await settle();
+   s.server.hold=true;s.win.cvStudioPeople.sourcerChanged();await settle();const release=s.server.release;s.server.hold=false;
+   s.server.open();await starred;await settle();release();await settle();
+   assert.equal(s.star('Demo Beta').textContent,'\u2605','the star stays after the older read arrives');}
+
+  // A refused note save works after a refresh, once the newer note was shown.
+  {const c=fixture();await c.el('CandidatesTab').click();await settle();
+   const editor=c.row('Demo Beta').children.at(-1).children[0];editor.children[1].value='Mine';await editor.children[1].dispatch('input');
+   c.server.rows.find(row=>row.key==='b'.repeat(64)).notes='Theirs';c.server.rows.find(row=>row.key==='b'.repeat(64)).revision=2;
+   await editor.children[2].click();await settle();assert.match(c.el('CandidatesMessage').textContent,/This candidate changed/);
+   await c.el('CandidatesRefresh').click();await settle();
+   const again=c.row('Demo Beta').children.at(-1).children[0];assert.equal(again.children[0].textContent,'Theirs','the newer note is shown');
+   await again.children[2].click();await settle();
+   assert.equal(c.last('candidate_note').revision,2);assert.equal(c.last('candidate_note').notes,'Mine');assert.match(c.el('CandidatesMessage').textContent,/Note saved/);}
+
+  finished=true;
+  console.log('Candidate folders: create, move selected, folder view with counts, shortlist and filter, notes with organising, Trash and Restore, select page, refresh and stale selections, failed reloads, in-flight reads, canonical folder names, export view and folder deletion passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

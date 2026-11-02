@@ -135,7 +135,7 @@ DEFAULT_MODULES = (
         ("cvstudio_email_verifier.py",),
     ),
     ModuleDefinition("apollo", "domain", ("cvstudio_apollo.py",), ("people_dashboards",)),
-    ModuleDefinition("people_dashboards", "domain", ("cvstudio_people.py",)),
+    ModuleDefinition("people_dashboards", "domain", ("cvstudio_people.py",), ("job_leads",)),
     ModuleDefinition(
         "secrets",
         "domain",
