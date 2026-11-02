@@ -90,6 +90,27 @@ def test_revision_conflict_preserves_latest_edit(store):
     assert error.value.status == 409 and store.list() == [changed]
 
 
+def test_pulled_client_tag_is_validated_kept_on_edit_and_restored(store, tmp_path):
+    client = {"company_id": 4242, "name": "  Example Client  "}
+    saved = store.save({**RECORD, "client": client})["record"]
+    assert saved["client"] == {"company_id": 4242, "name": "Example Client"}
+    edit = {key: value for key, value in saved.items() if key != "client"}
+    edited = store.save({**edit, "notes": "Edited in Job ads"})["record"]
+    assert edited["client"] == saved["client"], "an edit that does not send the client keeps it"
+    backup = store.backup()
+    other = JobLeadsStore(tmp_path / "restored.sqlite3")
+    other.restore(backup)
+    assert other.list()[0]["client"] == saved["client"]
+    plain = store.save({**RECORD, "url": "https://www.linkedin.com/jobs/view/1234567891"})["record"]
+    assert "client" not in plain
+    for bad in [{"company_id": "4242", "name": "X"}, {"company_id": True, "name": "X"}, {"company_id": 0, "name": "X"},
+                {"company_id": 4242, "name": ""}, {"company_id": 4242, "name": "x" * 201}, {"company_id": 4242, "name": "a\nb"},
+                {"company_id": 4242}, {"company_id": 4242, "name": "X", "extra": 1}, ["4242"]]:
+        with pytest.raises(JobLeadsError):
+            store.save({**RECORD, "url": "https://www.linkedin.com/jobs/view/1234567899", "client": bad})
+    assert len(store.list()) == 2
+
+
 def test_concurrent_saves_share_one_identity_without_lost_edits(store):
     with ThreadPoolExecutor(max_workers=5) as pool:
         replies = list(pool.map(lambda _:JobLeadsStore(store.path).save(RECORD), range(5)))

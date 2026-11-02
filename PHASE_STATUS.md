@@ -4,7 +4,14 @@
 
 ## Release state
 
-- v24.6.537 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.538 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged537/PR282/c8524cd. Review fixes:
+  - saved client ads carry their pulled client (optional, validated `client` on
+    a Job Leads record, payload only, no schema change);
+  - most specific name attribution, consistent counts, newest-read-wins
+    refresh, a correct "Last N days", Stop for save batches;
+  - sortBy is pinned after load.
+- v24.6.537 (merged PR282) was local/unmerged on `claude/job-leads-signed-clients` from
   merged536/PR281/eb7451e. LinkedIn's AI job search adds and rotates
   session/tracking/sort parameters; the companion now identifies a job search
   only by keywords, location, geoId, distance and f_* filters, so client pulls

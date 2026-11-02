@@ -12,11 +12,12 @@
   const JOBADDER_URL = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.jobadder\.com\/companies\/[1-9][0-9]{0,9}$/;
   const LEGAL = new Set(['pt','tbk','sdn','bhd','berhad','pte','ltd','limited','inc','llc','corp','corporation','co','plc','gmbh','the']);
   const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADS_PAGE = 50, COMPANY_PAGE = 50;
-  const STATUS_LABELS = {new:'New', to_contact:'To contact', contacted:'Contacted', follow_up:'Following up', won:'Won', closed:'Closed'};
   const TICKS_KEY = 'cvstudio_signed_clients_ticks';
+  // Job Leads owns the status names; this view only reads them.
+  const statusLabels = () => window.cvStudioJobLeads?.statusLabels || {};
   const fresh = () => ({account:'', signed:[], statuses:null, followed:[], records:[], folders:[], companies:null, found:[], picked:new Set(),
-    chosen:null, foundPage:0, adsPage:0, adsShown:0, resolvedIds:new Map(), linkedinSearch:'', working:false, refreshing:false, resolving:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
-  let state = fresh(), generation = 0, ready = false, resyncNeeded = false;
+    chosen:null, foundPage:0, adsPage:0, adsShown:0, saving:false, resolvedIds:new Map(), linkedinSearch:'', working:false, refreshing:false, resolving:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
+  let state = fresh(), generation = 0, ready = false, resyncNeeded = false, recordsRead = 0, returning = null;
   let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()}, adsIndex = {records:null, followed:null, rows:[]};
 
   // Pure helpers (exported for tests) ---------------------------------------
@@ -55,14 +56,21 @@
     url.searchParams.set('f_C', clean.join(','));
     return url.href;
   }
-  // Saved, non-deleted Job ads whose company matches a followed client, the
-  // same name match the "Ads in Job ads" count uses. Each ad is listed once.
+  // Saved, non-deleted Job ads of followed clients, each listed once. An ad
+  // saved from a client pull carries that client; other ads (for example ones
+  // added on LinkedIn) go to the followed client whose name matches the ad's
+  // company most specifically. The "Ads in Job ads" count uses the same rows.
   function clientAds(records, followed) {
     const clients = (followed || []).map(client => ({client, words:words(client.name)}));
+    const byId = new Map(clients.map(item => [item.client.company_id, item.client]));
     const rows = [];
     for (const record of records || []) {
       if (!record || record.deleted) continue;
-      const own = words(record.company), match = clients.find(item => subset(item.words, own));
+      const tagged = byId.get(record.client?.company_id);
+      if (tagged) { rows.push({record, client:tagged}); continue; }
+      const own = words(record.company);
+      const match = clients.filter(item => subset(item.words, own)).sort((a, b) =>
+        Math.abs(a.words.length - own.length) - Math.abs(b.words.length - own.length) || b.words.length - a.words.length)[0];
       if (match) rows.push({record, client:match.client});
     }
     return rows;
@@ -145,8 +153,8 @@
   }
   function savedCount(client) {
     if (countIndex.records !== state.records || countIndex.followed !== state.followed) {
-      const companies = state.records.filter(row => !row.deleted).map(row => words(row.company)), counts = new Map();
-      for (const item of state.followed) { const own = words(item.name); counts.set(item.company_id, companies.filter(other => subset(own, other)).length); }
+      const counts = new Map();
+      for (const row of allClientAds()) counts.set(row.client.company_id, (counts.get(row.client.company_id) || 0) + 1);
       countIndex = {records:state.records, followed:state.followed, counts};
     }
     return countIndex.counts.get(client.company_id) || 0;
@@ -222,7 +230,7 @@
     el('OpenLinkedIn').disabled = locked || !state.signed.length || stale || !pullable().length;
     el('FollowedRefresh').disabled = locked;
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort','FiltersReset']) el(name).disabled=locked || !c?.rows.length;
-    el('Stop').disabled = !(state.pulling || state.refreshing) || state.stopped;
+    el('Stop').disabled = !(state.pulling || state.refreshing || state.saving) || state.stopped;
     el('Pages').disabled = locked;
     el('Untick').disabled = locked || !state.chosen?.size;
     el('Ticked').textContent = state.followed.length ? `${pullable().length} of ${MAX_PER_PULL} ticked` : '';
@@ -349,7 +357,7 @@
   function adsRows() {
     // Folder choices are JSON strings, so Unfiled ("") differs from All folders ('').
     const client = el('AdsClient').value, status = el('AdsStatus').value, folder = el('AdsFolder').value;
-    const days = Number(el('AdsPosted').value), since = days ? dayStart(days) : '';
+    const days = Number(el('AdsPosted').value), since = days ? dayStart(days - 1) : '';
     const query = String(el('AdsQuery').value || '').trim().toLowerCase();
     const sorts = {posted_desc:['date_posted',-1], posted_asc:['date_posted',1], saved_desc:['created_at',-1], saved_asc:['created_at',1],
       role_asc:['role',1], company_asc:['company',1], client_asc:['client',1]};
@@ -372,10 +380,10 @@
     select.value = [all[0], ...entries.map(entry => entry[0])].includes(old) ? old : all[0];
   }
   function drawAds() {
-    const every = allClientAds(), since = dayStart(7);
+    const every = allClientAds(), since = dayStart(6); // today and the 6 days before
     const clients = new Map(every.map(row => [String(row.client.company_id), row.client.name]));
     adsChoices('AdsClient', [...clients].sort((a, b) => compareText(a[1], b[1])), ['', 'All clients']);
-    adsChoices('AdsStatus', Object.entries(STATUS_LABELS), ['', 'All statuses']);
+    adsChoices('AdsStatus', Object.entries(statusLabels()), ['', 'All statuses']);
     adsChoices('AdsFolder', [['', 'Unfiled'], ...state.folders.map(name => [name, name])].map(([name, label]) => [JSON.stringify(name), label]), ['', 'All folders']);
     const tiles = el('AdsTiles'); tiles.replaceChildren();
     for (const [count, label] of [[every.length, 'Saved ads'], [clients.size, 'Clients with ads'],
@@ -395,7 +403,7 @@
       const tr = node('tr'), role = node('td'), owner = node('td');
       role.append(link(record.role, record.url, JOB_URL)); owner.append(link(client.name, client.jobadder_url, JOBADDER_URL));
       tr.append(node('td', record.date_posted || '—'), role, node('td', record.company), owner, node('td', record.location || '—'),
-        node('td', STATUS_LABELS[record.status] || record.status || '—'), node('td', record.folder || 'Unfiled'),
+        node('td', statusLabels()[record.status] || record.status || '—'), node('td', record.folder || 'Unfiled'),
         node('td', String(record.created_at || '').slice(0, 10) || '—'), node('td', record.hr ? (String(record.hr.scanned_at || '').slice(0, 10) || 'Scanned') : 'Not scanned'));
       target.append(tr);
     }
@@ -412,7 +420,8 @@
     for (const name of state.folders) { const option = node('option', name); option.value = name; select.append(option); }
     select.value = state.folders.includes(old) ? old : '';
   }
-  function draw() { drawStatuses(); drawFollowed(); drawCompanies(); drawFound(); drawAds(); drawLinkedIn(); controls(); }
+  // The dashboard re-filters every saved ad, so it is drawn only when shown.
+  function draw() { drawStatuses(); drawFollowed(); drawCompanies(); drawFound(); if (!el('FollowedPanel').hidden) drawAds(); drawLinkedIn(); controls(); }
 
   // Actions ------------------------------------------------------------------
 
@@ -459,8 +468,11 @@
     rememberTicks();
   }
   async function refreshRecords(token = generation) {
+    // Reads can overlap (a return-to-tab refresh and a save's refresh); only
+    // the most recently started one may replace the saved ads.
+    const read = ++recordsRead;
     const data = await leads();
-    if (token !== generation) return;
+    if (token !== generation || read !== recordsRead) return;
     state.records = Array.isArray(data.records) ? data.records : [];
     state.recordsReady = true;
     state.folders = Array.isArray(data.folders) ? data.folders : [];
@@ -591,6 +603,22 @@
     });
   }
   function check(token) { if (state.stopped || token !== generation) throw Error('Stopped.'); }
+  // Reads a client's numeric LinkedIn company from its company page through
+  // the companion, once per page per session. A failed read is cancelled.
+  async function resolveCompany(app, token, client, run) {
+    state.resolving = true;
+    try {
+      const resolved = await app.rpc('jobCompanyID', {company_url:client.linkedin_url, operation_id:run}, 35000);
+      check(token);
+      if (resolved?.company_url !== client.linkedin_url || typeof resolved?.company_id !== 'string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
+        throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
+      remember(client, resolved.company_id);
+      return resolved.company_id;
+    } catch (error) {
+      try { await app.rpc('jobReadCancel', {operation_id:run}, 1500); } catch {}
+      throw error;
+    } finally { if (token === generation) state.resolving = false; }
+  }
   // Pulls one client's company-filtered search. Returns whether every ad it
   // listed fitted in the review list.
   async function pullClient(app, token, client, pages, tally) {
@@ -598,20 +626,7 @@
     state.run = run;
     let complete = true;
     try {
-      let companyId=knownId(client);
-      if(!companyId) {
-        state.resolving=true;
-        try {
-          const resolved=await app.rpc('jobCompanyID',{company_url:client.linkedin_url,operation_id:run},35000);
-          check(token);
-          if(resolved?.company_url!==client.linkedin_url || typeof resolved?.company_id!=='string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
-            throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
-          companyId=resolved.company_id;remember(client,companyId);
-        } catch(error) {
-          try {await app.rpc('jobReadCancel',{operation_id:run},1500);} catch {}
-          throw error;
-        } finally {if(token===generation)state.resolving=false;}
-      }
+      const companyId = knownId(client) || await resolveCompany(app, token, client, run);
       check(token);
       const source = await app.rpc('jobSearchBegin', {run_id:run, query:'', location:'', max_pages:pages, use_open:false, company_id:companyId});
       check(token);
@@ -684,8 +699,8 @@
     }
   }
   function stop() {
-    if (!state.pulling && !state.refreshing) return;
-    state.stopped = true; controls(); progress('Stopping after the current read…');
+    if (!state.pulling && !state.refreshing && !state.saving) return;
+    state.stopped = true; controls(); progress(state.saving ? 'Stopping after the current save…' : 'Stopping after the current read…');
     if(state.resolving && state.run){try{void jobLeads()?.rpc?.('jobReadCancel',{operation_id:state.run}).catch(()=>{});}catch{}}
     if (state.run) { try { void jobLeads()?.rpc?.('end', {run_id:state.run}).catch(() => {}); } catch {} }
   }
@@ -726,18 +741,12 @@
       for (const [index, client] of missing.entries()) {
         check(token);
         progress(`Reading the LinkedIn company number for ${client.name} (${index + 1} of ${missing.length})… Its page opens in a background tab.`);
-        const run = hex(); state.run = run; state.resolving = true;
-        try {
-          const resolved = await app.rpc('jobCompanyID', {company_url:client.linkedin_url, operation_id:run}, 35000);
-          check(token);
-          if (resolved?.company_url !== client.linkedin_url || typeof resolved?.company_id !== 'string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
-            throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
-          remember(client, resolved.company_id);
-        } catch (error) {
-          try { await app.rpc('jobReadCancel', {operation_id:run}, 1500); } catch {}
+        const run = hex(); state.run = run;
+        try { await resolveCompany(app, token, client, run); }
+        catch (error) {
           if (state.stopped || token !== generation) throw error;
           failures.push(`${client.name}: ${error.message}`);
-        } finally { if (token === generation) { state.resolving = false; if (state.run === run) state.run = ''; } }
+        } finally { if (token === generation && state.run === run) state.run = ''; }
       }
       check(token);
       const ready = targets.filter(client => knownId(client));
@@ -761,20 +770,26 @@
       const folder = el('Folder').value;
       if (folder && !state.folders.includes(folder)) throw Error('This folder changed in another window. Choose a folder again.');
       let added = 0, skipped = 0, failure = '';
+      state.saving = true; state.stopped = false; controls();
       try {
         for (const [index, row] of selected.entries()) {
           if (token !== generation) return;
-          progress(`Saving ${index + 1} of ${selected.length} to ${folder || 'Unfiled'}…`);
+          // Stop ends the batch between saves; an ad being saved is never cut off.
+          if (state.stopped) break;
+          progress(`Saving ${index + 1} of ${selected.length} to ${folder || 'Unfiled'}… Click Stop to end after this ad.`);
+          // The client the ad was pulled for groups it in Saved client job ads.
           const result = await leads({action:'save', record:{url:row.url, company:row.company, role:row.role, location:row.location, date_posted:row.date_posted,
-            description:row.description, description_rich:[], description_truncated:true, folder, status:'new', contact:'', notes:'', follow_up:''}});
+            description:row.description, description_rich:[], description_truncated:true, folder, status:'new', contact:'', notes:'', follow_up:'',
+            ...(Number.isSafeInteger(row.client_id) && row.client_id > 0 && row.client_name ? {client:{company_id:row.client_id, name:String(row.client_name).slice(0, 200)}} : {})}});
           if (result.duplicate) skipped++; else added++;
           state.picked.delete(row.url);
         }
       } catch (error) { failure = error.message; }
+      finally { if (token === generation) state.saving = false; }
       if (token !== generation) return;
       try { await refreshRecords(); await jobLeads()?.refresh?.(); } catch (error) { failure = failure || error.message; }
       const remaining = state.found.filter(row => state.picked.has(row.url) && !savedJob(row.url)).length;
-      const text = `Saved ${added} ad${added === 1 ? '' : 's'} to ${folder || 'Unfiled'} in Job ads.` + (skipped ? ` ${skipped} were already saved; their details were kept.` : '') +
+      const text = (state.stopped ? 'Stopped. ' : '') + `Saved ${added} ad${added === 1 ? '' : 's'} to ${folder || 'Unfiled'} in Job ads.` + (skipped ? ` ${skipped} were already saved; their details were kept.` : '') +
         (failure ? ` ${failure}` : '') + (remaining ? ` ${remaining} selected ad${remaining === 1 ? ' is' : 's are'} still waiting: click Save selected again.` : ' They are listed in Saved client ads below.');
       progress(''); message(text);
     }, true);
@@ -787,6 +802,7 @@
     el('Panel').hidden = view !== 'signed'; el('Tab').setAttribute('aria-pressed', String(view === 'signed'));
     el('FollowedPanel').hidden = view !== 'followed'; el('FollowedTab').setAttribute('aria-pressed', String(view === 'followed'));
     if (!view) return;
+    if (view === 'followed') { drawAds(); controls(); }
     window.cvStudioPeople?.hideHR?.();
     for (const kind of ['Ads', 'Contacts']) {
       const panel = document.getElementById('jobLeadsApollo' + kind + 'Panel'), tab = document.getElementById('jobLeadsApollo' + kind + 'Tab');
@@ -813,9 +829,10 @@
   // Ads added on LinkedIn reach Job Leads directly; re-read them when the
   // owner comes back to this tab so Saved client ads stays current.
   function returned() {
-    if (document.hidden || el('FollowedPanel').hidden || mine() || !state.loaded) return;
+    // focus and visibilitychange both fire on return: one read serves both.
+    if (returning || document.hidden || el('FollowedPanel').hidden || mine() || !state.loaded) return;
     const token = generation;
-    void refreshRecords(token).then(() => { if (token === generation && !mine()) draw(); }).catch(() => {});
+    returning = refreshRecords(token).then(() => { if (token === generation && !mine()) draw(); }).catch(() => {}).finally(() => { returning = null; });
   }
 
   function init() {

@@ -43,9 +43,11 @@ function fixture(options={}){
   const fetch=async(url,init={})=>{
     if(url==='/jobadder/api_info')return {ok:true,json:async()=>state.apiInfo || {connected:true,account_cache_namespace:state.account}};
     if(url==='/job-leads'){
+      if(!init.body)state.recordGets=(state.recordGets||0)+1;
       if(!init.body && state.holdRecords)return new Promise(resolve=>state.recordsReply=resolve);
       if(!init.body)return reply({records:structuredClone(state.records),folders:[...state.folders]});
       const body=JSON.parse(init.body);leadsCalls.push(body);assert.equal(body.action,'save');
+      if(state.holdSave)await new Promise(resolve=>{state.releaseSave=resolve;});
       const duplicate=state.records.find(row=>row.url===body.record.url);
       if(duplicate)return reply({record:duplicate,duplicate:true});
       const record={...body.record,id:String(state.records.length+1).padStart(32,'0'),deleted:false};state.records.push(record);return reply({record,duplicate:false});
@@ -78,6 +80,7 @@ function fixture(options={}){
   };
   const runs=new Map(),begun=[],ended=[];let tab=40;
   const app={
+    statusLabels:{new:'New',to_contact:'To contact',contacted:'Contacted',follow_up:'Following up',won:'Won',closed:'Closed'},
     lock:value=>{state.locks.push(value);state.busy=value;},isBusy:()=>state.busy,refresh:async()=>{state.refreshes++;},activityStart:()=>'activity',activityEnd:()=>{},
     rpc:async(action,args={})=>{
       rpcCalls.push({action,args:structuredClone(args)});
@@ -274,7 +277,10 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   f.el('Folder').value='Clients';
   await f.el('Add').click();await settle();
   assert.deepEqual(f.leadsCalls.map(c=>c.record.url),['https://www.linkedin.com/jobs/view/1002','https://www.linkedin.com/jobs/view/1003','https://www.linkedin.com/jobs/view/2001']);
-  assert.deepEqual(Object.keys(f.leadsCalls[0].record).sort(),['company','contact','date_posted','description','description_rich','description_truncated','folder','follow_up','location','notes','role','status','url'].sort());
+  assert.deepEqual(Object.keys(f.leadsCalls[0].record).sort(),['client','company','contact','date_posted','description','description_rich','description_truncated','folder','follow_up','location','notes','role','status','url'].sort());
+  // Each saved ad carries the client it was pulled for, so the dashboard never guesses from names.
+  assert(f.leadsCalls.every(call=>Number.isSafeInteger(call.record.client.company_id) && typeof call.record.client.name==='string' && call.record.client.name));
+  assert.notEqual(f.leadsCalls[0].record.client.company_id,f.leadsCalls[2].record.client.company_id,'ads from different clients keep their own client');
   assert.equal(f.leadsCalls[0].record.folder,'Clients');assert.equal(f.leadsCalls[0].record.status,'new');assert.equal(f.leadsCalls[0].record.notes,'');
   assert.equal(f.state.refreshes,1,'the main Job ads list reloads');
   assert.match(f.el('Message').textContent,/^Saved 3 ads to Clients/);
@@ -571,6 +577,48 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.equal(d.el('AdsCount').textContent,before,'no background read while Followed clients is hidden');
    const empty=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[]});await empty.el('FollowedTab').click();await settle();
    assert.match(empty.el('AdsEmpty').textContent,/No saved ads from followed clients yet/);assert(!empty.el('AdsEmpty').hidden);}
+
+  // Review fixes: attribution by pulled client, then the most specific name.
+  {const rec=(id,company,patch={})=>({id:id.padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+id,company,role:'Role '+id,status:'new',folder:'',date_posted:'',created_at:'2026-10-01T00:00:00Z',deleted:false,...patch});
+   const records=[rec('81','ABC Logistics Sdn Bhd'),rec('82','ABC'),rec('83','Johnson Matthey',{client:{company_id:12,name:'JM Catalysts'}}),rec('84','Unrelated')];
+   const followed=[client(11,'4242','ABC'),client(12,'5151','JM Catalysts'),client(13,'6363','ABC Logistics')];
+   const a=fixture({signed:[2],followed,records});await a.el('FollowedTab').click();await settle();
+   assert.deepEqual(Array.from(a.api.clientAds(records,followed),row=>[row.record.company,row.client.name]),
+     [['ABC Logistics Sdn Bhd','ABC Logistics'],['ABC','ABC'],['Johnson Matthey','JM Catalysts']],'the most specific name wins and a pulled ad keeps its client');
+   assert.deepEqual(rows(a).map(row=>row.children[3].text),['1','1','1'],'Ads in Job ads counts the same rows as the dashboard');
+   assert.equal(a.el('AdsCount').textContent,'3');}
+
+  // "Last 7 days" means today and the 6 days before.
+  {const day=offset=>{const d=new Date();d.setDate(d.getDate()-offset);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+   const rec=(id,offset)=>({id:id.padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+id,company:'Example Client',role:'Role '+id,status:'new',folder:'',date_posted:day(offset),created_at:'2026-10-01T00:00:00Z',deleted:false});
+   const w=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[rec('91',0),rec('92',6),rec('93',7)]});
+   await w.el('FollowedTab').click();await settle();
+   assert.match(w.el('AdsTiles').children[2].text,/^2 Posted in the last 7 days/);
+   w.el('AdsPosted').value='7';await w.el('AdsPosted').dispatch('change');assert.equal(w.el('AdsRows').children.length,2);}
+
+  // A return-to-tab read never overwrites a newer read, and one return reads once.
+  {const r=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});await r.el('FollowedTab').click();await settle();
+   const stale=structuredClone(r.state.records),before=r.state.recordGets;r.state.holdRecords=true;
+   r.focus();r.focus();await settle();assert.equal(r.state.recordGets,before+1,'focus and visibility on one return read once');
+   const held=r.state.recordsReply;r.state.holdRecords=false;
+   r.state.records.push({id:'7'.repeat(32),url:'https://www.linkedin.com/jobs/view/7777',company:'Example Client',role:'Newer ad',status:'new',folder:'',date_posted:'',deleted:false});
+   await r.el('FollowedRefresh').click();await settle();assert.equal(r.el('AdsCount').textContent,'3');
+   held({ok:true,json:async()=>({ok:true,records:stale,folders:['Clients']})});await settle();
+   assert.equal(r.el('AdsCount').textContent,'3','the older reply is ignored');}
+
+  // Hidden dashboard is not redrawn; it is drawn when its tab opens.
+  {const h=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});await h.el('Tab').click();await settle();
+   assert.equal(h.el('AdsRows').children.length,0,'no dashboard work while Signed clients is shown');
+   await h.el('FollowedTab').click();assert.equal(h.el('AdsCount').textContent,'2','drawn as soon as the tab opens');}
+
+  // Stop ends a long save batch between ads.
+  {const st=fixture({signed:[2],followed:[client(11,'4242','Example Client')],pages:{'4242':[bulk(6000,30)]}});
+   await st.el('FollowedTab').click();await settle();await st.el('Pull').click();await settle(120);
+   await st.el('SelectAll').click();st.state.holdSave=true;const saving=st.el('Add').click();await settle();
+   assert(!st.el('Stop').disabled,'Stop is available while saving');await st.el('Stop').click();
+   st.state.holdSave=false;st.state.releaseSave();await saving;await settle(60);
+   assert.equal(st.leadsCalls.length,1,'no further ad is saved after Stop');
+   assert.match(st.el('FollowedMessage').textContent,/^Stopped\. Saved 1 ad.*29 selected ads are still waiting/);}
 
   // Account change on screen, and a JobAdder outage.
   const down=fixture({down:true});await down.el('Tab').click();await settle();

@@ -78,16 +78,16 @@ function jobURL(value) {
     return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
   } catch { return ''; }
 }
-const jobSearchFilter = /^(?:keywords|location|geoId|distance|f_[A-Za-z0-9]{1,20})$/;
+const jobSearchFilter = /^(?:keywords|location|geoId|distance|sortBy|f_[A-Za-z0-9]{1,20})$/;
 function jobSearchKey(value) {
   try {
     if (typeof value !== 'string' || value.length > 2048) return '';
     const url = new URL(value);
     if (!linkedin(value) || url.username || url.password || !/^\/jobs\/search(?:-results)?\/?$/.test(url.pathname)) return '';
     url.pathname = '/jobs/search/'; url.hash = '';
-    // Only parameters that decide which jobs are listed identify a search.
-    // LinkedIn adds and rotates tracking, session, paging and sort parameters
-    // while the page is open; those never make it a different search.
+    // Only parameters that decide which jobs are listed, and in which order,
+    // identify a search. LinkedIn adds and rotates tracking, session and
+    // paging parameters while the page is open; those never change it.
     for (const name of [...new Set(url.searchParams.keys())])
       if (!jobSearchFilter.test(name) || url.searchParams.getAll(name).every(item => item === '')) url.searchParams.delete(name);
     url.searchParams.sort(); return url.href;
@@ -284,8 +284,13 @@ async function settleJobSearch(bound, run, tab) {
   if (!actual) throw safeError('The tab left LinkedIn Jobs search. Open a job search and try again.');
   if (tab.pendingUrl && jobSearchKey(tab.pendingUrl) !== actual) return false;
   const requested = new URL(bound.jobKey), resolved = new URL(actual);
-  requested.searchParams.delete('location');
-  for (const name of ['location','geoId','distance']) resolved.searchParams.delete(name);
+  // LinkedIn may fill in a location, radius or default sort as it loads; the
+  // resolved values are then pinned for the rest of the run.
+  for (const name of ['location','sortBy']) requested.searchParams.delete(name);
+  for (const name of ['location','geoId','distance','sortBy']) resolved.searchParams.delete(name);
+  // A search opened without keywords (a client's company search) may get
+  // keywords filled in by LinkedIn's AI search; the company filter must stay.
+  if (!requested.searchParams.has('keywords')) resolved.searchParams.delete('keywords');
   if (requested.href !== resolved.href) {
     // Name only the changed filter parameters (never their values).
     const names=[...new Set([...requested.searchParams.keys(),...resolved.searchParams.keys()])]
