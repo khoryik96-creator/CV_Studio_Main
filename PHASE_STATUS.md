@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.534 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.535 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged534/PR279/a867965. Invisible or parked background reCAPTCHA frames no
+  longer count as a LinkedIn verification check; only a visible captcha does.
+  Ad-read access errors name the signal (sign-in page, captcha or notice).
+  Companion only; no route/schema change. Update app AND companion.
+- v24.6.534 (merged PR279) was local/unmerged on `claude/job-leads-signed-clients` from
   merged533/PR278/f674ed4. Bulk Find HR people no longer stops when an ad's own
   wording (for example "unusual activity" or "security verification") looks
   like a LinkedIn notice: the ad reader checks page text only while no ad is
