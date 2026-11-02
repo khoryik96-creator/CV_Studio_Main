@@ -1,6 +1,6 @@
 const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
 class Element {
-  constructor(tagName='div',textContent=''){Object.assign(this,{tagName,textContent,value:'',children:[],handlers:{},disabled:false,checked:false,hidden:false,dataset:{}})}
+  constructor(tagName='div',textContent=''){Object.assign(this,{tagName,textContent,value:'',children:[],handlers:{},disabled:false,checked:false,hidden:false,dataset:{},classes:new Set()});this.classList={toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name),contains:name=>this.classes.has(name)}}
   addEventListener(type,fn){this.handlers[type]=fn} append(...values){this.children.push(...values)}
   appendChild(value){this.children.push(value);return value} replaceChildren(...values){this.children=values}
   setAttribute(name,value){this[name]=value} focus(){} scrollIntoView(){}
@@ -78,7 +78,7 @@ function fixture(options={}){
   }
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-search-walk.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
-  return {el,state,calls,requests,apollo:window.cvStudioApollo,jobLeads:()=>window.cvStudioJobLeads,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
+  return {el,document,state,calls,requests,apollo:window.cvStudioApollo,jobLeads:()=>window.cvStudioJobLeads,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
     state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record,request}});
   })};
 }
@@ -227,6 +227,11 @@ if(require.main===module)(async()=>{
   assert.match(direct.el('SearchCount').textContent,/0 found/,'direct additions do not become temporary search results');
   const quick=direct.state.records.find(row=>row.url===incoming.url);assert.equal(quick.folder,'Priority');assert.equal(quick.contact,'');assert.equal(quick.notes,'');assert.equal(quick.status,'new');
   assert.equal(direct.el('notes').value,'Keep unsaved notes');
+  // An ad LinkedIn dates only as "X days ago" keeps that estimate, never as the exact date.
+  const aged=job('4444444444',{role:'Estimated age ad',date_posted:'',date_posted_estimate:'2026-10-20'});assert((await direct.capture(aged)).ok);
+  const agedSaved=direct.state.records.find(row=>row.url===aged.url);assert.equal(agedSaved.date_posted,'');assert.equal(agedSaved.date_posted_estimate,'2026-10-20');
+  const bogus=job('5555555555',{role:'Bad estimate',date_posted:'',date_posted_estimate:'2 weeks ago'});assert((await direct.capture(bogus)).ok);
+  assert.equal(direct.state.records.find(row=>row.url===bogus.url).date_posted_estimate,'','only a calendar date is kept as an estimate');
   assert((await direct.capture({...b,notes:'Do not overwrite'})).duplicate);assert.equal(direct.state.records[0].notes,'Important saved notes');
   const count=direct.state.records.length;assert((await direct.capture(job('9',{url:'https://attacker.invalid/jobs/view/9'}))).error);assert.equal(direct.state.records.length,count);
   direct.state.failSave=a.url;assert((await direct.capture(a)).error);assert.equal(direct.el('notes').value,'Keep unsaved notes');

@@ -65,6 +65,16 @@ def test_posted_date_and_description_survive_save_reopen_backup_restore(store,tm
     assert record['date_posted']=='2026-10-02' and record['description']==content and record['description_truncated'] is True
 
 
+def test_estimated_posted_date_is_validated_kept_on_form_edits_and_separate_from_exact(store):
+    saved = store.save({**RECORD, 'date_posted_estimate': '2026-10-19'})['record']
+    assert saved['date_posted'] == '' and saved['date_posted_estimate'] == '2026-10-19'
+    form_edit = {key: value for key, value in saved.items() if key != 'date_posted_estimate'}
+    assert store.save({**form_edit, 'notes': 'Edited'})['record']['date_posted_estimate'] == '2026-10-19', 'a form edit keeps the estimate'
+    for bad in ['2 weeks ago', '2026-02-30', '20261019']:
+        with pytest.raises(JobLeadsError):
+            store.save({**RECORD, 'url': 'https://www.linkedin.com/jobs/view/1234567892', 'date_posted_estimate': bad})
+
+
 def test_legacy_rows_without_new_fields_keep_defaults_in_current_schema(store):
     saved=store.save(RECORD)['record']
     raw={key:value for key,value in saved.items() if key not in {'date_posted','description_truncated'}}

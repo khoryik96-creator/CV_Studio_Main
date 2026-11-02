@@ -16,6 +16,7 @@ async function mount(context){
   await page.evaluate(markup=>{
     const parsed=new DOMParser().parseFromString(markup,'text/html');
     document.body.append(document.importNode(parsed.getElementById('viewJobLeads'),true));
+    document.body.append(document.importNode(parsed.getElementById('settingsApolloCard'),true));
     document.getElementById('viewJobLeads').classList.add('active');
     window.contactTestCalls=[];
     window.fetch=async(url,options)=>{

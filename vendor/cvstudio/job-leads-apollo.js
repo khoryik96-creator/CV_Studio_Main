@@ -1,4 +1,5 @@
-/* Per-account Apollo controls for saved HR cards. No tokens or emails in browser storage. */
+/* Per-account Apollo controls for saved HR cards. The connection itself lives in
+   Settings → Integrations & Data. No tokens or emails in browser storage. */
 (function () {
   'use strict';
   const el=name=>document.getElementById('jobLeadsApollo'+name);
@@ -25,9 +26,26 @@
   }
   function text(tag,value,cls) {const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;}
   function message(value) {el('Message').textContent=value;}
+  // Connection messages show beside the Settings card; the Job ads note keeps
+  // unlock results next to the HR cards.
+  function setup(value) {el('SetupMessage').textContent=value;}
+  const settingsHint='Connect Apollo in Settings → Integrations & Data to unlock emails.';
+  function openSettings() {
+    // Opened after the click finishes, so Settings' "click outside closes"
+    // listener does not close it again for the same click.
+    setTimeout(showSettings,0);
+  }
+  function showSettings() {
+    const panel=document.getElementById('settingsPanel');
+    if(panel && panel.style.display!=='block' && typeof window.toggleSettings==='function') window.toggleSettings();
+    if(typeof window.showSettingsTab==='function') window.showSettingsTab('integrations');
+    const card=document.getElementById('settingsApolloCard');card?.scrollIntoView?.({block:'center'});card?.focus?.();
+  }
   function controls() {
     if(!ready) return;
     el('State').textContent=account.connected?'Connected as '+account.name:account.available?'Use your own Apollo account and credits':'Apollo connection needs owner setup';
+    const pill=document.getElementById('settingsApolloStatus');
+    if(pill) {pill.textContent=account.connected?'Connected':account.connecting?'Signing in':account.available?'Not connected':'Needs setup';pill.classList.toggle('ok',!!account.connected);}
     el('Connect').hidden=account.connected;
     el('Connect').disabled=working || appBusy || !account.available;
     el('Connect').textContent=account.connecting?'Continue sign-in':'Connect Apollo';
@@ -132,13 +150,13 @@
         if(generation!==pollGeneration) return;
         if(result.connected) {
           account={...account,connected:true,connecting:false,name:result.name};cache={};
-          el('Continue').hidden=true;message('Apollo connected. Choose Unlock email on a saved HR card.');
+          el('Continue').hidden=true;setup('Apollo connected.');message('Apollo connected. Choose Unlock email on a saved HR card.');
           await refreshEmails(row,sequence);controls();return;
         }
         await new Promise(resolve=>setTimeout(resolve,2000));
       }
-      if(generation===pollGeneration) message('Sign-in is still waiting. Continue sign-in or cancel and connect again.');
-    } catch(error) {if(generation===pollGeneration) {account.connecting=false;message(error.message);controls();}}
+      if(generation===pollGeneration) setup('Sign-in is still waiting. Continue sign-in or cancel and connect again.');
+    } catch(error) {if(generation===pollGeneration) {account.connecting=false;setup(error.message);controls();}}
     finally {polling=false;if(account.connecting && generation!==pollGeneration) void poll(pollGeneration);}
   }
   async function connect() {
@@ -151,11 +169,11 @@
       const data=await api({action:'connect'});
       account.connecting=true;el('Continue').href=data.authorization_url;el('Continue').hidden=false;
       if(popup) popup.location.href=data.authorization_url;
-      message('Sign in with Apollo in the new tab, then return here. Your Apollo password stays with Apollo.');
+      setup('Sign in with Apollo in the new tab, then return here. Your Apollo password stays with Apollo.');
       const generation=polling?pollGeneration:++pollGeneration;
       // An old polling loop exits before another one starts.
       if(!polling) void poll(generation);
-    } catch(error) {popup?.close();message(error.message);}
+    } catch(error) {popup?.close();setup(error.message);}
     finally {working=false;controls();}
   }
   async function disconnect() {
@@ -165,8 +183,8 @@
     try {
       const data=await api({action:'disconnect'});
       account={...account,connected:false,connecting:false,name:''};cache={};el('Continue').hidden=true;
-      message(data.warning || 'Apollo disconnected. Saved job ads and HR profiles were kept.');
-    } catch(error) {message(error.message);}
+      setup(data.warning || 'Apollo disconnected. Saved job ads and HR profiles were kept.');message(settingsHint);
+    } catch(error) {setup(error.message);}
     finally {working=false;controls();}
   }
   async function unlock(person, source=row, prior, notify=message, complete) {
@@ -194,6 +212,7 @@
     connected:()=>account.connected,
     available:()=>account.available,
     connect,
+    openSettings,
     unlockSaved:(current,person,previous,notify,complete)=>unlock(person,current,previous,notify,complete),
     async init() {
       if(ready) return;ready=true;
@@ -208,10 +227,11 @@
       window.addEventListener('pagehide',()=>{++pollGeneration;account.connecting=false;});
       try {
         account=await api();
-        if(!account.available) message('Your CV Studio owner needs to finish the one-time Apollo sign-in setup.');
+        if(!account.available) setup('Your CV Studio owner needs to finish the one-time Apollo sign-in setup.');
+        if(!account.connected && !account.connecting) message(settingsHint);
         await refreshEmails(row,sequence);
         if(account.connecting) void poll(++pollGeneration);
-      } catch(error) {message(error.message);}
+      } catch(error) {setup(error.message);message(error.message);}
       controls();
     },
     busy(value) {appBusy=value;controls();},

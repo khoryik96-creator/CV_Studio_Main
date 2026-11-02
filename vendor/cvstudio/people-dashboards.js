@@ -98,7 +98,7 @@
     }
     if(kind==='HR') {
       for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !window.cvStudioApollo?.connected();
-      el('HRConnect').hidden=!!window.cvStudioApollo?.connected();el('HRConnect').disabled=appBusy || dateBusy || !window.cvStudioApollo?.available();
+      el('HRConnect').hidden=!!window.cvStudioApollo?.connected();el('HRConnect').disabled=appBusy || dateBusy;
     }
   }
   function choices(kind) {
@@ -387,7 +387,7 @@
     for(const kind of ['Ads','Contacts']){document.getElementById('jobLeadsApollo'+kind+'Panel').hidden=true;document.getElementById('jobLeadsApollo'+kind+'Tab').setAttribute('aria-pressed','false');}
     if(!openingHR)void refresh('HR');
   });
-  el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.connect());
+  el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.openSettings());
   async function stopDate(){if(!dateBusy)return;dateStopped=true;controls('HR');if(dateOperation)try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}
   el('HRDateStop').addEventListener('click',stopDate);
   el('HRDateAll').addEventListener('click',checkMissingEmployment);

@@ -22,6 +22,7 @@
       if (!url || url !== raw.url || typeof raw.company !== 'string' || !raw.company.trim() || typeof raw.role !== 'string' || !raw.role.trim()) continue;
       result.push({url,company:raw.company.slice(0,200),role:raw.role.slice(0,240),location:typeof raw.location === 'string' ? raw.location.slice(0,240) : '',
         date_posted:typeof raw.date_posted === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date_posted) ? raw.date_posted : '',
+        date_posted_estimate:typeof raw.date_posted_estimate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date_posted_estimate) ? raw.date_posted_estimate : '',
         description:typeof raw.description === 'string' ? raw.description.slice(0,6500) : ''});
     }
     return result;

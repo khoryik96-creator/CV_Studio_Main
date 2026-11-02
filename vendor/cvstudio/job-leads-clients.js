@@ -75,6 +75,9 @@
     }
     return rows;
   }
+  // Exact posted date when LinkedIn gave one, otherwise its estimate ("≈").
+  const postedOf = row => row?.date_posted || row?.date_posted_estimate || '';
+  const postedText = row => row?.date_posted || (row?.date_posted_estimate ? '≈ ' + row.date_posted_estimate : '—');
   function savedAds(client, records) {
     return (records || []).filter(row => !row.deleted && sameCompany(row.company, client.name)).length;
   }
@@ -354,7 +357,7 @@
         pick.append(box);
       }
       const role = node('td'); role.append(link(row.role, row.url, JOB_URL));
-      tr.append(pick, role, node('td', row.client_name), node('td', row.company), node('td', row.location || '—'), node('td', row.date_posted || '—'));
+      tr.append(pick, role, node('td', row.client_name), node('td', row.company), node('td', row.location || '—'), node('td', postedText(row)));
       target.append(tr);
     }
     el('FoundPage').textContent = state.found.length ? `${state.foundPage * FOUND_PAGE + 1}–${Math.min((state.foundPage + 1) * FOUND_PAGE, state.found.length)} of ${state.found.length}` : '';
@@ -375,10 +378,10 @@
     const sorts = {posted_desc:['date_posted',-1], posted_asc:['date_posted',1], saved_desc:['created_at',-1], saved_asc:['created_at',1],
       role_asc:['role',1], company_asc:['company',1], client_asc:['client',1]};
     const [field, direction] = sorts[el('AdsSort').value] || sorts.posted_desc;
-    const value = row => field === 'client' ? row.client.name : row.record[field] || '';
+    const value = row => field === 'client' ? row.client.name : field === 'date_posted' ? postedOf(row.record) : row.record[field] || '';
     return allClientAds().filter(({record, client: owner}) =>
       (!client || String(owner.company_id) === client) && (!status || record.status === status) &&
-      (!folder || JSON.stringify(record.folder || '') === folder) && (!since || (record.date_posted || '') >= since) &&
+      (!folder || JSON.stringify(record.folder || '') === folder) && (!since || postedOf(record) >= since) &&
       (!query || [record.role, record.company, record.location].some(text => String(text || '').toLowerCase().includes(query))))
       .sort((a, b) => {
         const x = value(a), y = value(b);
@@ -393,18 +396,11 @@
     select.value = [all[0], ...entries.map(entry => entry[0])].includes(old) ? old : all[0];
   }
   function drawAds() {
-    const every = allClientAds(), since = dayStart(6); // today and the 6 days before
+    const every = allClientAds();
     const clients = new Map(every.map(row => [String(row.client.company_id), row.client.name]));
     adsChoices('AdsClient', [...clients].sort((a, b) => compareText(a[1], b[1])), ['', 'All clients']);
     adsChoices('AdsStatus', Object.entries(statusLabels()), ['', 'All statuses']);
     adsChoices('AdsFolder', [['', 'Unfiled'], ...state.folders.map(name => [name, name])].map(([name, label]) => [JSON.stringify(name), label]), ['', 'All folders']);
-    const tiles = el('AdsTiles'); tiles.replaceChildren();
-    for (const [count, label] of [[every.length, 'Saved ads'], [clients.size, 'Clients with ads'],
-      [every.filter(row => (row.record.date_posted || '') >= since).length, 'Posted in the last 7 days'],
-      [every.filter(row => row.record.status === 'new').length, 'Status: New'],
-      [every.filter(row => !row.record.hr).length, 'No HR scan yet']]) {
-      const tile = node('div', undefined, 'job-leads-clients-tile'); tile.append(node('strong', String(count)), node('span', label)); tiles.append(tile);
-    }
     // A just-created folder becomes the Move target once its option exists.
     const moveTo = el('AdsMoveFolder'), target0 = state.moveTo || moveTo.value; state.moveTo = '';
     moveTo.replaceChildren(...[['', 'Unfiled'], ...state.folders.map(name => [name, name])].map(([value, label]) => { const n = node('option', label); n.value = value; return n; }));
@@ -435,7 +431,7 @@
         hr.append(node('span', `${people} found` + (record.hr.scanned_at ? ' · ' + String(record.hr.scanned_at).slice(0, 10) : '')));
         if (people) { const view = button('View', () => viewHR(record)); view.dataset.clientAction = ''; view.setAttribute('aria-label', 'View HR people for ' + record.company); hr.append(' ', view); }
       } else hr.textContent = 'Not scanned';
-      tr.append(pick, node('td', record.date_posted || '—'), role, node('td', record.company), owner, node('td', record.location || '—'),
+      tr.append(pick, node('td', postedText(record)), role, node('td', record.company), owner, node('td', record.location || '—'),
         node('td', statusLabels()[record.status] || record.status || '—'), node('td', record.folder || 'Unfiled'),
         node('td', String(record.created_at || '').slice(0, 10) || '—'), hr);
       target.append(tr);
@@ -693,7 +689,7 @@
     if (targets.length > MAX_PER_PULL) { progress(`Pull up to ${MAX_PER_PULL} clients at a time. Untick some clients and try again.`); return; }
     if (state.found.length >= MAX_FOUND) { progress(`The review list is full (${MAX_FOUND} ads). Add or clear ads, then pull again.`); return; }
     const token = generation, activity = app.activityStart?.() ?? null, tally = {ads:0};
-    let done = 0, failed = 0, skipped = 0, partial = 0, failure = '';
+    let done = 0, failed = 0, skipped = 0, partial = 0, failure = '', dated = 0;
     const failures = [], empty = [];
     state.pulling = true; state.stopped = false; app.lock(true); controls();
     try {
@@ -726,6 +722,7 @@
           failed++; failures.push(`${client.name}: ${error.message}`);
         }
       }
+      if (!state.stopped && token === generation) dated = await fillPostedDates(token);
     } catch (error) { if (!state.stopped && token === generation) failure = error.message; }
     finally {
       if (token === generation) {
@@ -735,12 +732,30 @@
           (started ? `${done} client${done === 1 ? '' : 's'} pulled, ${tally.ads} ads found, ${fresh} new to review.` : '') +
           (partial || skipped ? ` The review list is full (${MAX_FOUND} ads): ${partial + skipped} client${partial + skipped === 1 ? ' was' : 's were'} not fully pulled. Add or clear ads, then pull again.` : '') +
           (empty.length ? ` No open jobs on LinkedIn: ${empty.join(', ')}.` : '') +
+          (dated ? ` Posted dates added to ${dated} saved ad${dated === 1 ? '' : 's'}.` : '') +
           // Every client's reason is listed, not only the last one.
           (failed ? ` ${failed} could not be pulled: ${failures.join(' ')}` : '') + (failure ? ' ' + failure : ''));
         draw();
       }
       app.activityEnd?.(activity, !!(failure || failed));
     }
+  }
+  // Saved ads with no posted date take the date (or estimate) this pull just
+  // read for the same ad. Nothing else in the saved ad changes.
+  async function fillPostedDates(token) {
+    let filled = 0;
+    for (const row of state.found) {
+      if (token !== generation || state.stopped) break;
+      const record = savedJob(row.url);
+      if (!record || record.deleted || record.date_posted || record.date_posted_estimate || !(row.date_posted || row.date_posted_estimate)) continue;
+      const {created_at, updated_at, hr, ...fields} = record;
+      try {
+        await leads({action:'save', record:{...fields, date_posted:row.date_posted || '', date_posted_estimate:row.date_posted ? '' : row.date_posted_estimate}});
+        filled++;
+      } catch {} // a conflicting edit keeps the saved ad as it is
+    }
+    if (filled && token === generation) await refreshRecords(token);
+    return filled;
   }
   function stop() {
     if (!state.pulling && !state.refreshing && !state.saving) return;
@@ -824,6 +839,7 @@
           progress(`Saving ${index + 1} of ${selected.length}…`);
           // The client the ad was pulled for groups it in Saved client job ads.
           const result = await leads({action:'save', record:{url:row.url, company:row.company, role:row.role, location:row.location, date_posted:row.date_posted,
+            date_posted_estimate:row.date_posted ? '' : row.date_posted_estimate || '',
             description:row.description, description_rich:[], description_truncated:true, folder, status:'new', contact:'', notes:'', follow_up:'',
             ...(Number.isSafeInteger(row.client_id) && row.client_id > 0 && row.client_name ? {client:{company_id:row.client_id, name:String(row.client_name).slice(0, 200)}} : {})}});
           if (result.duplicate) skipped++; else added++;

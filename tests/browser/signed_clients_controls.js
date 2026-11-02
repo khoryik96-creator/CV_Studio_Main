@@ -13,7 +13,12 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   const names=()=>page.locator('#jobLeadsClientsCompanies tr td:first-child a').allTextContents();
   const waitNames=async expected=>page.waitForFunction(value=>JSON.stringify([...document.querySelectorAll('#jobLeadsClientsCompanies tr td:first-child a')].map(n=>n.textContent))===JSON.stringify(value),expected);
   const status=label=>page.locator('#jobLeadsClientsStatuses').getByRole('checkbox',{name:label,exact:true});
-  await page.goto(origin+'/?module=jobleads');await page.locator('#jobLeadsClientsTab').click();await status('Signed Client').waitFor();
+  await page.goto(origin+'/?module=jobleads');
+  // HR people's Connect Apollo opens the Settings card, and the same click does not close it again.
+  await page.locator('#peopleHRTab').click();await page.waitForFunction(()=>document.getElementById('jobLeadsApolloState').textContent.startsWith('Connected'));await page.evaluate(()=>{const b=document.getElementById('peopleHRConnect');b.hidden=false;b.disabled=false;});
+  await page.locator('#peopleHRConnect').click();await page.locator('#settingsApolloCard').waitFor();await page.waitForTimeout(300);
+  assert(await page.locator('#settingsApolloCard').isVisible(),'Settings stays open on the Apollo card');await page.evaluate(()=>closeSettingsPanel());
+  await page.locator('#jobLeadsClientsTab').click();await status('Signed Client').waitFor();
   await status('Signed Client').check();await status('Active Client').check();await page.locator('#jobLeadsClientsStatusesSave').click();await waitNames(['alpha','Client 2','Client 10','Zeta']);
   const company=name=>page.locator('#jobLeadsClientsCompanies tr').filter({has:page.getByRole('link',{name,exact:true})});
   await company('Client 10').getByRole('button',{name:'Follow',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('#jobLeadsClientsFollowed tr').length===1);

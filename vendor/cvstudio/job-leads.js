@@ -211,8 +211,10 @@
     if (className) value.className = className;
     return value;
   }
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const estimateOf = row => typeof row?.date_posted_estimate === 'string' && DAY.test(row.date_posted_estimate) ? row.date_posted_estimate : '';
   function postedLabel(value) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return 'Not available';
+    if (!DAY.test(value || '')) return 'Not available';
     const date = new Date(value + 'T00:00:00Z');
     return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'}).format(date) : 'Not available';
   }
@@ -323,7 +325,8 @@
       card.append(node('h3', row.company), node('p', row.role, 'job-lead-role'));
       const meta = node('div', '', 'job-lead-meta');
       meta.append(node('span', labels[row.status], 'job-lead-status'));
-      meta.append(node('span', 'Posted: ' + postedLabel(row.date_posted)));
+      // An estimate from LinkedIn's "2 weeks ago" is marked with ≈.
+      meta.append(node('span', 'Posted: ' + (row.date_posted || !row.date_posted_estimate ? postedLabel(row.date_posted) : '≈ ' + postedLabel(row.date_posted_estimate))));
       meta.append(node('span', 'Date created: ' + createdLabel(row.created_at)));
       meta.append(node('span', row.folder || 'Unfiled', 'job-lead-folder'));
       if (row.follow_up) meta.append(node('span', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : ''));
@@ -595,6 +598,20 @@
   function hrTimeoutMessage(stage,country) {
     return {company:'The LinkedIn company identity did not finish loading.',company_filter:'LinkedIn’s company filter did not confirm the company.',country_filter:'LinkedIn’s location filter did not confirm '+(country || 'the selected country')+'.',navigation:'The expected LinkedIn search did not finish opening.',results:'The LinkedIn HR results did not finish loading.'}[stage] || 'LinkedIn did not finish loading the HR results.';
   }
+  // One LinkedIn company page URL per company, or '' when it is not one.
+  function companyPage(url) {
+    const match=String(url || '').match(/^https:\/\/www\.linkedin\.com\/company\/([A-Za-z0-9_-]+)(?:\/(?:people|about|life))?\/?$/);
+    return match ? 'https://www.linkedin.com/company/'+match[1]+'/' : '';
+  }
+  // The employer link on this exact ad, or '' when the ad cannot be read.
+  async function adCompanyPage(row) {
+    hrCapture=hex();
+    try {
+      const captured=await rpc('jobFromLink',{url:row.url,company_only:true,operation_id:hrCapture});
+      return captured?.url===row.url ? companyPage(captured.company_url) : '';
+    } catch { return ''; }
+    finally { hrCapture=''; }
+  }
   async function scanHR(row, {country,keywords,pages,companyURL,expectedRedirectURL}, notify, showPeople, recovery=0) {
     const found = new Map();let finalSnapshot=null,omitted=false,outcome,cleanupFailed=false,saving=false,retryCompanyURL='';
     let companyName=row.hr?.company_name || row.company, jobURL='',expectedID='';
@@ -626,9 +643,8 @@
           companyURL=captured.company_url || '';companyName=captured.company.trim();jobURL=row.url;
         }
       }
-      const companyMatch=companyURL.match(/^https:\/\/www\.linkedin\.com\/company\/([A-Za-z0-9_-]+)(?:\/(?:people|about|life))?\/?$/);
-      if (!companyMatch) throw Error('The company link is unavailable. Enter its LinkedIn company page under Search options.');
-      companyURL='https://www.linkedin.com/company/'+companyMatch[1]+'/';
+      companyURL=companyPage(companyURL);
+      if (!companyURL) throw Error('The company link is unavailable. Enter its LinkedIn company page under Search options.');
       if(expectedRedirectURL && companyURL!==expectedRedirectURL)throw Error('LinkedIn still shows the old company link on this ad. Open it and confirm its employer link before trying again.');
       checkHR(); hrRun=hex();
       const source = await rpc('hrBegin',{run_id:hrRun,company_url:companyURL,company:companyName,...(jobURL?{job_url:jobURL}:{}),...(expectedID?{expected_company_id:expectedID}:{}),country,keywords,max_pages:pages}); checkHR();
@@ -697,14 +713,15 @@
       checkHR();
       const complete=!finalSnapshot.hasNext && !omitted;
       saving=true;
-      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
-        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>({...person,employment_status:person.joined?'observed':_employment==='observed'?'not_shown':'not_checked'}))}});
+      const search={company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
+        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>({...person,employment_status:person.joined?'observed':_employment==='observed'?'not_shown':'not_checked'}))};
+      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
       hrRow=''; render(); drawPreview();
       const employmentConfirmed=[...found.values()].filter(person=>person.joined).length;
       const message=`${found.size} HR matches saved · ${employmentConfirmed}/${found.size} employment dates confirmed · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`+(expectedID?' The ad could not be reread; its previously saved company identity was reconfirmed.':'');
-      outcome={state:'saved',matches:found.size,employmentConfirmed,complete,message};notify(message);
+      outcome={state:'saved',matches:found.size,employmentConfirmed,complete,message,search};notify(message);
     } catch(error) {
       if(error.companionCode==='HR_COMPANY_REDIRECT' && recovery===0 && jobURL && !found.size && !finalSnapshot && !saving && error.companyURL)retryCompanyURL=error.companyURL;
       const saveUnconfirmed=saving && error.code!=='JOB_LEADS_CONFLICT';
@@ -790,10 +807,44 @@
     }
     bulkHRSummary();rememberBulkHR();lock(true);
     let stoppedReason='';
+    // HR people belong to the company, not the ad: each LinkedIn company is
+    // scanned once in a run. Another selected ad with the same employer name
+    // has its own employer link read first, and only an exact match of the
+    // scanned company page gets the saved result copied without a scan.
+    const companyKey=row=>String(row.company || '').trim().toLocaleLowerCase();
+    const scannedCompanies=new Map(), scannedNames=new Set();
     try {
       for (const item of bulkHR.items.filter(item=>item.node.dataset.state!=='saved').sort((a,b)=>a.priority-b.priority)) {
         if (hrStopped) break;
-        const row=item.row;
+        const row=item.row;let shared=null;
+        if (scannedNames.has(companyKey(row))) {
+          ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · Checking the company on this ad…`;
+          const page=await adCompanyPage(row);
+          if (hrStopped) break;
+          shared=scannedCompanies.get(page) || null;
+        }
+        if (shared) {
+          item.node.dataset.state='running';item.node.textContent=item.title+' · Copying from the same company…';
+          ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · Copying HR people from ${shared.title}…`;
+          let unconfirmed='';
+          try {
+            const response=await api({action:'save_hr',id:row.id,revision:row.revision,search:{...shared.search,company:row.company}});
+            const index=rows.findIndex(value=>value.id===row.id);if(index>=0)rows[index]=response.record;
+            // Same bookkeeping as a scanned save: the open form keeps the new revision.
+            if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
+            item.node.dataset.state='saved';item.node.textContent=item.title+` · ${shared.matches} HR matches copied from ${shared.title} (same company, no extra scan)`;
+            if (savedJob(previewUrl)?.id===row.id) drawPreview(); // the new revision redraws its saved HR
+            bulkHR.saved++;
+          } catch(error) {
+            // Like a scanned save: a conflict keeps the ad; any other failure
+            // may have saved, so the queue stops until saved ads are refreshed.
+            if (error.code!=='JOB_LEADS_CONFLICT') unconfirmed=error.message+' The save could not be confirmed. Refresh saved ads before trying again. No ad details were edited.';
+            item.node.dataset.state='failed';item.node.textContent=item.title+' · '+(unconfirmed || error.message+' Previous saved results and ad details were kept.');bulkHR.failed++;
+          }
+          bulkHR.completed++;bulkHRSummary();rememberBulkHR();render();
+          if (unconfirmed) { stoppedReason=unconfirmed;break; }
+          continue;
+        }
         item.node.dataset.state='running';item.node.textContent=item.title+' · Scanning…';
         rememberBulkHR();
         const notify=message=>{
@@ -802,6 +853,9 @@
         };
         const showPeople=people=>{if (savedJob(previewUrl)?.id===row.id) hrPeople(people);};
         const outcome=await scanHR(row,{...settings,companyURL:row.hr?.company_url || ''},notify,showPeople);
+        if (outcome.state==='saved' && companyPage(outcome.search?.company_url)) {
+          scannedCompanies.set(companyPage(outcome.search.company_url),{search:outcome.search,matches:outcome.matches,title:item.title});scannedNames.add(companyKey(row));
+        }
         item.node.dataset.state=outcome.state;
         item.node.textContent=item.title+' · '+(outcome.state==='saved' ? `${outcome.matches} HR matches saved${outcome.complete ? '' : ' · Limited scan'} · ${outcome.employmentConfirmed}/${outcome.matches} employment dates confirmed` : outcome.message);
         bulkHR.completed++;if (outcome.state==='saved') bulkHR.saved++;else if (outcome.state==='failed') bulkHR.failed++;else bulkHR.cancelled++;
@@ -902,6 +956,7 @@
       if (!data.description?.trim()) throw Error('The full content was not available. Its search summary is kept.');
       // Reading a saved ad is a temporary preview; never overwrite its durable content or editing draft.
       previewCapture = {...row,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+        date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
         description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,full:true};
       const found = discovered.find(value => value.url === row.url); if (found) Object.assign(found,previewCapture);
       searchStatus(savedJob(row.url) ? 'Full ad captured for preview. To update the saved content, use Edit / view details → Refresh ad content, then save.' : 'Full ad captured for review. Select it and Add selected to list when ready.');
@@ -920,6 +975,7 @@
       if (folder && !folderNames.includes(folder)) throw Error('This folder changed in another window. Choose a folder again.');
       for (const row of selection) {
         const record = {url:row.url,company:row.company,role:row.role,location:row.location,date_posted:row.date_posted,
+          date_posted_estimate:row.date_posted ? '' : estimateOf(row),
           description:row.description,description_rich:row.description_rich,description_truncated:row.description_truncated,
           folder,status:'new',contact:'',notes:'',follow_up:''};
         const result = await api({action:'save',record});
@@ -1016,6 +1072,7 @@
       }
       const data = await prepareSource({...raw});
       const record = {url,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+        date_posted_estimate:data.date_posted ? '' : estimateOf(data),
         description:data.description || '',description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
         folder,status:'new',contact:'',notes:'',follow_up:''};
       const saved = await api({action:'save',record});

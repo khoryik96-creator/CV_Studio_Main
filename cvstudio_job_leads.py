@@ -19,7 +19,10 @@ STATUSES = {"new": "New", "to_contact": "To contact", "contacted": "Contacted",
             "follow_up": "Following up", "won": "Won", "closed": "Closed"}
 FIELDS = {"url": 2048, "company": 200, "role": 240, "contact": 400,
           "location": 240, "notes": 10000, "description": 20000,
-          "status": 20, "follow_up": 10, "date_posted": 10, "folder": 80}
+          "status": 20, "follow_up": 10, "date_posted": 10, "folder": 80,
+          # Approximate date from LinkedIn's relative age ("2 weeks ago"); the
+          # exact date_posted is never guessed and always wins when present.
+          "date_posted_estimate": 10}
 MAX_RECORDS = 5000
 MAX_FOLDERS = 5000
 MAX_BYTES = 8 * 1024 * 1024
@@ -239,7 +242,7 @@ def clean_record(raw):
     if result["status"] not in STATUSES:
         raise JobLeadsError("Choose a valid lead status.")
     result['folder'] = clean_folder(result['folder'], allow_unfiled=True)
-    for key, label in [("follow_up", "follow-up date"), ("date_posted", "posting date")]:
+    for key, label in [("follow_up", "follow-up date"), ("date_posted", "posting date"), ("date_posted_estimate", "estimated posting date")]:
         if result[key]:
             try:
                 if date.fromisoformat(result[key]).isoformat() != result[key]:
@@ -599,6 +602,9 @@ class JobLeadsStore:
                 # Ordinary edits do not send the client an ad was pulled for.
                 if 'client' not in data and previous.get('client'):
                     data['client'] = previous['client']
+                # The Job ads edit form does not carry the estimated date.
+                if 'date_posted_estimate' not in raw and previous.get('date_posted_estimate'):
+                    data['date_posted_estimate'] = previous['date_posted_estimate']
                 data['deleted'] = False
                 connection.execute("UPDATE leads SET url=?,payload=?,revision=revision+1,updated_at=? WHERE id=?", (data["url"], json.dumps(data, ensure_ascii=False), now, identity))
             else:
