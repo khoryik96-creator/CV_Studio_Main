@@ -12,7 +12,10 @@
     original dates (additive `save_hr` `reuse_from`; no schema change);
   - an automatic email check after an unlock;
   - an HR people Email filter (Excel too) and a counted, confirmed bulk
-    unlock (25 per run, stops on unconfirmed results).
+    unlock (25 per run, stops on unconfirmed results);
+  - a team setup file form with every ID, tenant, secret and per-provider AI
+    key column. Files are schema 2; schema 1 files still import. Frontend
+    only; no route or schema change.
 - v24.6.543 (merged PR288) was local/unmerged on `claude/job-leads-signed-clients` from
   merged542/PR287/c282b18. It is a Job Leads layout release:
   - Job ads table with Client/Posted/Sort filters and a hidden-until-used

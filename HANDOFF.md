@@ -7,7 +7,7 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.544 Update my clients, HR scan reuse, auto email check, bulk unlock (local, unmerged)**
+**Current checkpoint: v24.6.544 Update my clients, HR scan reuse, auto email check, bulk unlock, full setup-file columns (local, unmerged)**
 on `claude/job-leads-signed-clients`, from merged543 PR288 / `3f9b87d`.
 - Followed clients "Update my clients" (`updateClients`):
   - Pulls every followed client with a link, in groups of `MAX_PER_PULL`.
@@ -41,6 +41,20 @@ on `claude/job-leads-signed-clients`, from merged543 PR288 / `3f9b87d`.
   - It calls `unlockSaved(..., {confirmed:true, batch:true})` one at a time.
     Any unconfirmed result stops the run, which is never replayed. Stop
     works between lookups, and contacts refresh once at the end.
+- Team setup file (`setup-file.js`, Settings → Integrations & Data):
+  - Create is now a form with every column: JobAdder Client ID and Client
+    Secret, Outlook and OneNote application ID and tenant, the Main AI
+    provider, a key per AI provider (Claude, OpenAI, DeepSeek), and
+    provider + key for Lead Finder, Job search and Contact enrichment.
+  - Opening the form (`fillFromSaved`) fills saved IDs, tenants and
+    providers, but never a box the owner edited. Secret boxes only say
+    "Saved on this computer · type it to include": saved secrets are never
+    returned to the page.
+  - Files are now schema 2 (`ai.main_provider` + `ai.keys`). Schema 1 files
+    (`ai.main`) still import. Import saves each provider key through the
+    normal Save, with the main provider last so it stays selected.
+  - Both the import confirmation and the result list what the file does not
+    contain (`missing`).
 
 **Previous checkpoint: v24.6.543 Job Leads layout (merged PR288)**
 from merged542 PR287 / `c282b18`.

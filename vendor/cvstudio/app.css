@@ -1813,3 +1813,14 @@
 /* HR people: Search, Company and Email on one row (v24.6.544). */
 #peopleHRPanel .people-filters { grid-template-columns:2fr 1fr 1fr; }
 @media(max-width:650px) { #peopleHRPanel .people-filters { grid-template-columns:1fr; } }
+/* Team setup file: one column per value (ID, tenant, secret / provider, key). */
+#settingsSetupFileCard .setup-file-table { display:grid;gap:6px;margin:8px 0; }
+#settingsSetupFileCard .setup-file-row { display:grid;grid-template-columns:120px minmax(0,1.7fr) minmax(0,1fr) minmax(0,1.3fr);gap:8px;align-items:center; }
+#settingsSetupFileCard .setup-file-table.keys .setup-file-row { grid-template-columns:120px minmax(0,1fr) minmax(0,2fr); }
+#settingsSetupFileCard .setup-file-head span { font-size:9.5px;font-weight:850;color:var(--text3);text-transform:uppercase;letter-spacing:.04em; }
+#settingsSetupFileCard .setup-file-name { font-size:11px;font-weight:850;color:var(--text1); }
+#settingsSetupFileCard .setup-file-cell { display:block;min-width:0; }
+#settingsSetupFileCard .setup-file-col { display:none; }
+#settingsSetupFileCard .setup-file-cell input,#settingsSetupFileCard .setup-file-cell select { width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text1);font-size:11px; }
+#settingsSetupFileCard .setup-file-none { font-size:10.5px;color:var(--text3); }
+@media(max-width:700px){#settingsSetupFileCard .setup-file-row,#settingsSetupFileCard .setup-file-table.keys .setup-file-row{grid-template-columns:1fr;gap:4px;padding:8px 0;border-top:1px solid var(--border)}#settingsSetupFileCard .setup-file-head{display:none}#settingsSetupFileCard .setup-file-col{display:block;font-size:9.5px;font-weight:850;color:var(--text3);margin-bottom:2px}}
