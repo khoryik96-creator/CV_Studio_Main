@@ -662,7 +662,19 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    // A second run finds nothing new, saves nothing and starts no scan.
    await u.el('Update').click();await settle(800);
    assert.equal(u.leadsCalls.filter(c=>c.action==='save').length,17);assert.equal(u.state.scans.length,1);
-   assert.match(u.el('FollowedMessage').textContent,/0 new ads saved .* No HR scan was needed/);}
+   assert.match(u.el('FollowedMessage').textContent,/0 new ads saved .* No HR scan was needed/);
+   // A group that fills the 600-ad review list: the clients it cut off lead the
+   // next group, so every client is pulled (5 x 175 ads = 875).
+   const big=[41,42,43,44,45].map(id=>client(id,String(id),'Fictional Big '+id));
+   const deep=id=>Array.from({length:5},(_,p)=>bulk(id*10000+p*35,35));
+   const g=fixture({signed:[2],followed:big,pages:Object.fromEntries(big.map(c=>[c.linkedin_id,deep(c.company_id)]))});
+   await g.el('FollowedTab').click();await settle();g.el('Pages').value='5';
+   await g.el('Update').click();await settle(6000);
+   assert.deepEqual(g.rpcCalls.filter(c=>c.action==='jobSearchBegin').map(c=>c.args.company_id),['41','42','43','44','44','45'],'the cut-off client is pulled again from an empty list, then the rest');
+   assert.equal(g.leadsCalls.filter(c=>c.action==='save').length,875,'no client is skipped');
+   assert.deepEqual(g.calls.filter(c=>c.action==='pulled').map(c=>c.company_id),[41,42,43,44,45]);
+   assert.match(g.el('FollowedMessage').textContent,/Updated 5 of 5 clients: 875 new ads saved/);
+   assert.equal(g.state.scans[0].ids.length,875);}
 
   // Before any status is chosen or client followed, each view shows one next step.
   {const none=fixture({signed:[],followed:[]});await none.el('FollowedTab').click();await settle();

@@ -619,7 +619,8 @@
     }
   }
   // Pulls the ticked clients, or `targets` (Update my clients). Resolves to
-  // {ran, stopped, failed, done} once a pull actually started, else undefined.
+  // {ran, stopped, failed, done, unfinished} once a pull actually started,
+  // else undefined; `unfinished` lists the clients a full review list cut off.
   async function pull(targets = pullable()) {
     const app = jobLeads();
     if (mine() || !app?.rpc || !window.cvStudioJobSearch) return;
@@ -633,7 +634,7 @@
     if (state.found.length >= MAX_FOUND) { progress(`The review list is full (${MAX_FOUND} ads). Add or clear ads, then pull again.`); return; }
     const token = generation, activity = app.activityStart?.() ?? null, tally = {ads:0};
     let done = 0, failed = 0, skipped = 0, partial = 0, failure = '', dated = 0;
-    const failures = [], empty = [];
+    const failures = [], empty = [], unfinished = [];
     state.pulling = true; state.stopped = false; app.lock(true); controls();
     try {
       progress('Checking the browser companion…');
@@ -648,10 +649,10 @@
       for (const [index, client] of targets.entries()) {
         check(token);
         // Never open another search once nothing more can be listed.
-        if (state.found.length >= MAX_FOUND) { skipped = targets.length - index; break; }
+        if (state.found.length >= MAX_FOUND) { skipped = targets.length - index; unfinished.push(...targets.slice(index)); break; }
         progress(`Pulling ${client.name} (${index + 1} of ${targets.length})…`);
         try {
-          if (!await pullClient(app, token, client, pages, tally)) { partial++; continue; }
+          if (!await pullClient(app, token, client, pages, tally)) { partial++; unfinished.push(client); continue; }
           done++;
           try { const data = await call({action:'pulled', company_id:client.company_id, account:state.account}); if (token === generation && sameAccount(data.account)) setFollowed(data.followed || state.followed); } catch {}
         } catch (error) {
@@ -682,7 +683,7 @@
       }
       app.activityEnd?.(activity, !!(failure || failed));
     }
-    return {ran:true, stopped:state.stopped || token !== generation, failed:failed + (failure ? 1 : 0), done};
+    return {ran:true, stopped:state.stopped || token !== generation, failed:failed + (failure ? 1 : 0), done, unfinished};
   }
   // Saved ads with no posted date take the date (or estimate) this pull just
   // read for the same ad. Nothing else in the saved ad changes.
@@ -815,14 +816,20 @@
     const clients = state.followed.filter(eligible);
     if (!clients.length) { progress('Add a LinkedIn link to at least one followed client first.'); return; }
     const token = generation, day = new Date(), folder = 'Client ads ' + day.getFullYear() + '-' + String(day.getMonth() + 1).padStart(2, '0') + '-' + String(day.getDate()).padStart(2, '0');
-    const savedIds = new Set(); let pulled = 0, failed = 0;
-    for (let start = 0; start < clients.length; start += MAX_PER_PULL) {
-      // Each group starts from an empty review list, so the list never fills up.
+    const savedIds = new Set(); let pulled = 0, failed = 0, queue = clients;
+    while (queue.length) {
+      // Each group starts from an empty review list. Already-saved ads take
+      // places in it too, so a group can fill it; the clients it cut off lead
+      // the next group. One client (at most 5 pages) always fits an empty list.
+      const group = queue.slice(0, MAX_PER_PULL);
       state.found = []; state.picked.clear(); state.foundPage = 0;
-      const result = await pull(clients.slice(start, start + MAX_PER_PULL));
+      const result = await pull(group);
       if (!result || token !== generation) return;
       pulled += result.done; failed += result.failed;
       if (result.stopped) { message(`Stopped. ${savedIds.size} new ads were saved to ${folder}.`); return; }
+      const unfinished = result.unfinished || [];
+      if (unfinished.length >= group.length) { message(`Stopped: the review list filled before any client finished. ${savedIds.size} new ads were saved to ${folder}.`); return; }
+      queue = [...unfinished, ...queue.slice(group.length)];
       const fresh = state.found.filter(row => !savedJob(row.url));
       if (!fresh.length) continue;
       if (!state.folders.includes(folder)) {

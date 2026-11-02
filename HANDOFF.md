@@ -39,8 +39,14 @@ on `claude/job-leads-signed-clients`, from merged543 PR288 / `3f9b87d`.
     finished lookup, up to 25 per run. One confirmation states the people and
     the most credits (earlier lookups are checked free).
   - It calls `unlockSaved(..., {confirmed:true, batch:true})` one at a time.
-    Any unconfirmed result stops the run, which is never replayed. Stop
-    works between lookups, and contacts refresh once at the end.
+    A lost response or any returned state other than found/not_found/
+    mismatch (pending, unconfirmed, auth_required, limited) stops the run,
+    which is never replayed. Stop works between lookups, and contacts refresh
+    once at the end.
+- Update my clients re-queues clients a full review list cut off:
+  `pull()` returns `unfinished`, and those clients lead the next group.
+  Already-saved ads take places in the 600-ad list too. One client (at most
+  5 pages) always fits an empty list, so every group makes progress.
 - Team setup file (`setup-file.js`, Settings → Integrations & Data):
   - Create is now a form with every column: JobAdder Client ID and Client
     Secret, Outlook and OneNote application ID and tenant, the Main AI

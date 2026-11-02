@@ -72,11 +72,22 @@ function fixture(rows,{answers={},confirm=true}={}){
   const lost=fixture([hr(7),hr(8),hr(9)],{answers:{'https://www.linkedin.com/in/fictional-8':'lost'}});await lost.el('HRTab').click();await settle();
   await lost.el('HRUnlockAll').click();await settle();
   assert.deepEqual(lost.unlocks.map(u=>u.url.split('-').pop()),['7','8']);assert.match(lost.el('HRMessage').textContent,/^Stopped: The result could not be confirmed\. 1 email unlocked/);
+  // A returned (not lost) unfinished result also stops the run: the server
+  // answers pending/unconfirmed/reconnect/limit normally, so success alone is not enough.
+  for(const state of ['unconfirmed','pending','auth_required','limited']){
+    const r=fixture([hr(7),hr(8),hr(9)],{answers:{'https://www.linkedin.com/in/fictional-8':{state,message:'Apollo did not confirm this lookup ('+state+').'}}});
+    await r.el('HRTab').click();await settle();await r.el('HRUnlockAll').click();await settle();
+    assert.deepEqual(r.unlocks.map(u=>u.url.split('-').pop()),['7','8'],state+' stops before the next paid lookup');
+    assert.equal(r.el('HRMessage').textContent,'Stopped: Apollo did not confirm this lookup ('+state+'). 1 email unlocked, 0 without an email. Emails are checked automatically.');
+  }
+  const mixed=fixture([hr(7),hr(8),hr(9)],{answers:{'https://www.linkedin.com/in/fictional-7':{state:'mismatch',message:'No match.'},'https://www.linkedin.com/in/fictional-8':{state:'not_found',message:'No email.'}}});
+  await mixed.el('HRTab').click();await settle();await mixed.el('HRUnlockAll').click();await settle();
+  assert.equal(mixed.unlocks.length,3);assert.match(mixed.el('HRMessage').textContent,/^Finished\. 1 email unlocked, 2 without an email\./,'finished answers without an email continue the run');
   // Stop ends the run between lookups; filters decide who is included; at most 25 per run.
   const many=fixture(Array.from({length:30},(_,i)=>hr(10+i)));await many.el('HRTab').click();await settle();
   let stopAfter=2;const original=many.apollo.unlockSaved;many.apollo.unlockSaved=async(...args)=>{const result=await original(...args);if(--stopAfter===0)await many.el('HRUnlockStop').click();return result;};
   await many.el('HRUnlockAll').click();await settle();
   assert.match(many.confirms[0],/for 25 people shown/);assert.match(many.confirms[0],/The first 25 are unlocked now; run it again for the other 5/);
   assert.equal(many.unlocks.length,2,'Stop ends the run after the current lookup');assert.match(many.el('HRMessage').textContent,/^Stopped\. 2 emails unlocked/);
-  console.log('HR people: Email filter, one counted confirmation, skipped finished lookups, free re-checks, stop on unconfirmed results, Stop and a 25-person cap passed.');
+  console.log('HR people: Email filter, one counted confirmation, skipped finished lookups, free re-checks, stop on lost or unfinished results, Stop and a 25-person cap passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

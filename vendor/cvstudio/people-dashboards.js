@@ -108,8 +108,9 @@
   }
   // Bulk unlock: everyone shown who has no email and no finished lookup, up
   // to MAX_UNLOCK per run, after one confirmation stating the credits. Paid
-  // lookups run one at a time; an unconfirmed result stops the run (never
-  // replayed), as does Stop.
+  // lookups run one at a time. A lost response or any unfinished result
+  // (pending, unconfirmed, reconnect, account limit) stops the run and is
+  // never replayed, as does Stop.
   const MAX_UNLOCK=25;
   let unlockRun=null;
   const unlockable=row=>!row.email_result || ['pending','unconfirmed'].includes(row.email_result.state);
@@ -130,7 +131,12 @@
         let note='';
         const success=await window.cvStudioApollo.unlockSaved(source,row,row.email_result || null,message=>{note=message;},value=>{row.email_result=value;},{confirmed:true,batch:true});
         if(success!==true){reason=note || 'Apollo is busy or disconnected.';if(!row.email_result)row.email_result={state:'unconfirmed',message:'Check the previous lookup before trying again.'};break;}
-        if(row.email_result?.state==='found')found++;else none++;
+        // Only a finished answer counts. A pending, unconfirmed, reconnect or
+        // account-limit result stops the run so no further credit is spent.
+        const state=row.email_result?.state;
+        if(state==='found')found++;
+        else if(state==='not_found' || state==='mismatch')none++;
+        else {reason=row.email_result?.message || note || 'Apollo did not confirm this lookup.';break;}
       }
     } finally {
       unlockRun=null;
