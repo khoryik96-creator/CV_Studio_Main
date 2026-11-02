@@ -382,6 +382,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.deepEqual(o.calls.map(c=>c.action),['overview','statuses','companies']);assert(o.el('Browse').open);assert.equal(o.el('Companies').children.length,2);
    const k=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});await k.el('Tab').click();await settle();
    assert.deepEqual(k.calls.map(c=>c.action),['overview','statuses','companies']);assert.equal(k.el('Companies').children.length,2);
+   assert.match(k.el('Message').textContent,/signed clients found/);assert.equal(k.el('FollowedMessage').textContent,'','the client search message stays in Signed clients');
    // Refresh reads everything again, including the page of clients already listed.
    await o.el('Refresh').click();await settle();
    assert.deepEqual(o.calls.map(c=>c.action),['overview','statuses','companies','overview','statuses','companies']);

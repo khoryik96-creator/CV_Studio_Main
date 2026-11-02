@@ -1800,6 +1800,9 @@
 .job-leads-ads-table .job-lead-title:hover { text-decoration:underline; }
 .job-leads-ads-table .job-leads-actions { flex-wrap:nowrap; gap:6px; }
 .job-leads-ads-table td > button + button { margin-left:6px; }
+/* Buttons never break mid-word: the HR and Actions cells keep one line. */
+.job-leads-ads-table td:nth-child(10), .job-leads-ads-table td:last-child { white-space:nowrap; max-width:none; }
+@media(max-width:650px) { .job-leads-filters { grid-template-columns:1fr 1fr; } .job-leads-filters > label:first-child { grid-column:1 / -1; } }
 .job-leads-ads-table .job-leads-actions button, .job-leads-ads-table td > button { padding:4px 8px; font-size:11px; min-height:0; }
 /* Shown as "Job ads (12)"; the brackets also keep the accessible name readable. */
 .job-leads-tab-count { font-weight:600; opacity:.75; }

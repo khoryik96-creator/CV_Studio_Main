@@ -519,8 +519,9 @@
     if (!accept(data, token)) return;
     const rows = data.companies || [], checked = Number.isSafeInteger(data.checked) ? data.checked : rows.length;
     state.companies = {rows, offset:data.offset || 0, total:data.total ?? null, next:data.next_offset ?? null, returned:checked};
-    if (rows.length) message(rows.length === 1 ? '1 signed client found.' : `${rows.length} signed clients found.`);
-    else message(state.companies.offset ? 'No more signed clients.' : 'No signed clients found. Check the statuses or the name.');
+    // The client search belongs to Signed clients; Followed clients keeps its own messages.
+    el('Message').textContent = rows.length ? (rows.length === 1 ? '1 signed client found.' : `${rows.length} signed clients found.`)
+      : state.companies.offset ? 'No more signed clients.' : 'No signed clients found. Check the statuses or the name.';
   }
   function searchCompanies(offset = 0) { return work(token => readCompanies(token, offset)); }
   function follow(company) {
