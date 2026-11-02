@@ -78,13 +78,18 @@ function jobURL(value) {
     return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
   } catch { return ''; }
 }
+const jobSearchFilter = /^(?:keywords|location|geoId|distance|f_[A-Za-z0-9]{1,20})$/;
 function jobSearchKey(value) {
   try {
     if (typeof value !== 'string' || value.length > 2048) return '';
     const url = new URL(value);
     if (!linkedin(value) || url.username || url.password || !/^\/jobs\/search(?:-results)?\/?$/.test(url.pathname)) return '';
     url.pathname = '/jobs/search/'; url.hash = '';
-    for (const name of ['start','currentJobId','trk','trackingId','refId','lipi','position','pageNum','origin','refresh','eBP']) url.searchParams.delete(name);
+    // Only parameters that decide which jobs are listed identify a search.
+    // LinkedIn adds and rotates tracking, session, paging and sort parameters
+    // while the page is open; those never make it a different search.
+    for (const name of [...new Set(url.searchParams.keys())])
+      if (!jobSearchFilter.test(name) || url.searchParams.getAll(name).every(item => item === '')) url.searchParams.delete(name);
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
@@ -281,7 +286,12 @@ async function settleJobSearch(bound, run, tab) {
   const requested = new URL(bound.jobKey), resolved = new URL(actual);
   requested.searchParams.delete('location');
   for (const name of ['location','geoId','distance']) resolved.searchParams.delete(name);
-  if (requested.href !== resolved.href) throw safeError('LinkedIn changed the search keywords or filters. Choose the already-open search to review its current results.');
+  if (requested.href !== resolved.href) {
+    // Name only the changed filter parameters (never their values).
+    const names=[...new Set([...requested.searchParams.keys(),...resolved.searchParams.keys()])]
+      .filter(name => JSON.stringify(requested.searchParams.getAll(name)) !== JSON.stringify(resolved.searchParams.getAll(name))).sort();
+    throw safeError(`LinkedIn changed the search keywords or filters (${names.join(', ')}). Choose the already-open search to review its current results.`);
+  }
   await jobScript({target:{tabId:tab.id},files:['reader.js']},jobReaderStartError);
   live(bound,run);
   const [{result}] = await jobScript({target:{tabId:tab.id},func:method => globalThis.SourcerReader[method](),args:['jobSearchContext']},jobReaderReadError);

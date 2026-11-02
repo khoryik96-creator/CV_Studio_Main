@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.536 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.537 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged536/PR281/eb7451e. LinkedIn's AI job search adds and rotates
+  session/tracking/sort parameters; the companion now identifies a job search
+  only by keywords, location, geoId, distance and f_* filters, so client pulls
+  and in-page Add to CV Studio work on it. Companion only.
+- v24.6.536 (merged PR281) was local/unmerged on `claude/job-leads-signed-clients` from
   merged535/PR280/0361880. Job Leads: Signed clients keeps statuses and Find in
   JobAdder; a new Followed clients tab holds followed clients, Pull into CV
   Studio or Open on LinkedIn (one company-filtered search to choose ads there),
