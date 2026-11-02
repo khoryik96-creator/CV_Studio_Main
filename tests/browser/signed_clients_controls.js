@@ -15,8 +15,8 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   const status=label=>page.locator('#jobLeadsClientsStatuses').getByRole('checkbox',{name:label,exact:true});
   await page.goto(origin+'/?module=jobleads');
   // HR people's Connect Apollo opens the Settings card, and the same click does not close it again.
-  await page.locator('#peopleHRTab').click();await page.waitForFunction(()=>document.getElementById('jobLeadsApolloState').textContent.startsWith('Connected'));await page.evaluate(()=>{const b=document.getElementById('peopleHRConnect');b.hidden=false;b.disabled=false;});
-  await page.locator('#peopleHRConnect').click();await page.locator('#settingsApolloCard').waitFor();await page.waitForTimeout(300);
+  await page.locator('#peopleHRTab').click();await page.waitForFunction(()=>document.getElementById('jobLeadsApolloState').textContent.startsWith('Connected'));// A real bubbling click (the button is hidden here because the fixture account is connected).
+  await page.evaluate(()=>{const b=document.getElementById('peopleHRConnect');b.hidden=false;b.disabled=false;b.click();});await page.locator('#settingsApolloCard').waitFor();await page.waitForTimeout(300);
   assert(await page.locator('#settingsApolloCard').isVisible(),'Settings stays open on the Apollo card');await page.evaluate(()=>closeSettingsPanel());
   await page.locator('#jobLeadsClientsTab').click();await status('Signed Client').waitFor();
   await status('Signed Client').check();await status('Active Client').check();await page.locator('#jobLeadsClientsStatusesSave').click();await waitNames(['alpha','Client 2','Client 10','Zeta']);
@@ -27,7 +27,7 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   assert(await page.locator('#jobLeadsClientsPanel').isHidden() && await page.locator('#jobLeadsClientsBrowse').isHidden(),'Signed clients setup stays in its tab');
   let followed=page.locator('#jobLeadsClientsFollowed tr');assert(await followed.getByRole('checkbox').isDisabled());
   const link=followed.getByRole('textbox',{name:'LinkedIn link for Client 10'});assert(await link.isVisible());assert.equal(await link.getAttribute('data-guide'),'true');
-  await page.getByRole('button',{name:'Refresh from JobAdder',exact:true}).click();
+  await page.locator('#jobLeadsClientsFollowedRefresh').click();
   await page.waitForFunction(()=>!document.querySelector('#jobLeadsClientsFollowed input[type="checkbox"]').disabled);
   assert.equal(await followed.getByRole('link',{name:'LinkedIn page'}).getAttribute('href'),'https://www.linkedin.com/company/fictional-client/');
   assert.match(await page.locator('#jobLeadsClientsProgress').textContent(),/1 of 1 clients refreshed/);
@@ -44,14 +44,27 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   for (const [id,role,posted] of [['7001','Fictional Payroll Lead','2026-10-28'],['7002','Fictional Data Analyst','2026-10-12']])
     assert.equal(await page.evaluate(async([id,role,posted])=>(await fetch('/job-leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'save',record:{url:'https://www.linkedin.com/jobs/view/'+id,company:'Client 10 Sdn Bhd',role,location:'Kuala Lumpur',date_posted:posted,description:'',description_rich:[],description_truncated:true,folder:'',status:'new',contact:'',notes:'',follow_up:''}})})).status,[id,role,posted]),200);
   await page.locator('#jobLeadsClientsFollowedRefresh').click();await page.waitForFunction(()=>document.querySelector('#jobLeadsClientsAdsCount').textContent==='2');
-  assert.deepEqual(await page.locator('#jobLeadsClientsAdsRows tr td:nth-child(3)').allTextContents(),['Fictional Payroll Lead','Fictional Data Analyst']);
-  assert.equal(await page.locator('#jobLeadsClientsFollowed tr td:nth-child(4)').textContent(),'2','the Ads in Job ads count matches the dashboard');
-  // Saved client ads: select, move to a new folder, and the Find HR people panel.
-  await page.locator('#jobLeadsClientsAdsSelectAll').click();assert.equal(await page.locator('#jobLeadsClientsAdsSelected').textContent(),'2 selected');
-  assert(await page.locator('#jobLeadsClientsHR').isVisible(),'Find HR people appears for selected ads');
-  await page.locator('#jobLeadsClientsAdsFolderNew').click();await page.locator('#jobLeadsClientsAdsFolderName').fill('Fictional clients');await page.locator('#jobLeadsClientsAdsFolderCreate').click();
-  await page.waitForFunction(()=>document.querySelector('#jobLeadsClientsAdsMoveFolder').value==='Fictional clients');
-  await page.locator('#jobLeadsClientsAdsMove').click();await page.waitForFunction(()=>[...document.querySelectorAll('#jobLeadsClientsAdsRows tr td:nth-child(8)')].every(n=>n.textContent==='Fictional clients'));
+  assert.equal(await page.locator('#jobLeadsClientsFollowed tr td:nth-child(4)').textContent(),'2','the Ads in Job ads count');
+  assert.equal(await page.locator('#jobLeadsClientsTabCount').textContent(),'1','the Followed clients tab shows its count');
+  await page.locator('#jobLeadsClientsFollowedPanel').screenshot({path:path.join(output,'followed-clients-desktop.jpg')});
+  // Client ads live in Job ads: View in Job ads filters it to client ads.
+  await page.locator('#jobLeadsClientsAdsOpen').click();await page.locator('#jobLeadsList tr').first().waitFor();
+  assert(await page.locator('#jobLeadsApolloAdsPanel').isVisible() && !await page.locator('#jobLeadsClientsFollowedPanel').isVisible());
+  assert.equal(await page.locator('#jobLeadsClientFilter').inputValue(),'!any');
+  assert.deepEqual((await page.locator('#jobLeadsList tr td:nth-child(3)').allTextContents()).sort(),['Fictional Data Analyst','Fictional Payroll Lead']);
+  assert.deepEqual(await page.locator('#jobLeadsList tr td:nth-child(5)').allTextContents(),['Client 10','Client 10'],'the Client column');
+  assert(!await page.locator('#jobLeadsFormCard').isVisible(),'the manual form stays closed until it is used');
+  // Job ads' own actions: select, move to a new folder, and Find HR people.
+  await page.locator('#jobLeadsSelectPage').check();assert.equal(await page.locator('#jobLeadsSelectedCount').textContent(),'2 selected');
+  assert(await page.locator('#jobLeadsBulkHR').isVisible(),'Find HR people appears for selected ads');
+  await page.locator('#jobLeadsFolderNew').click();await page.locator('#jobLeadsFolderName').fill('Fictional clients');await page.locator('#jobLeadsFolderCreate').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('#jobLeadsMoveFolder option')].some(n=>n.value==='Fictional clients'));
+  await page.locator('#jobLeadsFolderFilter').selectOption('*');await page.locator('#jobLeadsSelectPage').check();
+  await page.locator('#jobLeadsMoveFolder').selectOption('Fictional clients');await page.locator('#jobLeadsMove').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('#jobLeadsList tr td:nth-child(8)')].every(n=>n.textContent==='Fictional clients'));
+  await page.locator('#jobLeadsApolloAdsPanel').screenshot({path:path.join(output,'job-ads-desktop.jpg')});
+  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Job ads: no page-wide horizontal scroll on a phone');
+  await page.setViewportSize({width:1440,height:1000});await page.locator('#jobLeadsClientsFollowedTab').click();
   await page.locator('#jobLeadsClientsFollowedPanel').screenshot({path:path.join(output,'followed-clients-desktop.jpg')});
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no page-wide horizontal scroll on a phone');
   await page.locator('#jobLeadsClientsFollowedPanel').screenshot({path:path.join(output,'followed-clients-mobile.jpg')});await page.setViewportSize({width:1440,height:1000});
@@ -70,6 +83,6 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   assert.match(await page.locator('#jobLeadsClientsProgress').textContent(),/Save statuses/);assert.equal(await page.evaluate(()=>window.fixtureSearches),0);
   await page.locator('#jobLeadsClientsFollowedTab').click();await page.waitForFunction(()=>!document.querySelector('#jobLeadsClientsFollowedRefresh').disabled);
   assert(await page.locator('#jobLeadsClientsOpenLinkedIn').isDisabled(),'no LinkedIn search without signed statuses');
-  assert.deepEqual(errors,[]);console.log('Native Signed and Followed clients: separate tabs, Open on LinkedIn pop-up, saved client ads dashboard, saved Follow/link, reload restores browse/results, intersecting filters/sort, empty statuses block Pull, mobile and no page errors passed.');
+  assert.deepEqual(errors,[]);console.log('Native Signed and Followed clients: separate tabs, Open on LinkedIn pop-up, client ads in Job ads with folders and HR, saved Follow/link, reload restores browse/results, intersecting filters/sort, empty statuses block Pull, mobile and no page errors passed.');
  } finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});

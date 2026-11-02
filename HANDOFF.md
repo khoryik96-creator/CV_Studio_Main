@@ -7,8 +7,60 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.542 Team setup file (local, unmerged)**
-on `claude/job-leads-signed-clients`, from merged541 PR286 / `7de5b82`.
+**Current checkpoint: v24.6.543 Job Leads layout (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged542 PR287 / `c282b18`.
+- Job ads:
+  - The saved ads are a compact table (`#jobLeadsList` is a `tbody`). The
+    title opens the existing preview, and the row has Open ↗, Edit and Delete.
+  - The manual form (`#jobLeadsFormCard`) is hidden until "Add an ad
+    manually" or Edit (`showForm`, `#jobLeadsLayout[data-form]`). The
+    status line `#jobLeadsMessage` moved into the list card.
+  - "Find job ads on LinkedIn" starts open.
+  - New filters: Client (`clientOf`: Followed clients' matching once loaded,
+    else `record.client`), Posted (exact or estimate) and Sort. The default
+    sort is "Recently updated", the saved order. Reset filters is included.
+- Saved client job ads merged into Job ads:
+  - Followed clients keeps a count plus "View in Job ads"
+    (`cvStudioJobLeads.showClientAds`, which re-reads saved ads first).
+  - The per-client count opens Job ads filtered to that client.
+  - The client-only HR scanner (`scanClientAds`, the `ClientsHR` panel and
+    checkpoint) is removed; Job ads' Find HR people covers client ads.
+- Tabs are in workflow order: Signed → Followed → Job ads → HR people →
+  Unlocked contacts. They show counts (HR people is provisional from saved
+  ads until its own read).
+- Next steps: "View HR people" after a bulk scan saves people; "Go to
+  Unlocked contacts" after an unlock; "Go to Followed clients" once a client
+  is followed.
+- One Refresh per view:
+  - Signed clients does a full reload that keeps unsaved status ticks, then
+    re-reads the listed page.
+  - Followed clients does a full reload, then re-checks LinkedIn links in
+    JobAdder. "Reload statuses" and "Refresh from JobAdder" are gone.
+- Empty states: Followed clients shows one setup step (`FollowedSetup`)
+  until a client is followed. The Signed clients search waits for statuses.
+- Filters use the shared `people-filters` grid. `#viewJobLeads [hidden]`
+  always hides.
+- Second review (12 fixes):
+  - The unlock next step had reused id `peopleHRNext` (HR paging). It is now
+    `peopleHRGoContacts`, and `tests/test_index_unique_ids.js` guards every id.
+  - `showClientAds` does nothing to the filters during an HR scan, re-reads
+    saved ads, and clears Search/Status/Posted/Folder so every ad of that
+    client shows.
+  - `showHR('')` clears the company filter.
+  - A per-row "View" opens HR people for that company.
+  - Clients' `clientOf` returns `undefined` until followed clients load. Job
+    ads only then falls back to `record.client`.
+  - The client-ad count shows "—" until saved ads are read.
+  - Each filter call looks up an ad's client once.
+  - The Job ads table is not a nested 60vh scroll box.
+  - Signed Refresh confirms it ran.
+  - `localDate(daysBack)` is reused.
+  - Title buttons say "Preview … at …".
+- Pre-existing browser-test failures on master too: `hr_queue_resume.js`
+  (no job-search-walk loaded) and the Sourcer part of `search_guidance.js`.
+
+**Previous checkpoint: v24.6.542 Team setup file (merged PR287)**
+from merged541 PR286 / `7de5b82`.
 - Settings → Integrations & Data starts with a "Team setup file" card
   (`vendor/cvstudio/setup-file.js`, appended to both FRONTEND_MODULES lists).
 - Import: the whole JSON file (`product: "CV Studio setup"`, `schema: 1`,

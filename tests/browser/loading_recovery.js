@@ -22,7 +22,7 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   assert(await page.locator('#jobLeadsClientsRefresh').isDisabled(),'the independent saved-ad read is still pending');
   await page.waitForFunction(()=>!document.querySelector('#jobLeadsClientsRefresh').disabled,{},{timeout:20000});
   assert.match(await page.locator('#jobLeadsClientsMessage').textContent(),/Saved ads could not be refreshed/);
-  assert(await page.locator('#jobLeadsClientsStatusesLoad').isEnabled());
+  assert(await page.locator('#jobLeadsClientsRefresh').isEnabled(),'Refresh is the one recovery action');
   await page.locator('#jobLeadsClientsPanel').screenshot({path:path.join(output,'clients-recovery.jpg')});
   for(const route of held)await route.abort().catch(()=>{});await page.unroute('**/job-leads');
   await page.locator('#tabLinkedinSourcer').click();await page.locator('#peopleSourcerSearchTab').click();await page.locator('#liSourcerSetupGuide').click();

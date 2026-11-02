@@ -78,23 +78,9 @@ if(require.main===module)(async()=>{
   const trash=bulkFixture();trash.state.records[1].deleted=true;await trash.init();trash.select();await trash.start();assert.equal(trash.state.starts.length,2,'only selected live saved ads are scanned');
   const large=bulkFixture(),template=large.state.records[0];large.state.records=Array.from({length:41},(_,i)=>({...structuredClone(template),id:(i+1).toString(16).padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+(1111111000+i)}));
   await large.init();large.select();await large.el('Next').click();large.select();await large.start();assert.equal(large.state.starts.length,0);assert.match(large.el('BulkHRMessage').textContent,/40 ads/,'bulk work has a bounded run size across page selections');
-  // Followed clients scans its own selection with its own settings and progress panel.
-  const followed=bulkFixture({preferences:new Map([[preference,JSON.stringify({countryMode:'specific',country:'Malaysia',pages:10})]])});await followed.init();
-  assert.equal(followed.el('ClientsHRPages').value,'10');assert.match(followed.el('ClientsHRKeywords').value,/talent acquisition/);
-  assert.equal(await followed.jobLeads().scanClientAds(['1'.repeat(32),'3'.repeat(32)]),true);
-  assert.deepEqual(followed.state.starts.map(a=>a.max_pages),[10,10]);assert.equal(followed.requests.filter(r=>r.action==='save_hr').length,2);
-  assert.equal(followed.el('ClientsHRBar').value,2);assert.match(followed.el('ClientsHRMessage').textContent,/finished/i);assert.equal(followed.el('ClientsHRResults').children.length,2);
-  assert.equal(followed.el('BulkHRResults').children.length,0,'the Job ads queue panel is untouched');assert.equal(followed.el('BulkHRMessage').textContent,'');
-  // Review fixes: Job ads ticks survive, each view resumes only its own runs,
-  // a busy Job Leads is reported, and HR settings stay in sync across panels.
-  const stored=new Map(),both=bulkFixture({preferences:stored});await both.init();both.select();
-  assert.equal(both.el('SelectedCount').textContent,'3 selected');
-  assert.equal(await both.jobLeads().scanClientAds(['2'.repeat(32)]),true);
-  assert.equal(both.el('SelectedCount').textContent,'3 selected','a Followed clients scan keeps the Job ads ticks');
-  assert(stored.has('cvstudio_job_leads_client_hr_queue_v1') && !stored.has('cvstudio_job_leads_hr_queue_v1'),'the client run has its own resume record');
-  assert.equal(both.el('BulkHRStart').textContent,'Scan selected ads','Job ads does not offer to resume the other view\'s run');
   const busy=bulkFixture();busy.state.holdId='1'.repeat(32);await busy.init();busy.select();const busyRun=busy.start();await held(busy);
-  await assert.rejects(busy.jobLeads().scanClientAds(['2'.repeat(32)]),/busy/,'a busy Job Leads is reported, not silently ignored');
+  assert(busy.el('BulkHRNextStep').hidden,'the next step appears only after the queue ends');
+  await busy.jobLeads().showClientAds(11);assert.equal(busy.el('ClientFilter').value,'','View in Job ads never half-applies a filter mid-scan');assert.match(busy.el('Message').textContent,/when the HR scan finishes/);
   busy.state.release();await busyRun;
   // Two selected ads from the same company: one scan, its result copied to the other.
   const sameCo=bulkFixture();sameCo.state.records[1].company=sameCo.state.records[0].company;sameCo.state.slugs={2:'example-1'};await sameCo.init();sameCo.select();await sameCo.start();
@@ -103,6 +89,7 @@ if(require.main===module)(async()=>{
   const copied=saves.find(r=>r.id==='2'.repeat(32));assert.equal(copied.search.company,sameCo.state.records[1].company);assert.equal(copied.search.people.length,1);
   assert(sameCo.el('BulkHRResults').children.some(n=>/copied from .* \(same company, no extra scan\)/.test(n.textContent)));
   assert.match(sameCo.el('BulkHRSummary').textContent,/3 of 3 ads processed · 3 saved/);
+  assert(!sameCo.el('BulkHRNextStep').hidden,'saved HR people offer View HR people');
   // A same-named ad whose own employer link is another LinkedIn company is scanned on its own.
   const otherCo=bulkFixture();otherCo.state.records[1].company=otherCo.state.records[0].company;
   await otherCo.init();otherCo.select();await otherCo.start();
@@ -120,15 +107,7 @@ if(require.main===module)(async()=>{
   assert.equal(lost.state.starts.length,1,'no further ad is scanned after an unconfirmed copy');
   assert.match(lost.el('BulkHRResults').children[1].textContent,/could not be confirmed/);assert.doesNotMatch(lost.el('BulkHRResults').children[1].textContent,/were kept/);
   assert.match(lost.el('BulkHRMessage').textContent,/Queue stopped/);
-  const early=bulkFixture();await early.init();const pending=early.jobLeads().scanClientAds(['1'.repeat(32)]);early.jobLeads().stopHR();
-  assert.equal(await pending,false);assert.equal(early.state.starts.length,0,'Stop while saved ads reload means nothing is scanned');
-  assert.equal(early.requests.filter(r=>r.action==='save_hr').length,0);assert.match(early.el('ClientsHRMessage').textContent,/Stopped before the scan started/);
-  assert.equal(await early.jobLeads().scanClientAds(['1'.repeat(32)]),true,'a later scan runs normally');assert.equal(early.state.starts.length,1);
   const synced=bulkFixture({preferences:new Map()});await synced.init();
-  synced.el('ClientsHRPages').value='10';await synced.el('ClientsHRPages').handlers.change();
-  assert.equal(synced.el('BulkHRPages').value,'10');assert.equal(synced.el('HRPages').value,'10');
-  synced.el('BulkHRPages').value='5';synced.el('BulkHRPages').handlers.change();assert.equal(synced.el('ClientsHRPages').value,'5','Job ads changes reach Followed clients');
-  const tooMany=bulkFixture(),one=tooMany.state.records[0];tooMany.state.records=Array.from({length:41},(_,i)=>({...structuredClone(one),id:(i+1).toString(16).padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/2'+String(i).padStart(9,'0')}));
-  await tooMany.init();assert.equal(await tooMany.jobLeads().scanClientAds(tooMany.state.records.map(r=>r.id)),false);assert.match(tooMany.el('ClientsHRMessage').textContent,/40 ads/);assert.equal(tooMany.state.starts.length,0);
-  console.log('Bulk HR: Followed clients queue panel, shared saved settings, serial ownership/cleanup, progress, independent saves, Stop, pagehide, per-ad errors, stale writes, disconnects and drafts passed');
+  synced.el('BulkHRPages').value='10';await synced.el('BulkHRPages').handlers.change();assert.equal(synced.el('HRPages').value,'10','bulk and single-ad HR settings stay in sync');
+  console.log('Bulk HR: shared saved settings, same-company copies, next step, serial ownership/cleanup, progress, independent saves, Stop, pagehide, per-ad errors, stale writes, disconnects and drafts passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -22,9 +22,11 @@
   const discoveryPicked = new Set();
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
   let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
-  let bulkHR = null, clientScanPending = false;
-  // Each HR queue view (Job ads, Followed clients) resumes only its own runs.
-  const bulkCheckpointKeys={BulkHR:'cvstudio_job_leads_hr_queue_v1',ClientsHR:'cvstudio_job_leads_client_hr_queue_v1'};
+  let bulkHR = null;
+  // The HR queue resumes only its own unfinished run.
+  const bulkCheckpointKeys={BulkHR:'cvstudio_job_leads_hr_queue_v1'};
+  // The Followed clients queue was merged into Job ads (v24.6.543).
+  try { localStorage.removeItem('cvstudio_job_leads_client_hr_queue_v1'); } catch {}
   const bulkCheckpoints={};
   for (const [prefix,key] of Object.entries(bulkCheckpointKeys)) {
     try {
@@ -76,8 +78,9 @@
   }
   function chooseGuide(flow) { guideFlow=flow;guideTried=false;guideIssue='';nextGuide(); }
   const status = message => { el('Message').textContent = message; };
-  function localDate() {
-    const d = new Date();
+  // Today's local date, or the date `daysBack` days earlier, as YYYY-MM-DD.
+  function localDate(daysBack = 0) {
+    const d = new Date(); d.setDate(d.getDate() - daysBack);
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
@@ -174,8 +177,8 @@
     busy = value;
     window.cvStudioApollo?.busy(value);
     el('Previous').disabled=value || page===0;el('Next').disabled=value || (page+1)*40>=filtered().length;
-    for (const name of ['Search','Filter','FolderFilter']) el(name).disabled = value && hrRunning;
-    for (const id of ['Save', 'New', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage']) el(id).disabled = value;
+    for (const name of ['Search','Filter','FolderFilter','ClientFilter','PostedFilter','Sort','FiltersReset']) el(name).disabled = value && hrRunning;
+    for (const id of ['Save', 'New', 'FormClose', 'AddManual', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
     el('List').querySelectorAll('input').forEach(input => { input.disabled = value; });
@@ -196,15 +199,45 @@
   async function load() {
     const data = await api(); rows = data.records; folderNames = data.folders || [];
     previewCapture = null;
-    picked.clear(); syncFolders(); render();
+    picked.clear(); syncFolders(); syncClients(); render();
     drawDiscovery();
     return data;
   }
+  // The followed client an ad belongs to: Followed clients' own matching once
+  // it knows the followed clients, before that the client the ad was saved for.
+  function clientOf(row) {
+    const known = window.cvStudioJobLeadsClients?.clientOf?.(row);
+    return known !== undefined ? known : row?.client?.name ? row.client : null;
+  }
+  const postedOf = row => row.date_posted || estimateOf(row);
+  const SORTS = {saved_desc:['created_at',-1], saved_asc:['created_at',1], posted_desc:['posted',-1], posted_asc:['posted',1],
+    role_asc:['role',1], company_asc:['company',1], client_asc:['client',1]};
   function filtered() {
     const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value, folder = el('FolderFilter').value;
-    return rows.filter(row => (folder === '!trash' ? row.deleted : !row.deleted && (folder === '*' || (row.folder || '') === folder)) &&
+    const client = el('ClientFilter').value, days = Number(el('PostedFilter').value), since = days ? localDate(days - 1) : ''; // today and the days before
+    // Each ad's client is looked up once per call, not per comparison.
+    const owners = new Map(), ownerOf = row => { if (!owners.has(row)) owners.set(row, clientOf(row)); return owners.get(row); };
+    const list = rows.filter(row => (folder === '!trash' ? row.deleted : !row.deleted && (folder === '*' || (row.folder || '') === folder)) &&
       (!filter || row.status === filter || filter === 'due' && due(row)) &&
-      (!term || [row.company, row.role, row.contact, row.notes, row.location].some(value => value.toLocaleLowerCase().includes(term))));
+      (!client || (client === '!any' ? !!ownerOf(row) : String(ownerOf(row)?.company_id ?? '') === client)) &&
+      (!since || postedOf(row) >= since) &&
+      (!term || [row.company, row.role, row.contact, row.notes, row.location, ownerOf(row)?.name].some(value => String(value || '').toLocaleLowerCase().includes(term))));
+    const [field, direction] = SORTS[el('Sort').value] || [];
+    if (!field) return list; // Recently updated: the saved order
+    const value = row => field === 'posted' ? postedOf(row) : field === 'client' ? ownerOf(row)?.name || '' : row[field] || '';
+    // Blank values sort last in either direction.
+    return list.sort((a, b) => { const x = value(a), y = value(b); return !x || !y ? (x ? -1 : y ? 1 : 0) : direction * String(x).localeCompare(String(y)); });
+  }
+  function syncClients() {
+    const select = el('ClientFilter'), old = select.value, clients = new Map();
+    for (const row of rows) { const client = clientOf(row); if (client && !row.deleted) clients.set(String(client.company_id), client.name); }
+    select.replaceChildren(new Option('All ads', ''), new Option('Any client', '!any'), ...[...clients].sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) => new Option(name, id)));
+    select.value = ['', '!any', ...clients.keys()].includes(old) ? old : '';
+    return clients;
+  }
+  // The manual form opens beside the list only while it is in use.
+  function showForm(open) {
+    el('FormCard').hidden = !open; el('Layout').dataset.form = open ? 'open' : ''; el('AddManual').hidden = open;
   }
   function node(tag, text, className) {
     const value = document.createElement(tag); value.textContent = text;
@@ -217,6 +250,10 @@
     if (!DAY.test(value || '')) return 'Not available';
     const date = new Date(value + 'T00:00:00Z');
     return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'}).format(date) : 'Not available';
+  }
+  function savedLabel(value) {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', year:'numeric'}).format(date) : '—';
   }
   function createdLabel(value) {
     const date = new Date(value);
@@ -313,54 +350,57 @@
   function render() {
     const selected = filtered(), list = el('List'); list.replaceChildren();
     el('Total').textContent = String(rows.filter(row => !row.deleted).length);
+    el('AdsTabCount').textContent = el('Total').textContent;
+    // HR people: each person once per company, keyed as the HR people list is.
+    const people = new Set(rows.filter(row => !row.deleted && row.hr).flatMap(row => (row.hr.people || []).map(person =>
+      (row.hr.company_id || '') + '|' + String(person.url || '').replace(/\/+$/, '').toLowerCase())));
+    const hrCount = document.getElementById('peopleHRTabCount'); if (hrCount) hrCount.textContent = String(people.size);
     el('Due').textContent = String(rows.filter(row => !row.deleted && due(row)).length);
     updateClear();
     page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
     el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
     el('Previous').disabled = busy || page === 0; el('Next').disabled = busy || (page+1)*40 >= selected.length;
     updateSelection();
-    if (!selected.length && rows.length) list.appendChild(node('p','No matching ads.','job-leads-muted'));
+    if (!selected.length) {
+      const empty = node('tr'), cell = node('td', rows.length ? 'No matching ads. Change or reset the filters.' : 'No saved ads yet. Search LinkedIn above, pull ads in Followed clients, or add one manually.', 'job-leads-muted');
+      cell.colSpan = 11; empty.appendChild(cell); list.appendChild(empty);
+    }
+    const button = (text, action, cls = 'sec') => { const value = node('button', text, cls); value.type = 'button'; value.disabled = busy; value.addEventListener('click', action); return value; };
     selected.slice(page*40, (page+1)*40).forEach(row => {
-      const card = node('article', '', 'job-lead-card');
-      card.append(node('h3', row.company), node('p', row.role, 'job-lead-role'));
-      const meta = node('div', '', 'job-lead-meta');
-      meta.append(node('span', labels[row.status], 'job-lead-status'));
-      // An estimate from LinkedIn's "2 weeks ago" is marked with ≈.
-      meta.append(node('span', 'Posted: ' + (row.date_posted || !row.date_posted_estimate ? postedLabel(row.date_posted) : '≈ ' + postedLabel(row.date_posted_estimate))));
-      meta.append(node('span', 'Date created: ' + createdLabel(row.created_at)));
-      meta.append(node('span', row.folder || 'Unfiled', 'job-lead-folder'));
-      if (row.follow_up) meta.append(node('span', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : ''));
-      card.appendChild(meta);
-      if (row.contact) card.appendChild(node('p', 'Contact: ' + row.contact));
-      if (row.location) card.appendChild(node('p', row.location, 'job-leads-muted'));
-      if (row.notes) card.appendChild(node('p', row.notes.slice(0, 300) + (row.notes.length > 300 ? '…' : ''), 'job-lead-notes'));
-      const actions = node('div', '', 'job-leads-actions');
-      const link = node('a', 'Open LinkedIn ad'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-      const edit = node('button', row.deleted ? 'Restore' : 'Edit / view details', 'sec'); edit.type = 'button'; edit.disabled = busy;
-      edit.addEventListener('click', () => { if (row.deleted) return moveToTrash([row], false); if (!busy && discard()) { fill(row); chooseGuide('Form'); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); } });
-      const preview = node('button', 'Preview', 'sec'); preview.type = 'button'; preview.disabled = busy;
-      preview.addEventListener('click', () => { if (!busy) selectPreview(row.url, true); });
-      actions.append(link, preview, edit); card.appendChild(actions); list.appendChild(card);
+      const tr = node('tr'), pick = node('td');
       if (!row.deleted) {
-        const hr = node('button',row.hr ? `HR people (${row.hr.people.length})` : 'HR people','sec'); hr.type='button'; hr.disabled=busy;
-        hr.addEventListener('click',()=>{ if (!busy) { selectPreview(row.url); chooseGuide('HR'); el('HR').scrollIntoView({block:'nearest',behavior:'smooth'}); } }); actions.append(hr);
-      }
-      if (!row.deleted) { const remove = node('button', 'Delete', 'sec job-lead-delete'); remove.type = 'button'; remove.disabled = busy; remove.addEventListener('click', () => moveToTrash([row], true)); actions.appendChild(remove); }
-      if (!row.deleted) {
-        const pick = node('label', '', 'job-lead-select'), checkbox = node('input');
+        const checkbox = node('input');
         checkbox.type = 'checkbox'; checkbox.checked = picked.has(row.id); checkbox.disabled = busy;
         checkbox.setAttribute('aria-label', 'Select ' + row.company + ' — ' + row.role);
         checkbox.addEventListener('change', () => { if (busy) return; if (checkbox.checked) picked.add(row.id); else picked.delete(row.id); updateSelection(); chooseGuide('BulkHR'); });
-        pick.append(checkbox, document.createTextNode('Select')); card.appendChild(pick);
+        pick.appendChild(checkbox);
       }
-      const details = node('details', '', 'job-lead-ad');
-      details.appendChild(node('summary', 'View more — job ad content'));
-      if (row.description) {
-        if (row.description_truncated || row.description.length >= 20000) details.appendChild(node('p', 'Captured excerpt. Open the LinkedIn ad for the complete content.', 'job-leads-muted'));
-        const body = node('div', '', 'job-lead-ad-content'); content(body, row.description, row.description_rich); details.appendChild(body);
-        if (!row.description_rich?.length) details.appendChild(node('p', 'Plain-text capture. To refresh its original formatting, use Edit / view details → Refresh ad content, then save.', 'job-leads-muted'));
-      } else details.appendChild(node('p', 'No job description was saved. Open the LinkedIn ad, or use Edit / view details and Fill from link, then save.', 'job-leads-muted'));
-      card.appendChild(details);
+      // An estimate from LinkedIn's "2 weeks ago" is marked with ≈.
+      const posted = row.date_posted ? postedLabel(row.date_posted) : estimateOf(row) ? '≈ ' + postedLabel(estimateOf(row)) : '—';
+      const title = node('td'), open = button(row.role, () => { if (!busy) selectPreview(row.url, true); }, 'job-lead-title');
+      open.setAttribute('aria-label', 'Preview ' + row.role + ' at ' + row.company); title.appendChild(open);
+      if (row.notes) title.appendChild(node('div', row.notes.slice(0, 120) + (row.notes.length > 120 ? '…' : ''), 'job-leads-muted'));
+      const company = node('td', row.company); if (row.contact) company.appendChild(node('div', 'Contact: ' + row.contact, 'job-leads-muted'));
+      const state = node('td', labels[row.status] || row.status);
+      if (row.follow_up) state.appendChild(node('div', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : 'job-leads-muted'));
+      const hr = node('td');
+      if (!row.deleted) hr.appendChild(button(row.hr ? `HR people (${row.hr.people.length})` : 'Find HR', () => { if (!busy) { selectPreview(row.url); chooseGuide('HR'); el('HR').scrollIntoView({block:'nearest',behavior:'smooth'}); } }));
+      // The HR people tab, filtered to this company, is where emails are unlocked.
+      if (!row.deleted && row.hr?.people?.length && row.hr.company_id) {
+        const view = button('View', () => { if (!busy) window.cvStudioPeople?.showHR?.(String(row.hr.company_id)); });
+        view.setAttribute('aria-label', 'View HR people for ' + row.company); hr.append(view);
+      }
+      const actions = node('div', '', 'job-leads-actions');
+      const link = node('a', 'Open ↗'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      actions.append(link, button(row.deleted ? 'Restore' : 'Edit', () => {
+        if (row.deleted) return moveToTrash([row], false);
+        if (!busy && discard()) { fill(row); showForm(true); chooseGuide('Form'); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); }
+      }));
+      if (!row.deleted) actions.appendChild(button('Delete', () => moveToTrash([row], true), 'sec job-lead-delete'));
+      const cells = node('td'); cells.appendChild(actions);
+      tr.append(pick, node('td', posted), title, company, node('td', clientOf(row)?.name || '—'), node('td', row.location || '—'),
+        state, node('td', row.folder || 'Unfiled'), node('td', savedLabel(row.created_at)), hr, cells);
+      list.appendChild(tr);
     });
   }
   const searchStatus = value => { el('SearchStatus').textContent = value; };
@@ -514,7 +554,7 @@
     const value=validHRPreferences({countryMode:el(prefix+'CountryMode').value,country:el(prefix+'Country').value,pages:Number(el(prefix+'Pages').value)});
     if (!value) return;
     preferredHR=value;
-    for (const other of ['HR','BulkHR','ClientsHR']) if (other!==prefix && el(other+'Pages')) setHRPreferenceControls(other,value);
+    for (const other of ['HR','BulkHR']) if (other!==prefix) setHRPreferenceControls(other,value);
     try { localStorage.setItem(hrPreferenceKey,JSON.stringify(value)); } catch {}
     bulkHRControls();
   }
@@ -768,7 +808,6 @@
     try { localStorage.setItem(bulkCheckpointKeys[bulkHR.ui.prefix],JSON.stringify(checkpoint)); } catch {}
   }
   function stopHR() {
-    if (clientScanPending) { hrStopped=true; return; }
     if (!hrRunning) return;
     hrStopped=true;el('HRMessage').textContent='Stopping after the current read…';
     if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
@@ -779,8 +818,7 @@
     bulkHR.ui.part('Bar').value=bulkHR.completed;
     bulkHR.ui.part('Summary').textContent=`${bulkHR.completed} of ${bulkHR.items.length} ads processed · ${bulkHR.saved} saved · ${bulkHR.failed} failed`+(bulkHR.cancelled ? ` · ${bulkHR.cancelled} stopped` : '');
   }
-  // The Job ads queue UI. Followed clients passes its own panel (same parts,
-  // another id prefix) so one scanner serves both views.
+  // The Job ads queue UI parts.
   const jobAdsHRUI={prefix:'BulkHR',part:name=>el('BulkHR'+name),guide:true};
   async function startBulkHR(ids=null,ui=jobAdsHRUI) {
     const chosen=ids ? new Set(ids) : picked;
@@ -797,6 +835,7 @@
     rememberHRPreferences(ui.prefix);
     const plan=bulkHRPlan(selection,settings,ui.prefix);
     const activity=beginScanActivity();
+    if (ui.guide) el('BulkHRNextStep').hidden=true;
     hrStopped=false;hrRunning=true;bulkHR={running:true,ui,settings,completed:0,saved:0,failed:0,cancelled:0,items:[]};
     ui.part('Results').replaceChildren();ui.part('Progress').hidden=false;ui.part('Bar').hidden=false;
     ui.part('Bar').max=selection.length;
@@ -873,30 +912,10 @@
       for (const item of bulkHR.items) if (item.node.dataset.state==='waiting') item.node.textContent=item.title+' · Not started';
       rememberBulkHR();
       ui.part('Message').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
+      if (ui.guide) el('BulkHRNextStep').hidden=!bulkHR.saved; // next step: the saved HR people
       bulkHRSummary();lock(false);finishScanActivity(activity,bulkHR.failed>0 || !!stoppedReason);
     }
     return true;
-  }
-  // Followed clients: scan these saved ads with its own settings and progress
-  // panel. The latest saved ads are read first so revisions are current.
-  async function scanClientAds(ids) {
-    if (busy || hrRunning || clientScanPending) throw Error('Job Leads is busy with another search, scan or save. Try again when it finishes.');
-    // Stop is honoured while the saved ads are re-read, before the queue starts.
-    clientScanPending=true;hrStopped=false;
-    try {
-      // Re-reading saved ads must not drop the owner's Job ads ticks.
-      const kept=new Set(picked);
-      await load();
-      for (const id of kept) if (rows.some(row=>row.id===id && !row.deleted)) picked.add(id);
-      updateSelection();
-      if (hrStopped) { el('ClientsHRMessage').textContent='Stopped before the scan started. Nothing was scanned.'; return false; }
-    } finally { clientScanPending=false; }
-    return startBulkHR(ids,{prefix:'ClientsHR',part:name=>el('ClientsHR'+name),guide:false});
-  }
-  // Whether Scan would resume an unfinished Followed clients run for these ads.
-  function clientScanResumes(ids) {
-    try { const chosen=new Set(ids);return bulkHRPlan(rows.filter(row=>chosen.has(row.id) && !row.deleted),hrSettings('ClientsHR'),'ClientsHR').resume; }
-    catch { return false; }
   }
   function rememberJobs(snapshot) {
     for (const row of window.cvStudioJobSearch.rows(snapshot)) {
@@ -959,7 +978,7 @@
         date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
         description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,full:true};
       const found = discovered.find(value => value.url === row.url); if (found) Object.assign(found,previewCapture);
-      searchStatus(savedJob(row.url) ? 'Full ad captured for preview. To update the saved content, use Edit / view details → Refresh ad content, then save.' : 'Full ad captured for review. Select it and Add selected to list when ready.');
+      searchStatus(savedJob(row.url) ? 'Full ad captured for preview. To update the saved content, use Edit → Refresh content, then save.' : 'Full ad captured for review. Select it and Add selected to list when ready.');
     } catch (error) { searchStatus(error.message + ' The previous content or search summary is still available.'); }
     finally { lock(false); drawDiscovery(); }
   }
@@ -1147,14 +1166,9 @@
     el('HRStart').addEventListener('click',startHR);
     el('HRStop').addEventListener('click',stopHR);
     el('BulkHRStart').addEventListener('click',()=>startBulkHR());el('BulkHRStop').addEventListener('click',stopHR);
+    el('BulkHRNext').addEventListener('click',()=>{if(!busy)window.cvStudioPeople?.showHR?.('');});
     setHRPreferenceControls('BulkHR',preferredHR || {countryMode:'',country:'',pages:3});
     el('BulkHRKeywords').value=hrDefaultKeywords;el('BulkHRProgress').hidden=true;
-    if (el('ClientsHRPages')) {
-      setHRPreferenceControls('ClientsHR',preferredHR || {countryMode:'',country:'',pages:3});el('ClientsHRKeywords').value=hrDefaultKeywords;
-      el('ClientsHRCountryMode').addEventListener('change',()=>{el('ClientsHRCountry').hidden=el('ClientsHRCountryLabel').hidden=!el('ClientsHRCountryMode').value;rememberHRPreferences('ClientsHR');});
-      el('ClientsHRCountry').addEventListener('input',()=>rememberHRPreferences('ClientsHR'));
-      el('ClientsHRPages').addEventListener('change',()=>rememberHRPreferences('ClientsHR'));
-    }
     el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; rememberHRPreferences(); chooseGuide('HR'); });
     el('HRCountry').addEventListener('input',()=>{rememberHRPreferences();chooseGuide('HR');});
     el('HRPages').addEventListener('change',()=>{rememberHRPreferences();chooseGuide('HR');});
@@ -1250,14 +1264,22 @@
         const value = await api({action:'save', record:{...draft(), ...(editing ? {id:editing.id, revision:editing.revision} : {})}});
         await load();
         if (value.duplicate) {
-          status(value.record.deleted ? 'This job is already saved in Trash. Your draft has been kept; restore the existing lead from Trash.' : 'This job is already saved. Your draft has been kept; use Edit / view details on the existing lead to change it.');
+          status(value.record.deleted ? 'This job is already saved in Trash. Your draft has been kept; restore the existing lead from Trash.' : 'This job is already saved. Your draft has been kept; use Edit on the existing lead to change it.');
         } else { fill(value.record); status('Lead saved on this computer.'); }
       } catch (error) { status(error.message); }
       finally { lock(false); }
     });
     el('New').addEventListener('click', () => { if (!busy && discard()) { fill(null); chooseGuide('Form'); status('Ready for another job ad.'); } });
     el('Refresh').addEventListener('click', async () => { if (busy) return; lock(true); try { await load(); status('Saved leads refreshed. Reopen a lead to load its latest changes.'); } catch (error) { status(error.message); } finally { lock(false); } });
-    for (const id of ['Search', 'Filter', 'FolderFilter']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', applySavedFilters);
+    for (const id of ['Search', 'Filter', 'FolderFilter', 'ClientFilter', 'PostedFilter', 'Sort']) el(id).addEventListener(id === 'Search' ? 'input' : 'change', applySavedFilters);
+    el('FiltersReset').addEventListener('click', () => {
+      if (busy && hrRunning) return;
+      el('Search').value = ''; el('Sort').value = '';
+      for (const id of ['Filter', 'ClientFilter', 'PostedFilter']) el(id).value = '';
+      el('FolderFilter').value = '*'; applySavedFilters();
+    });
+    el('AddManual').addEventListener('click', () => { if (!busy && discard()) { fill(null); showForm(true); chooseGuide('Form'); el('url').focus(); } });
+    el('FormClose').addEventListener('click', () => { if (!busy && discard()) { fill(null); showForm(false); chooseGuide('Search'); } });
     el('FolderNew').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = false; el('FolderName').focus(); } });
     el('FolderCancel').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = true; el('FolderName').value = ''; } });
     el('FolderCreate').addEventListener('click', createFolder);
@@ -1326,6 +1348,19 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,scanClientAds,clientScanResumes,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  // Followed clients opens its saved ads here, filtered to one client (or any).
+  // Ads saved from Followed clients are read again first, so none is missing.
+  async function showClientAds(companyId = '!any') {
+    document.getElementById('jobLeadsApolloAdsTab')?.click();
+    // Filters stay as they are while an HR scan runs (its selection is in use).
+    if (hrRunning) { status('Client ads can be listed when the HR scan finishes or is stopped.'); return; }
+    if (!busy) { lock(true); try { await load(); } catch (error) { status(error.message); } finally { lock(false); } }
+    if (hrRunning) return;
+    // Only the client filter applies, so every saved ad of the client shows.
+    el('Search').value = ''; el('Filter').value = ''; el('PostedFilter').value = ''; el('FolderFilter').value = '*';
+    el('ClientFilter').value = syncClients().has(String(companyId)) ? String(companyId) : '!any';
+    applySavedFilters(); el('List').scrollIntoView?.({block:'start', behavior:'smooth'});
+  }
+  window.cvStudioJobLeads={refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

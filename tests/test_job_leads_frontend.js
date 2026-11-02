@@ -111,11 +111,12 @@ const root = path.resolve(__dirname, '..');
   el('Form').handlers.submit({preventDefault(){}}); // wait for both save and list request
   await new Promise(resolve=>setTimeout(resolve,0));
   assert.equal(el('Total').textContent,'1');
-  assert.equal(el('List').children[0].children[0].textContent,'=FORMULA()');
-  assert.equal(el('List').children[0].children[1].textContent,'<img src=x onerror=alert(1)>');
-  const missingDetails=el('List').children[0].children.at(-1);
-  assert.equal(missingDetails.tagName,'details');assert.match(missingDetails.children[0].textContent,/View more/);assert.match(missingDetails.children[1].textContent,/No job description was saved/);
-  assert(el('List').children[0].children[2].children.some(child=>child.textContent==='Posted: Not available'));
+  // Table row: select, posted, title (opens the preview), company, client, …
+  const titleOf=row=>row.children[2].children[0];
+  assert.equal(el('List').children[0].children[3].textContent,'=FORMULA()');
+  assert.equal(titleOf(el('List').children[0]).textContent,'<img src=x onerror=alert(1)>');
+  assert.equal(el('List').children[0].children[1].textContent,'—','no posted date');
+  await titleOf(el('List').children[0]).click();assert.equal(el('PreviewTitle').textContent,'<img src=x onerror=alert(1)>','the title opens the preview');
   assert.match(el('Message').textContent,/saved on this computer/);
   await el('Export').click();assert((await blobs[0].text()).includes("'=FORMULA()"));
   el('Search').value='not present';el('Search').handlers.input();assert.equal(el('Count').textContent,'0 leads');
@@ -151,16 +152,17 @@ const root = path.resolve(__dirname, '..');
   await el('New').click();
   el('url').value='https://www.linkedin.com/jobs/view/7777777777';el('company').value='Saved Ad Company';el('role').value='Account Manager';el('date_posted').value='2026-10-02';el('description').value='<script>Never execute()</script>\nFull saved description';
   await el('Form').handlers.submit({preventDefault(){}});
-  const savedCard=el('List').children[0], more=savedCard.children.at(-1);
-  assert(savedCard.children[2].children.some(child=>child.textContent==='Posted: 2 Oct 2026'));
-  const savedText=more.children.find(child=>child.tagName==='div').querySelectorAll('#text').map(child=>child.textContent).join('\n');
-  assert.equal(more.tagName,'details');assert.equal(savedText,'<script>Never execute()</script>\nFull saved description');
+  const savedRow=el('List').children[0];
+  assert.equal(savedRow.children[1].textContent,'2 Oct 2026');
+  await titleOf(savedRow).click();const more=el('PreviewContent');
+  const savedText=more.querySelectorAll('#text').map(child=>child.textContent).join('\n');
+  assert.equal(savedText,'<script>Never execute()</script>\nFull saved description');
   assert.equal(more.querySelectorAll('script').length,0,'ad text is never executed');
   await el('Export').click();assert.match(await blobs.at(-1).text(),/date_posted/);assert.match(await blobs.at(-1).text(),/2026-10-02/);
   await el('New').click();el('url').value='https://attacker.invalid/jobs/view/123';await el('AutoFill').click();assert.equal(el('company').value,'');assert.match(el('Message').textContent,/Paste a LinkedIn job ad link/);
   // Realistic organization workflow: folders, known creation date, rich paste,
   // recoverable row deletion, restore, cancellation and clear with a hidden row.
-  assert(savedCard.children[2].children.some(child=>/Date created: 2 Oct 2026/.test(child.textContent)));
+  assert.equal(savedRow.children[8].textContent,'2 Oct 2026','the Saved column shows the date created');
   el('FolderFilter').value='*';
   records[0].folder='Finance';records.push({...records[0],id:'c'.repeat(32),folder:'Technology',url:'https://www.linkedin.com/jobs/view/8888888888'});
   await el('Refresh').click();el('FolderFilter').value='Finance';el('FolderFilter').handlers.change();
@@ -216,7 +218,7 @@ const root = path.resolve(__dirname, '..');
   el('Search').value='';el('Search').handlers.input();
   await el('FolderNew').click();el('FolderName').value='Another';await el('FolderCreate').click();
   el('FolderFilter').value='*';el('FolderFilter').handlers.change();
-  await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit').click();
   el('notes').value='Unsaved notes';el('notes').handlers.input();
   pick=el('List').children[0].querySelectorAll('input')[0];pick.checked=true;pick.handlers.change();
   el('MoveFolder').value='Another';allowDiscard=false;await el('Move').click();
@@ -238,7 +240,7 @@ const root = path.resolve(__dirname, '..');
   await el('New').click();assert.equal(el('folder').value,'Preferred');
   await el('Read').click();assert.equal(el('folder').value,'Preferred');
   el('FolderFilter').value='*';el('FolderFilter').handlers.change();
-  await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit / view details').click();
+  await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit').click();
   assert.equal(el('folder').value,'','editing uses that saved ad\'s own folder');
   await el('New').click();assert.equal(el('folder').value,'Preferred');
   el('folder').value='';el('folder').handlers.change();
@@ -253,10 +255,59 @@ const root = path.resolve(__dirname, '..');
   // lists while literal markup stays text. Saved payloads remain unchanged.
   records[0].description='Heading\nFirst item\nSecond item';
   records[0].description_rich=[{tag:'p',children:[{tag:'p',children:[{text:'Heading'}]},{tag:'ul',children:[{tag:'li',children:[{text:'First item'}]},{tag:'li',children:[{text:'Second item'}]}]}]}];
-  await el('Refresh').click();
-  const body=el('List').children[0].children.at(-1).children.find(child=>child.tagName==='div');
+  await el('Refresh').click();await titleOf(el('List').children[0]).click();
+  const body=el('PreviewContent');
   assert.equal(body.children[0].tagName,'p');assert.equal(body.children[1].tagName,'ul');assert.equal(body.children[0].querySelectorAll('p').length,0);
-  records[0].description_rich=[];records[0].description='Heading\n\n• First item\n• Second item';await el('Refresh').click();
-  assert.equal(el('List').children[0].children.at(-1).querySelectorAll('li').length,2);
+  records[0].description_rich=[];records[0].description='Heading\n\n• First item\n• Second item';await el('Refresh').click();await titleOf(el('List').children[0]).click();
+  assert.equal(el('PreviewContent').querySelectorAll('li').length,2);
+  // Job ads table: Client, Posted (estimates count) and Sort filters, empty
+  // states, the manual form toggle and the tab count.
+  {const day=offset=>{const d=new Date();d.setDate(d.getDate()-offset);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+   const label=value=>new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z'));
+   const ad=(n,patch)=>({id:String(n).repeat(32),revision:1,url:'https://www.linkedin.com/jobs/view/100000000'+n,company:'Company '+n,role:'Role '+n,contact:'',location:'',status:'new',folder:'',follow_up:'',notes:'',description:'',description_rich:[],date_posted:'',created_at:'2026-10-0'+n+'T00:00:00Z',deleted:false,...patch});
+   records=[ad(1,{role:'Zeta role',date_posted:day(2),client:{company_id:11,name:'Example Client'}}),ad(2,{role:'Alpha role',date_posted_estimate:day(3)}),
+     ad(3,{role:'Mid role',date_posted:day(20),client:{company_id:12,name:'Second Client'}})];
+   await el('Refresh').click();await el('FiltersReset').click();
+   const titles=()=>el('List').children.map(tr=>tr.children[2].children[0].textContent);
+   const choose=(name,value)=>{el(name).value=value;el(name).handlers.change();};
+   assert.deepEqual(titles(),['Zeta role','Alpha role','Mid role'],'Recently updated keeps the saved order');
+   assert.equal(el('List').children[1].children[1].textContent,'≈ '+label(day(3)),'an estimate shows with ≈');
+   assert.deepEqual([el('List').children[0].children[4].textContent,el('List').children[1].children[4].textContent],['Example Client','—']);
+   assert.deepEqual(el('ClientFilter').children.map(option=>option.textContent),['All ads','Any client','Example Client','Second Client']);
+   choose('ClientFilter','!any');assert.deepEqual(titles(),['Zeta role','Mid role']);
+   choose('ClientFilter','12');assert.deepEqual(titles(),['Mid role']);
+   await el('FiltersReset').click();choose('PostedFilter','7');assert.deepEqual(titles(),['Zeta role','Alpha role'],'estimates count for Posted');
+   await el('FiltersReset').click();choose('Sort','posted_asc');assert.deepEqual(titles(),['Mid role','Alpha role','Zeta role']);
+   choose('Sort','role_asc');assert.deepEqual(titles(),['Alpha role','Mid role','Zeta role']);
+   choose('Sort','client_asc');assert.deepEqual(titles(),['Zeta role','Mid role','Alpha role'],'ads without a client sort last');
+   choose('Sort','saved_desc');assert.deepEqual(titles(),['Mid role','Alpha role','Zeta role']);
+   await el('FiltersReset').click();el('Search').value='second client';el('Search').handlers.input();assert.deepEqual(titles(),['Mid role'],'search includes the client name');
+   el('Search').value='nothing like this';el('Search').handlers.input();assert.match(el('List').children[0].children[0].textContent,/No matching ads/);
+   await el('FiltersReset').click();assert.equal(el('AdsTabCount').textContent,'3');
+   // Followed clients opens its ads here: one client, or every client ad,
+   // with only the client filter applied.
+   el('Search').value='no such ad';el('Search').handlers.input();choose('PostedFilter','7');choose('Filter','won');
+   await window.cvStudioJobLeads.showClientAds(12);assert.equal(el('ClientFilter').value,'12');assert.deepEqual(titles(),['Mid role']);
+   assert.deepEqual([el('Search').value,el('PostedFilter').value,el('Filter').value,el('FolderFilter').value],['','','','*'],'other filters are cleared');
+   await window.cvStudioJobLeads.showClientAds(99);assert.equal(el('ClientFilter').value,'!any');
+   await window.cvStudioJobLeads.showClientAds();assert.equal(el('ClientFilter').value,'!any');assert.deepEqual(titles(),['Zeta role','Mid role']);
+   // The manual form opens only when it is used.
+   await el('FormClose').click();assert(el('FormCard').hidden && !el('AddManual').hidden);assert.equal(el('Layout').dataset.form,'');
+   await el('AddManual').click();assert(!el('FormCard').hidden && el('AddManual').hidden);assert.equal(el('Layout').dataset.form,'open');
+   await el('FormClose').click();await el('List').children[0].querySelectorAll('button').find(button=>button.textContent==='Edit').click();
+   assert(!el('FormCard').hidden,'Edit opens the form');assert.equal(el('company').value,'Company 1');
+   // The HR people tab counts each person once per company, as the HR people list does.
+   const person=url=>({url,name:'Fictional HR',title:'HR',location:'',matched:'HR'});
+   records=[ad(1,{hr:{company_id:'41',people:[person('https://www.linkedin.com/in/fictional-hr'),person('https://www.linkedin.com/in/Fictional-HR/')]}}),
+     ad(2,{hr:{company_id:'41',people:[person('https://www.linkedin.com/in/fictional-hr')]}}),ad(3,{hr:{company_id:'42',people:[person('https://www.linkedin.com/in/fictional-hr')]}}),
+     ad(4,{deleted:true,hr:{company_id:'43',people:[person('https://www.linkedin.com/in/other-hr')]}})];
+   await el('Refresh').click();assert.equal(document.getElementById('peopleHRTabCount').textContent,'2','case, trailing slash and repeat ads count once; Trash is left out');
+   // An ad with saved HR people opens the HR people tab filtered to its company.
+   await el('FiltersReset').click();let shownHR=null;window.cvStudioPeople={showHR:id=>{shownHR=id;}};
+   const hrCell=el('List').children.find(tr=>tr.children[2].children[0].textContent==='Role 1').children[9];
+   assert.deepEqual(hrCell.children.map(child=>child.textContent),['HR people (2)','View']);
+   await hrCell.children[1].click();assert.equal(shownHR,'41');assert.match(hrCell.children[1]['aria-label'],/View HR people for Company 1/);
+   assert.match(el('List').children[0].children[2].children[0]['aria-label'],/^Preview .+ at Company \d$/,'the title says what it does');
+   records=[];await el('Refresh').click();assert.match(el('List').children[0].children[0].textContent,/No saved ads yet/);assert.equal(el('AdsTabCount').textContent,'0');}
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/status/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});
