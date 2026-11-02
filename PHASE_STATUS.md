@@ -4,7 +4,16 @@
 
 ## Release state
 
-- v24.6.543 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.544 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged543/PR288/3f9b87d:
+  - Update my clients (pull every followed client, save to today's folder,
+    find HR people);
+  - HR scans of other ads reused for 30 days, copied server-side with their
+    original dates (additive `save_hr` `reuse_from`; no schema change);
+  - an automatic email check after an unlock;
+  - an HR people Email filter (Excel too) and a counted, confirmed bulk
+    unlock (25 per run, stops on unconfirmed results).
+- v24.6.543 (merged PR288) was local/unmerged on `claude/job-leads-signed-clients` from
   merged542/PR287/c282b18. It is a Job Leads layout release:
   - Job ads table with Client/Posted/Sort filters and a hidden-until-used
     manual form;

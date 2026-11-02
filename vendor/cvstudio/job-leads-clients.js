@@ -229,6 +229,7 @@
     // Job Leads' own busy state is checked when Pull/Add is clicked, so the
     // buttons never sit disabled after Job Leads finishes.
     el('Pull').disabled = locked || !state.recordsReady || !state.signed.length || stale || !pullable().length;
+    el('Update').disabled = locked || !state.recordsReady || !state.signed.length || stale || !state.followed.some(eligible);
     el('OpenLinkedIn').disabled = locked || !state.signed.length || stale || !pullable().length;
     el('FollowedRefresh').disabled = locked;
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort','FiltersReset']) el(name).disabled=locked || !c?.rows.length;
@@ -617,7 +618,9 @@
       try { await app.rpc('end', {run_id:run}); } catch {}
     }
   }
-  async function pull() {
+  // Pulls the ticked clients, or `targets` (Update my clients). Resolves to
+  // {ran, stopped, failed, done} once a pull actually started, else undefined.
+  async function pull(targets = pullable()) {
     const app = jobLeads();
     if (mine() || !app?.rpc || !window.cvStudioJobSearch) return;
     if (!state.signed.length || staleStatuses().length) { el('Setup').open=true;progress('Choose valid signed-client statuses in Signed clients and click Save statuses before pulling ads.');return; }
@@ -625,7 +628,6 @@
     if (app.isBusy?.()) { progress(BUSY_MESSAGE); return; }
     const pages = Number(el('Pages').value);
     if (![1, 2, 3, 5].includes(pages)) { progress('Choose the pages per client.'); return; }
-    const targets = pullable();
     if (!targets.length) { progress('Tick at least one followed client that has a LinkedIn link.'); return; }
     if (targets.length > MAX_PER_PULL) { progress(`Pull up to ${MAX_PER_PULL} clients at a time. Untick some clients and try again.`); return; }
     if (state.found.length >= MAX_FOUND) { progress(`The review list is full (${MAX_FOUND} ads). Add or clear ads, then pull again.`); return; }
@@ -680,6 +682,7 @@
       }
       app.activityEnd?.(activity, !!(failure || failed));
     }
+    return {ran:true, stopped:state.stopped || token !== generation, failed:failed + (failure ? 1 : 0), done};
   }
   // Saved ads with no posted date take the date (or estimate) this pull just
   // read for the same ad. Nothing else in the saved ad changes.
@@ -763,12 +766,15 @@
       if (token === generation) { state.pulling = false; app.lock(false); draw(); }
     }
   }
-  function addSelected() {
+  // Saves the selected new ads to `folderName` (default: the chosen folder)
+  // and resolves to {added, skipped, failure, stopped} when it ran.
+  async function addSelected(folderName) {
     if (!state.recordsReady) { progress('Saved ads have not loaded yet. Click Refresh before adding ads.'); return; }
-    return work(async token => {
+    let outcome;
+    await work(async token => {
       const selected = state.found.filter(row => state.picked.has(row.url) && !savedJob(row.url));
       if (!selected.length) return;
-      const folder = el('Folder').value;
+      const folder = folderName ?? el('Folder').value;
       if (folder && !state.folders.includes(folder)) throw Error('This folder changed in another window. Choose a folder again.');
       let added = 0, skipped = 0, failure = '';
       state.saving = true; state.stopped = false; controls();
@@ -794,7 +800,46 @@
       const text = (state.stopped ? 'Stopped. ' : '') + `Saved ${added} ad${added === 1 ? '' : 's'} to ${folder || 'Unfiled'}.` + (skipped ? ` ${skipped} were already saved; their details were kept.` : '') +
         (failure ? ` ${failure}` : '') + (remaining ? ` ${remaining} selected ad${remaining === 1 ? ' is' : 's are'} still waiting: click Save selected again.` : '');
       progress(''); message(text);
+      outcome = {added, skipped, failure, stopped:state.stopped};
     }, true);
+    return outcome;
+  }
+  // Update my clients: pull every followed client with a LinkedIn link (in
+  // groups of MAX_PER_PULL), save the new ads to today's "Client ads" folder,
+  // then find HR people for them in Job ads. Recently scanned companies are
+  // reused there, so each run only scans what is new.
+  async function updateClients() {
+    const app = jobLeads();
+    if (mine()) return;
+    if (app?.isBusy?.() || app?.hrRunning?.()) { progress(BUSY_MESSAGE); return; }
+    const clients = state.followed.filter(eligible);
+    if (!clients.length) { progress('Add a LinkedIn link to at least one followed client first.'); return; }
+    const token = generation, day = new Date(), folder = 'Client ads ' + day.getFullYear() + '-' + String(day.getMonth() + 1).padStart(2, '0') + '-' + String(day.getDate()).padStart(2, '0');
+    const savedIds = new Set(); let pulled = 0, failed = 0;
+    for (let start = 0; start < clients.length; start += MAX_PER_PULL) {
+      // Each group starts from an empty review list, so the list never fills up.
+      state.found = []; state.picked.clear(); state.foundPage = 0;
+      const result = await pull(clients.slice(start, start + MAX_PER_PULL));
+      if (!result || token !== generation) return;
+      pulled += result.done; failed += result.failed;
+      if (result.stopped) { message(`Stopped. ${savedIds.size} new ads were saved to ${folder}.`); return; }
+      const fresh = state.found.filter(row => !savedJob(row.url));
+      if (!fresh.length) continue;
+      if (!state.folders.includes(folder)) {
+        try { await leads({action:'create_folder', folder}); await refreshRecords(token); }
+        catch (error) { if (token === generation) message(error.message + ` ${savedIds.size} new ads were saved before this.`); return; }
+      }
+      for (const row of fresh) state.picked.add(row.url);
+      const saved = await addSelected(folder);
+      if (token !== generation) return;
+      for (const row of fresh) { const record = savedJob(row.url); if (record && !record.deleted) savedIds.add(record.id); }
+      if (!saved || saved.stopped || saved.failure) { message(`Stopped. ${savedIds.size} new ads were saved to ${folder}.` + (saved?.failure ? ' ' + saved.failure : '')); return; }
+    }
+    const summary = `Updated ${pulled} of ${clients.length} client${clients.length === 1 ? '' : 's'}` + (failed ? ` (${failed} could not be pulled)` : '') +
+      `: ${savedIds.size} new ad${savedIds.size === 1 ? '' : 's'} saved to ${folder}.`;
+    if (!savedIds.size) { message(summary + ' No HR scan was needed.'); return; }
+    message(summary + ' Finding HR people in Job ads…');
+    await app?.scanSavedAds?.([...savedIds], folder);
   }
 
   // Views and account changes ------------------------------------------------
@@ -867,14 +912,15 @@
     el('Query').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault?.(); void searchCompanies(0); } });
     el('CompaniesPrevious').addEventListener('click', () => searchCompanies(Math.max(0, (state.companies?.offset || 0) - COMPANY_PAGE)));
     el('CompaniesNext').addEventListener('click', () => { if (state.companies?.next !== null) void searchCompanies(state.companies.next); });
-    el('Pull').addEventListener('click', pull);
+    el('Pull').addEventListener('click', () => pull());
+    el('Update').addEventListener('click', updateClients);
     el('Stop').addEventListener('click', stop);
     el('Untick').addEventListener('click', () => { if (!mine() && state.chosen) { state.chosen.clear(); state.linkedinSearch = ''; rememberTicks(); draw(); } });
     el('SelectNew').addEventListener('change', () => {
       for (const row of pageRows()) if (!savedJob(row.url)) { if (el('SelectNew').checked) state.picked.add(row.url); else state.picked.delete(row.url); }
       draw();
     });
-    el('Add').addEventListener('click', addSelected);
+    el('Add').addEventListener('click', () => addSelected());
     el('Clear').addEventListener('click', () => { if (!mine()) { state.found = []; state.picked.clear(); state.foundPage = 0; progress('Pulled ads cleared.'); draw(); } });
     el('FoundPrevious').addEventListener('click', () => { state.foundPage = Math.max(0, state.foundPage - 1); draw(); });
     el('FoundNext').addEventListener('click', () => { state.foundPage++; draw(); });

@@ -232,7 +232,33 @@
   window.initEmailVerifier = init;
   window.addEventListener?.('pagehide',()=>{leaving=true;stopping=true;});
   window.addEventListener?.('pageshow',()=>{leaving=false;});
+  // An email just unlocked is checked once automatically (no email is sent).
+  // Checks run one at a time; each result is kept for this session and shown
+  // in every email-check box for that address.
+  const autoResults=new Map(), autoQueue=[], autoViews=new Set();
+  let autoRunning=false;
+  const autoKey=email=>String(email || '').trim().toLowerCase();
+  function autoCheck(email) {
+    const key=autoKey(email);
+    if(!key || !key.includes('@') || autoResults.has(key) || autoQueue.includes(key)) return;
+    autoQueue.push(key);void drainAuto();
+  }
+  async function drainAuto() {
+    if(autoRunning) return;
+    autoRunning=true;
+    try {
+      while(autoQueue.length && !leaving) {
+        const key=autoQueue[0];
+        for(const view of autoViews) view.showAuto(key);
+        try {autoResults.set(key,await checkEmail(key,'deep'));}
+        catch(error) {autoResults.set(key,{error:error.message});}
+        autoQueue.shift();
+        for(const view of autoViews) view.showAuto(key);
+      }
+    } finally {autoRunning=false;}
+  }
   window.cvStudioEmailVerifier={
+    autoCheck,
     forCard:card=>cards.get(card),
     decorate(card,person,options={}) {
       const wrap=textNode('div','','job-leads-email-check'), label=textNode('label','Email to verify'), input=document.createElement('input');
@@ -240,12 +266,12 @@
       label.appendChild(input);
       const button=textNode('button','Verify email','sec'), result=textNode('div','','job-leads-email-result');
       button.type='button';result.setAttribute?.('role','status');result.setAttribute?.('aria-live','polite');
-      let pending=false, generation=0, proposed='', recheckToken='';
-      input.addEventListener('input',()=>{++generation;recheckToken='';result.replaceChildren();});
+      let pending=false, generation=0, proposed='', recheckToken='', manual=false;
+      input.addEventListener('input',()=>{++generation;recheckToken='';result.replaceChildren();manual=false;});
       button.addEventListener('click',async()=>{
         if(pending || !input.value.trim()) {if(!pending) result.replaceChildren(textNode('small','Enter an email address first.'));return;}
         const email=input.value.trim(), current=++generation;
-        pending=true;button.disabled=true;button.textContent='Checking…';
+        pending=true;button.disabled=true;button.textContent='Checking…';manual=true;
         result.replaceChildren(textNode('small','Checking mail servers without sending an email…'));
         try {
           const answer=await checkEmail(email,'deep',recheckToken);
@@ -259,8 +285,18 @@
         email=typeof email==='string'?email:'';
         if(email===proposed) return;
         if(!input.value || input.value===proposed) {input.value=email;++generation;recheckToken='';result.replaceChildren();}
-        proposed=email;
+        proposed=email;view.showAuto(autoKey(email));
       }};
+      // Shows the automatic check for this address, unless a manual check is
+      // running or has already answered.
+      const view={showAuto(key) {
+        if(pending || manual || !key || autoKey(input.value)!==key) return;
+        const answer=autoResults.get(key);
+        if(answer?.error) result.replaceChildren(textNode('small','Automatic check: '+answer.error));
+        else if(answer) result.replaceChildren(textNode('strong',answer.assessment?.label || labels[answer.status]),textNode('p',answer.reason),textNode('small','Checked automatically after unlock · '+details(answer)));
+        else if(autoQueue.includes(key)) result.replaceChildren(textNode('small','Checking mail servers automatically…'));
+      }};
+      autoViews.add(view);
       if(options.readOnly)input.readOnly=true;
       if(options.compact){label.hidden=true;wrap.className+=' job-leads-email-compact';}
       cards.set(card,controller);wrap.append(label,button,result);card.appendChild(wrap);

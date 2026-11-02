@@ -122,6 +122,12 @@ def test_hr_projection_excludes_trash_and_deduplicates(tmp_path):
     assert not filter_people(people,'missing')
     result=hr_people([row,duplicate],lambda r,p:{'state':'found','email':'person@example.test'} if r['id']==duplicate['id'] else None)[0]
     assert result['email_id']==duplicate['id'] and result['email_result']['state']=='found'
+    # The Email filter (No email yet / Has email) applies to the export too.
+    without=hr_people([row,duplicate])
+    assert filter_people([result],email='found')==[result] and filter_people([result],email='none')==[]
+    assert filter_people(without,email='none')==without and filter_people(without,email='found')==[]
+    with pytest.raises(PeopleError):
+        filter_people(without,email='maybe')
 
 
 def test_date_update_is_atomic_and_preserves_scan_metadata(tmp_path):

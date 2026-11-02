@@ -122,8 +122,12 @@ def candidate_export_rows(rows):
              'deleted': 'Yes' if row.get('deleted') is True else ''} for row in rows]
 
 
-def filter_people(rows, query='', company=''):
-    return _filter(rows,query,company,'company_id',HR_FIELDS)
+def filter_people(rows, query='', company='', email=''):
+    """The HR people dashboard filters; email is '' (all), 'none' or 'found'."""
+    if email not in {'', 'none', 'found'}:
+        raise PeopleError('Choose a supported email filter.')
+    rows = _filter(rows,query,company,'company_id',HR_FIELDS)
+    return rows if not email else [row for row in rows if ((row.get('email_result') or {}).get('state') == 'found') == (email == 'found')]
 
 
 def employment_label(person):

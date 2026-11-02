@@ -1810,3 +1810,6 @@
 .job-leads-tab-count:not(:empty)::after { content:')'; }
 /* Inside Job Leads the hidden attribute always wins over a class's display. */
 #viewJobLeads [hidden] { display:none !important; }
+/* HR people: Search, Company and Email on one row (v24.6.544). */
+#peopleHRPanel .people-filters { grid-template-columns:2fr 1fr 1fr; }
+@media(max-width:650px) { #peopleHRPanel .people-filters { grid-template-columns:1fr; } }

@@ -618,8 +618,10 @@ class JobLeadsStore:
             connection.commit()
             return {"record": result, "duplicate": False}
 
-    def save_hr(self, identity, revision, raw, *, person_url=None, dates=None, user_confirmed=False):
+    def save_hr(self, identity, revision, raw, *, person_url=None, dates=None, user_confirmed=False, reuse_from=None, company_url=None):
         _selection([{'id':identity, 'revision':revision}])
+        if reuse_from is not None and (not isinstance(reuse_from, str) or not re.fullmatch(r'[0-9a-f]{32}', reuse_from) or reuse_from == identity or not isinstance(company_url, str)):
+            raise JobLeadsError('Choose saved HR people to reuse.')
         if type(user_confirmed) is not bool:
             raise JobLeadsError('Confirm the company and visible employment dates.')
         with self._connection() as connection:
@@ -640,6 +642,15 @@ class JobLeadsStore:
                 person.pop('employment_confirmed_by_user',None)
                 if user_confirmed:person['employment_confirmed_by_user']=True
                 record['hr'] = clean_hr(record['hr'],record['company'])
+            elif reuse_from is not None:
+                # A recent scan of the same LinkedIn company, saved on another ad,
+                # is copied as it is: its scan and employment dates stay original,
+                # so a reused result never looks newer than it is.
+                row = connection.execute('SELECT * FROM leads WHERE id=?', (reuse_from,)).fetchone()
+                source = self._record(row) if row is not None else None
+                if source is None or source['deleted'] or not source.get('hr') or source['hr'].get('company_url') != company_url:
+                    raise JobLeadsError('The HR people to reuse changed. Scan this ad again. Its details were kept.', 409, 'JOB_LEADS_CONFLICT')
+                record['hr'] = clean_hr({**source['hr'], 'company':record['company']}, record['company'])
             else:
                 record['hr'] = clean_hr(raw, record['company'])
                 record['hr']['scanned_at'] = _now()

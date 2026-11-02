@@ -245,6 +245,7 @@
     return value;
   }
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const HR_REUSE_DAYS = 30; // a company's HR scan is reused for this long
   const estimateOf = row => typeof row?.date_posted_estimate === 'string' && DAY.test(row.date_posted_estimate) ? row.date_posted_estimate : '';
   function postedLabel(value) {
     if (!DAY.test(value || '')) return 'Not available';
@@ -852,13 +853,26 @@
     // scanned company page gets the saved result copied without a scan.
     const companyKey=row=>String(row.company || '').trim().toLocaleLowerCase();
     const scannedCompanies=new Map(), scannedNames=new Set();
+    // Other saved ads scanned in the last 30 days with the same country and
+    // keywords count too: such a company is not scanned again. The server
+    // copies that scan with its original date, so a reused result never looks
+    // newer than it is. The selected ads themselves are never sources, so
+    // selecting an ad always scans it (or its company) afresh.
+    const recentSince=Date.now()-HR_REUSE_DAYS*86400000, selectedIds=new Set(selection.map(row=>row.id));
+    const recent=other=>!other.deleted && !selectedIds.has(other.id) && !!other.hr && other.hr.country===settings.country && other.hr.keywords===settings.keywords &&
+      Date.parse(other.hr.scanned_at)>=recentSince && !!companyPage(other.hr.company_url);
+    for (const other of rows) if (recent(other)) {
+      const page=companyPage(other.hr.company_url), known=scannedCompanies.get(page);
+      if (!known || known.scannedAt<other.hr.scanned_at) scannedCompanies.set(page,{source:other.id,matches:other.hr.people.length,title:other.company+' — '+other.role,scannedAt:other.hr.scanned_at});
+      scannedNames.add(companyKey(other));
+    }
     try {
       for (const item of bulkHR.items.filter(item=>item.node.dataset.state!=='saved').sort((a,b)=>a.priority-b.priority)) {
         if (hrStopped) break;
-        const row=item.row;let shared=null;
+        const row=item.row;let shared=null,page='';
         if (scannedNames.has(companyKey(row))) {
           ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · Checking the company on this ad…`;
-          const page=await adCompanyPage(row);
+          page=await adCompanyPage(row);
           if (hrStopped) break;
           shared=scannedCompanies.get(page) || null;
         }
@@ -867,11 +881,12 @@
           ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · Copying HR people from ${shared.title}…`;
           let unconfirmed='';
           try {
-            const response=await api({action:'save_hr',id:row.id,revision:row.revision,search:{...shared.search,company:row.company}});
+            const response=await api(shared.source ? {action:'save_hr',id:row.id,revision:row.revision,reuse_from:shared.source,company_url:page}
+              : {action:'save_hr',id:row.id,revision:row.revision,search:{...shared.search,company:row.company}});
             const index=rows.findIndex(value=>value.id===row.id);if(index>=0)rows[index]=response.record;
             // Same bookkeeping as a scanned save: the open form keeps the new revision.
             if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
-            item.node.dataset.state='saved';item.node.textContent=item.title+` · ${shared.matches} HR matches copied from ${shared.title} (same company, no extra scan)`;
+            item.node.dataset.state='saved';item.node.textContent=item.title+` · ${shared.matches} HR matches copied from ${shared.title} (same company${shared.scannedAt ? ', scanned ' + savedLabel(shared.scannedAt) : ''}, no extra scan)`;
             if (savedJob(previewUrl)?.id===row.id) drawPreview(); // the new revision redraws its saved HR
             bulkHR.saved++;
           } catch(error) {
@@ -1361,6 +1376,18 @@
     el('ClientFilter').value = syncClients().has(String(companyId)) ? String(companyId) : '!any';
     applySavedFilters(); el('List').scrollIntoView?.({block:'start', behavior:'smooth'});
   }
-  window.cvStudioJobLeads={refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  // Update my clients: show today's folder and find HR people for its new
+  // ads (up to 40 per run; recently scanned companies are reused).
+  async function scanSavedAds(ids, folder) {
+    document.getElementById('jobLeadsApolloAdsTab')?.click();
+    if (busy || hrRunning) { status('Job Leads is busy. Select the new ads in ' + folder + ' and click Scan selected ads when it finishes.'); return false; }
+    lock(true); try { await load(); } catch (error) { status(error.message); return false; } finally { lock(false); }
+    el('Search').value = ''; el('Filter').value = ''; el('PostedFilter').value = ''; el('ClientFilter').value = '';
+    el('FolderFilter').value = folderNames.includes(folder) ? folder : '*'; applySavedFilters();
+    const live = ids.filter(id => rows.some(row => row.id === id && !row.deleted)), chosen = live.slice(0, 40);
+    if (live.length > chosen.length) status(`${live.length - chosen.length} more new ads can be scanned afterwards: select them in ${folder} and click Scan selected ads.`);
+    return chosen.length ? startBulkHR(chosen) : false;
+  }
+  window.cvStudioJobLeads={refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,scanSavedAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

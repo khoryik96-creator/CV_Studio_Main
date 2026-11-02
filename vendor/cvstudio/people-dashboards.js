@@ -58,7 +58,8 @@
   const inFolder=(row,folder)=>folder==='!trash'?row.deleted===true:row.deleted!==true && (folder==='*' || (row.folder || '')===folder);
   function filtered(kind) {
     const query=el(kind+'Query').value.trim().toLowerCase(),value=selected(kind);
-    const rows=boards[kind].rows.filter(row=>(!value || row[kind==='HR'?'company_id':'run_id']===value) && (!query || fields[kind].map(k=>Array.isArray(row[k])?row[k].join(' '):String(row[k]??'')).join(' ').toLowerCase().includes(query)));
+    const email=kind==='HR'?el('HREmail').value:'';
+    const rows=boards[kind].rows.filter(row=>(!value || row[kind==='HR'?'company_id':'run_id']===value) && (!email || (email==='found')===(row.email_result?.state==='found')) && (!query || fields[kind].map(k=>Array.isArray(row[k])?row[k].join(' '):String(row[k]??'')).join(' ').toLowerCase().includes(query)));
     if(kind!=='Candidates')return rows;
     // Same rules as the Excel export: filters first, blank values last, and
     // equal values keep the newest-first archive order.
@@ -97,8 +98,47 @@
       for(const control of el('CandidatesRows').querySelectorAll('[data-organise]'))control.disabled=busy || control.dataset.organise==='trashed';
     }
     if(kind==='HR') {
-      for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !window.cvStudioApollo?.connected();
+      const connected=!!window.cvStudioApollo?.connected();
+      for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !!unlockRun || !connected;
+      el('HRUnlockAll').hidden=!connected || !!unlockRun;el('HRUnlockAll').disabled=appBusy || dateBusy || b.loading || !rows.some(unlockable);
+      el('HRUnlockStop').hidden=!unlockRun;el('HRUnlockStop').disabled=!!unlockRun?.stopped;
+      el('HRDateAll').disabled=el('HRDateAll').disabled || !!unlockRun;el('HREmail').disabled=!!unlockRun;
       el('HRConnect').hidden=!!window.cvStudioApollo?.connected();el('HRConnect').disabled=appBusy || dateBusy;
+    }
+  }
+  // Bulk unlock: everyone shown who has no email and no finished lookup, up
+  // to MAX_UNLOCK per run, after one confirmation stating the credits. Paid
+  // lookups run one at a time; an unconfirmed result stops the run (never
+  // replayed), as does Stop.
+  const MAX_UNLOCK=25;
+  let unlockRun=null;
+  const unlockable=row=>!row.email_result || ['pending','unconfirmed'].includes(row.email_result.state);
+  async function unlockAll() {
+    if(unlockRun || appBusy || dateBusy || !window.cvStudioApollo?.connected())return;
+    const shown=filtered('HR').filter(unlockable),people=shown.slice(0,MAX_UNLOCK);
+    if(!people.length){el('HRMessage').textContent='Everyone shown already has an email or a finished lookup.';return;}
+    const credits=people.filter(row=>!row.email_result).length,checks=people.length-credits,later=shown.length-people.length;
+    if(!window.confirm(`Unlock business emails for ${people.length===1?'1 person':people.length+' people'} shown, using your Apollo account?\n\nThis sends each person's LinkedIn profile, name and company to Apollo and may use up to ${plural(credits,'Apollo credit')} (one per person, even if only profile data comes back).`+
+      (checks?`\n${plural(checks,'earlier lookup')} ${checks===1?'is':'are'} checked without a credit.`:'')+(later?`\nThe first ${MAX_UNLOCK} are unlocked now; run it again for the other ${later}.`:'')))return;
+    const run=unlockRun={stopped:false};let found=0,none=0,reason='';
+    controls('HR');
+    try {
+      for(const row of people) {
+        if(run.stopped)break;
+        el('HRMessage').textContent=`Unlocking ${found+none+1} of ${people.length}: ${row.name}…`;
+        const source=personSource(row);source.id=row.email_id || row.id;source.revision=row.email_revision || row.revision;
+        let note='';
+        const success=await window.cvStudioApollo.unlockSaved(source,row,row.email_result || null,message=>{note=message;},value=>{row.email_result=value;},{confirmed:true,batch:true});
+        if(success!==true){reason=note || 'Apollo is busy or disconnected.';if(!row.email_result)row.email_result={state:'unconfirmed',message:'Check the previous lookup before trying again.'};break;}
+        if(row.email_result?.state==='found')found++;else none++;
+      }
+    } finally {
+      unlockRun=null;
+      await refresh('HR');
+      try{await window.cvStudioApollo?.contactsChanged?.();}catch{}
+      if(found)el('HRNextStep').hidden=false; // next step: Unlocked contacts
+      el('HRMessage').textContent=(run.stopped?'Stopped. ':reason?'Stopped: '+reason+' ':'Finished. ')+`${plural(found,'email')} unlocked, ${none} without an email.`+(found?' Emails are checked automatically.':'');
+      controls('HR');
     }
   }
   function choices(kind) {
@@ -354,7 +394,7 @@
   async function exportRows(kind) {
     const b=boards[kind];if(b.exporting || b.loading || !filtered(kind).length)return;b.exporting=true;controls(kind);
     try {
-      const response=await fetch(kind==='HR'?'/apollo':'/linkedin-sourcer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:kind==='HR'?'export_people':'export_candidates',query:el(kind+'Query').value,[kind==='HR'?'company':'search']:selected(kind),...(kind==='Candidates'?candidateView():{})})});
+      const response=await fetch(kind==='HR'?'/apollo':'/linkedin-sourcer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:kind==='HR'?'export_people':'export_candidates',query:el(kind+'Query').value,[kind==='HR'?'company':'search']:selected(kind),...(kind==='Candidates'?candidateView():{email:el('HREmail').value})})});
       if(!response.ok){const data=await response.json();throw Error(data.error || 'Export failed.');}
       const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download='CV-Studio-'+(kind==='HR'?'HR-People':'Candidates')+'.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch(error){el(kind+'Message').textContent=error.message;}
@@ -392,6 +432,9 @@
     if(!openingHR)void refresh('HR');
   });
   el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.openSettings());
+  el('HREmail').addEventListener('change',()=>{boards.HR.page=0;draw('HR');});
+  el('HRUnlockAll').addEventListener('click',unlockAll);
+  el('HRUnlockStop').addEventListener('click',()=>{if(unlockRun){unlockRun.stopped=true;controls('HR');el('HRMessage').textContent='Stopping after the current lookup…';}});
   el('HRGoContacts').addEventListener('click',()=>{el('HRNextStep').hidden=true;document.getElementById('jobLeadsApolloContactsTab')?.click();});
   async function stopDate(){if(!dateBusy)return;dateStopped=true;controls('HR');if(dateOperation)try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}
   el('HRDateStop').addEventListener('click',stopDate);

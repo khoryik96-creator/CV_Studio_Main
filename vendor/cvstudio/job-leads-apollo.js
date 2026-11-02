@@ -188,16 +188,22 @@
     } catch(error) {setup(error.message);}
     finally {working=false;controls();}
   }
-  async function unlock(person, source=row, prior, notify=message, complete) {
+  // options.confirmed: the owner already confirmed this unlock as part of a
+  // counted bulk unlock. options.batch: Unlocked contacts is refreshed once by
+  // the caller at the end instead of after each email.
+  async function unlock(person, source=row, prior, notify=message, complete, options={}) {
     if(working || appBusy || !account.connected || !source) return false;
     const current=source, token=sequence, previous=prior===undefined?cache[person.url]:prior;
-    if(!previous && !window.confirm('Unlock the business email for '+person.name+' using your Apollo account? This sends their LinkedIn profile, name and company to Apollo and may use an Apollo credit even if only profile data is returned.')) return;
+    if(!previous && !options.confirmed && !window.confirm('Unlock the business email for '+person.name+' using your Apollo account? This sends their LinkedIn profile, name and company to Apollo and may use an Apollo credit even if only profile data is returned.')) return;
     working=true;notify(previous?'Checking the previous lookup without spending another credit…':'Looking up this person in Apollo…');controls();
     try {
       const data=await api({action:'reveal',id:current.id,revision:current.revision,url:person.url,confirmed:!previous});
       if(token===sequence && row?.id===current.id) {cache[person.url]=data.result;}
       notify(data.contact_warning || data.result.message);complete?.(data.result);
-      if(data.result.state==='found' && (contactsLoaded || !el('ContactsPanel').hidden)) await refreshContacts();
+      if(data.result.state==='found') {
+        window.cvStudioEmailVerifier?.autoCheck?.(data.result.email); // no email is sent
+        if(!options.batch && (contactsLoaded || !el('ContactsPanel').hidden)) await refreshContacts();
+      }
     } catch(error) {
       if(token===sequence && row?.id===current.id) {
         // The response may have been lost after charging/saving. A follow-up
@@ -214,7 +220,8 @@
     available:()=>account.available,
     connect,
     openSettings,
-    unlockSaved:(current,person,previous,notify,complete)=>unlock(person,current,previous,notify,complete),
+    unlockSaved:(current,person,previous,notify,complete,options)=>unlock(person,current,previous,notify,complete,options),
+    contactsChanged:()=>contactsLoaded || !el('ContactsPanel').hidden ? refreshContacts() : undefined,
     async init() {
       if(ready) return;ready=true;
       el('Connect').addEventListener('click',connect);el('Disconnect').addEventListener('click',disconnect);
