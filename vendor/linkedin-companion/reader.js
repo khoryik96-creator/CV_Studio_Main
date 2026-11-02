@@ -18,11 +18,15 @@
       return u.origin + path;
     } catch { return ''; }
   }
-  function issue() {
+  // Page-text notices are a weaker signal than a checkpoint URL or captcha.
+  // A usage-limit notice must stay within one sentence, so unrelated words far
+  // apart in a job ad or profile cannot combine into a false restriction.
+  const restrictionNotice = /unusual activity|temporarily restricted|security verification|too many requests|you(?:.ve| have) reached[^.!?]{0,120}\b(?:(?:search|commercial)[^.!?]{0,120}\blimit|limit[^.!?]{0,120}\b(?:search|commercial))/i;
+  function issue(pageText = true) {
     const path = location.pathname;
     if (/^\/(checkpoint|challenge|authwall|login|uas)(\/|$)/i.test(path)) return 'LinkedIn needs you to sign in or complete a check. The agent will stop.';
     if (document.querySelector('iframe[src*="captcha"], [data-test-id="captcha-internal"], #captcha-internal')) return 'LinkedIn needs a verification check. The agent will stop.';
-    if (/unusual activity|temporarily restricted|security verification|you(?:.ve| have) reached.*(?:search|commercial).*limit|too many requests/i.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
+    if (pageText && restrictionNotice.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
     return '';
   }
   function employmentProfileURL(value) {
@@ -156,9 +160,13 @@
   }
   function readJob(expectedURL, companyOnly=false) {
     companyOnly=companyOnly===true;
+    // A recognized ad is read from its own detail panel. Its description can
+    // legitimately mention fraud "unusual activity" or identity "security
+    // verification", so whole-page notice text is checked only while no ad
+    // has been recognized. Checkpoint URLs and captchas always stop the read.
     const loading = message => { const error = Error(message); error.cvstudioJobLoading = true; throw error; };
     if (location.origin !== 'https://www.linkedin.com') throw Error('Choose a LinkedIn job ad.');
-    const problem = issue(); if (problem) throw Error(problem);
+    const problem = issue(false); if (problem) throw Error(problem);
     const view = location.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?([0-9]{1,24})\/?$/);
     const ids = new URLSearchParams(location.search).getAll('currentJobId');
     const id = view ? view[1] : /^\/jobs(?:\/search(?:-results)?|\/collections\/[^/]+)?\/?$/.test(location.pathname) && ids.length === 1 ? ids[0] : '';
@@ -170,6 +178,7 @@
     if (!panel) {
       const modern = readModernJob(url,companyOnly);
       if (modern) return modern;
+      const notice = issue(); if (notice) throw Error(notice);
       loading('This job layout has not loaded or is not recognized.');
     }
     const first = selector => [...panel.querySelectorAll(selector)].find(visible);
