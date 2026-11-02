@@ -4,7 +4,14 @@
 
 ## Release state
 
-- v24.6.533 is local/unmerged on `codex/v24.6.533-followed-client-refresh`
+- v24.6.534 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged533/PR278/f674ed4. Bulk Find HR people no longer stops when an ad's own
+  wording (for example "unusual activity" or "security verification") looks
+  like a LinkedIn notice: the ad reader checks page text only while no ad is
+  recognized, and usage-limit notices must sit in one sentence. Checkpoint
+  URLs and captchas still stop. Companion `reader.js` only; no route/schema
+  change. Update app AND companion.
+- v24.6.533 (merged PR278) was local/unmerged on `codex/v24.6.533-followed-client-refresh`
   from merged532/PR277/3488805. Adds guarded existing-follow JobAdder metadata
   refresh, named-company Pull with observed-ID companion resolution, bounded
   background-profile readiness/card-only continuation, observational frame

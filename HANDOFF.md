@@ -7,7 +7,26 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.533 followed-client refresh and Sourcer read/UI fixes (local, unmerged)**
+**Current checkpoint: v24.6.534 Find HR people false restriction fix (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged533 PR278 / `f674ed4`. Owner
+reported bulk Find HR people stopping with "LinkedIn needs sign-in or is showing
+a verification or usage restriction". Cause: the company-only ad read polls
+`SourcerReader.readJob` up to48 times, and each poll ran `issue()` over the
+first5000 characters of visible page text. Ad wording such as "unusual
+activity" or "security verification" (fraud/AML/KYC roles), or "you have
+reached ... research ... limit" across separate sentences, became
+`HR_ACCESS_REQUIRED`.
+- `reader.js` only. Checkpoint/challenge/authwall/login URLs and captchas still
+  always stop. The page-text notice check runs in `readJob` only while no ad is
+  recognized. The usage-limit pattern must sit inside one sentence, in either
+  word order. The same sentence bound applies to every other `issue()` caller.
+- `tests/test_job_ad_access_notice_reader.js` fails on533 with the exact
+  message and passes now. No route/schema/backend change; PR257 still held.
+- Known similar case left alone: Sourcer `readProfile` still checks a whole
+  profile's text, so a fraud analyst profile mentioning "unusual activity" can
+  still stop a sourcing run.
+
+**Previous checkpoint: v24.6.533 followed-client refresh and Sourcer read/UI fixes (merged PR278 / `f674ed4`)**
 on `codex/v24.6.533-followed-client-refresh`, from merged532 PR277 /
 `3488805e0bf9c4e6af3a000ab9c8c7071c59249a`. Owner requested JobAdder link
 refresh, selectable named company links, purple opened candidate names, New
