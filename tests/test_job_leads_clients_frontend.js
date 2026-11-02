@@ -46,7 +46,10 @@ function fixture(options={}){
       if(!init.body)state.recordGets=(state.recordGets||0)+1;
       if(!init.body && state.holdRecords)return new Promise(resolve=>state.recordsReply=resolve);
       if(!init.body)return reply({records:structuredClone(state.records),folders:[...state.folders]});
-      const body=JSON.parse(init.body);leadsCalls.push(body);
+      const body=JSON.parse(init.body);
+      // An update of an existing saved ad (posted-date backfill) is kept apart from new saves.
+      if(body.action==='save' && body.record.id){const record=state.records.find(row=>row.id===body.record.id);(state.updates ||= []).push(body.record);Object.assign(record,body.record);return reply({record,duplicate:false});}
+      leadsCalls.push(body);
       // Folder and Trash actions on saved ads, as the Job Leads store applies them.
       const find=identity=>state.records.find(record=>record.id===identity.id);
       if(body.action==='move_folder'){for(const item of body.records)find(item).folder=body.folder;if(body.folder && !state.folders.includes(body.folder))state.folders.push(body.folder);return reply({});}
@@ -291,12 +294,15 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   f.el('Folder').value='Clients';
   await f.el('Add').click();await settle();
   assert.deepEqual(f.leadsCalls.map(c=>c.record.url),['https://www.linkedin.com/jobs/view/1002','https://www.linkedin.com/jobs/view/1003','https://www.linkedin.com/jobs/view/2001']);
-  assert.deepEqual(Object.keys(f.leadsCalls[0].record).sort(),['client','company','contact','date_posted','description','description_rich','description_truncated','folder','follow_up','location','notes','role','status','url'].sort());
+  assert.deepEqual(Object.keys(f.leadsCalls[0].record).sort(),['client','company','contact','date_posted','date_posted_estimate','description','description_rich','description_truncated','folder','follow_up','location','notes','role','status','url'].sort());
   // Each saved ad carries the client it was pulled for, so the dashboard never guesses from names.
   assert(f.leadsCalls.every(call=>Number.isSafeInteger(call.record.client.company_id) && typeof call.record.client.name==='string' && call.record.client.name));
   assert.notEqual(f.leadsCalls[0].record.client.company_id,f.leadsCalls[2].record.client.company_id,'ads from different clients keep their own client');
   assert.equal(f.leadsCalls[0].record.folder,'Clients');assert.equal(f.leadsCalls[0].record.status,'new');assert.equal(f.leadsCalls[0].record.notes,'');
   assert.equal(f.state.refreshes,1,'the main Job ads list reloads');
+  // The already-saved ad that had no posted date took the date this pull read.
+  assert.deepEqual(f.state.updates.map(row=>[row.url,row.date_posted,row.date_posted_estimate]),[['https://www.linkedin.com/jobs/view/900','2026-10-20','']]);
+  assert.equal(f.state.updates[0].role,'Saved role','nothing else in the saved ad changes');
   assert.match(f.el('Message').textContent,/^Saved 3 ads to Clients/);
   assert.match(found(f)[2].text,/Already in Job ads/);assert.equal(box(found(f)[0]).checked,false,'the unticked ad stays available');
   // Adding waits for a busy Job Leads, with a message.
@@ -571,7 +577,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.deepEqual(Array.from(d.api.clientAds(records,d.state.followed),row=>[row.record.role,row.client.name]),[['Payroll Lead','Example Client'],['Data Analyst','Example Client'],['Accountant','Second Client']]);
    const table=()=>d.el('AdsRows').children.map(tr=>tr.children[2].text);
    assert.equal(d.el('AdsCount').textContent,'3');assert.deepEqual(table(),['Payroll Lead','Accountant','Data Analyst'],'newest posted first');
-   assert.deepEqual(d.el('AdsTiles').children.map(tile=>tile.text),['3 Saved ads','2 Clients with ads','1 Posted in the last 7 days','2 Status: New','2 No HR scan yet']);
+   assert.equal(d.el('AdsTiles').children.length,0,'no summary boxes: the heading already gives the count');
    const first=d.el('AdsRows').children[0].children;
    assert.deepEqual(first.map(cell=>cell.text),['',day(2),'Payroll Lead','Example Client Sdn Bhd','Example Client','Kuala Lumpur','Contacted','Clients','2026-10-05','Not scanned']);
    assert.equal(first[2].children[0].href,'https://www.linkedin.com/jobs/view/97');assert.equal(d.el('AdsRows').children[2].children[9].text,'0 found · 2026-10-20');
@@ -605,10 +611,12 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   // "Last 7 days" means today and the 6 days before.
   {const day=offset=>{const d=new Date();d.setDate(d.getDate()-offset);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
    const rec=(id,offset)=>({id:id.padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+id,company:'Example Client',role:'Role '+id,status:'new',folder:'',date_posted:day(offset),created_at:'2026-10-01T00:00:00Z',deleted:false});
-   const w=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[rec('91',0),rec('92',6),rec('93',7)]});
+   // An ad LinkedIn dated only as "3 days ago" carries an estimate, shown with ≈.
+   const estimated={...rec('94',0),date_posted:'',date_posted_estimate:day(3)};
+   const w=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[rec('91',0),rec('92',6),rec('93',7),estimated]});
    await w.el('FollowedTab').click();await settle();
-   assert.match(w.el('AdsTiles').children[2].text,/^2 Posted in the last 7 days/);
-   w.el('AdsPosted').value='7';await w.el('AdsPosted').dispatch('change');assert.equal(w.el('AdsRows').children.length,2);}
+   w.el('AdsPosted').value='7';await w.el('AdsPosted').dispatch('change');assert.equal(w.el('AdsRows').children.length,3);
+   assert(w.el('AdsRows').children.some(tr=>tr.children[1].text==='≈ '+day(3)),'the estimate shows with ≈');}
 
   // A return-to-tab read never overwrites a newer read, and one return reads once.
   {const r=fixture({signed:[2],followed:[client(11,'4242','Example Client')]});await r.el('FollowedTab').click();await settle();

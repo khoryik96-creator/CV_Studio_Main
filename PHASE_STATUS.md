@@ -4,7 +4,13 @@
 
 ## Release state
 
-- v24.6.540 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.541 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged540/PR285/42cec2e. Job ads get an approximate posted date from
+  LinkedIn's relative age (separate optional `date_posted_estimate`, no schema
+  change). Saved client ads are backfilled, and the client-ads tiles are
+  removed. Bulk HR scans run once per company. Apollo connect moves to
+  Settings → Integrations & Data.
+- v24.6.540 (merged PR285) was local/unmerged on `claude/job-leads-signed-clients` from
   merged539/PR284/ee2ae86. Followed clients' saved ads can be selected,
   moved to folders (new/delete folder), deleted to Trash and HR-scanned with
   Job ads' scanner. Found HR people appear in HR people (View opens it

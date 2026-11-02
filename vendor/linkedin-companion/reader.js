@@ -3,6 +3,22 @@
   const compact = value => String(value || '').replace(/\s+/g, ' ').trim();
   const visible = el => !!el && !!el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
   const text = el => compact(el?.innerText || '');
+  // LinkedIn's newer layouts show only a relative age ("2 weeks ago",
+  // "Reposted 3 days ago"). It becomes a separate *estimated* calendar date
+  // in this browser's time zone; date_posted itself is never guessed.
+  function relativePosted(value) {
+    const words = compact(value).toLowerCase();
+    let days = null;
+    const match = words.match(/\b(\d{1,3})\s+(minute|hour|day|week|month|year)s?\s+ago\b/);
+    if (match) {
+      const count = Number(match[1]);
+      days = {minute:0, hour:0, day:count, week:count * 7, month:count * 30, year:count * 365}[match[2]];
+    } else if (/\b(?:just now|moments? ago)\b/.test(words)) days = 0;
+    else if (/\byesterday\b/.test(words)) days = 1;
+    if (days === null || days > 3650) return '';
+    const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - days);
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
   function jobSummary(card) {
     const value = text(card), controls = text(card.querySelector?.('[data-cvstudio-job-controls]'));
     const index = controls ? value.indexOf(controls) : -1;
@@ -217,7 +233,8 @@
       if (Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day && (rawDate.length === 10 || Number(rawDate.slice(11,13)) < 24)) datePosted = day;
     }
     if (!role || !company) loading('The company or role has not loaded.');
-    return {url, role, company, company_url:employer?.url || jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, ...captured};
+    const estimate = datePosted ? '' : relativePosted(text(first('.job-details-jobs-unified-top-card__primary-description-container, .jobs-unified-top-card__primary-description, .topcard__flavor-row')));
+    return {url, role, company, company_url:employer?.url || jobCompanyURL(panel,company), location:locationText, date_posted:datePosted, date_posted_estimate:estimate, ...captured};
   }
   function jobLink(value) {
     try {
@@ -288,7 +305,7 @@
       const where = text(metadata).split(/\s*·\s*/)[0].slice(0,240);
       const captured = companyOnly ? {description:'',description_html:'',description_truncated:true} : jobDescription(abouts[0]);
       if (!companyOnly && !captured.description.replace(/^About the job\b\s*/i,'').trim()) return null;
-      return {url,role,company:employer.name.slice(0,200),company_url:employer.url,location:where,date_posted:'',...captured};
+      return {url,role,company:employer.name.slice(0,200),company_url:employer.url,location:where,date_posted:'',date_posted_estimate:relativePosted(text(metadata)),...captured};
     }
     return null;
   }
@@ -400,7 +417,7 @@
         const role = compact(String(paragraphs[0].innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
         const company = text(paragraphs[1]).slice(0,200), where = text(paragraphs[2]).slice(0,240);
         if (!role || !company) continue;
-        seen.add(url); jobs.push({url,role,company,location:where,date_posted:'',description:jobSummary(card).slice(0,6500),description_truncated:true});
+        seen.add(url); jobs.push({url,role,company,location:where,date_posted:'',date_posted_estimate:relativePosted(jobSummary(card)),description:jobSummary(card).slice(0,6500),description_truncated:true});
         if (jobs.length >= 40) break;
       }
     }
@@ -423,7 +440,7 @@
       const day = validDate ? posted.slice(0,10) : '';
       const calendar = new Date(day + 'T00:00:00Z');
       const datePosted = day && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day ? day : '';
-      seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,description:jobSummary(card).slice(0,6500),description_truncated:true});
+      seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,date_posted_estimate:datePosted ? '' : relativePosted(jobSummary(card)),description:jobSummary(card).slice(0,6500),description_truncated:true});
       if (jobs.length >= 40) break;
     }
     const scroller = jobScroller(scope), next = jobNextButton(scope);

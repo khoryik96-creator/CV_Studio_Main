@@ -62,6 +62,8 @@ first.innerText+=' Viewed';assert(!reader.readJobSearch().jobs[0].description.in
 assert.equal(reader.readJobPick(url).company,'Example Finance');
 assert.throws(()=>reader.readJobPick('https://www.linkedin.com/jobs/view/999'),'unobserved jobs are never captured');
 assert.equal(snapshot.jobs[0].url,url);assert.equal(snapshot.jobs[0].role,'Finance Manager');assert.equal(snapshot.jobs[0].company,'Example Finance');assert.equal(snapshot.jobs[0].location,'Penang');assert.equal(snapshot.jobs[0].date_posted,'','relative dates are never guessed');
+{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-14);const ago=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+ assert.equal(snapshot.jobs[0].date_posted_estimate,ago,'"2 weeks ago" becomes a separate estimated date');}
 assert(snapshot.hasNext);assert(reader.nextJobSearch(snapshot.signature));assert.equal(state.next,1);
 next.disabled=true;assert.equal(reader.nextJobSearch(snapshot.signature),false);assert.equal(state.next,1);
 assert(reader.scrollJobSearch(snapshot.signature));assert.equal(state.scroll,1);
@@ -76,6 +78,7 @@ for(const label of ['10 jobs','20 jobs','100 jobs','1,000 jobs','10,000 jobs']){
 scope.innerText='0 jobs';assert.equal(reader.readJobSearch().empty,true,'modern zero count remains a true empty result');
 scope.innerText='100 jobs';state.cards=[duplicate];assert.equal(reader.readJobSearch().jobs.length,1,'modern cards are read after loading');
 let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');assert.equal(captured.company,'Example Finance');assert.equal(captured.location,'Penang');
+assert.equal(captured.date_posted,'');assert.match(captured.date_posted_estimate,/^\d{4}-\d{2}-\d{2}$/,'the ad header age gives an estimated posted date');
 state.plainTitle=true;location.pathname='/jobs/view/1234567890/';location.href=url+'/';location.search='';
 captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager','standalone plain title is not replaced by the Hybrid job-type link');
 assert.equal(captured.company_url,'https://www.linkedin.com/company/example/');assert.equal(captured.location,'Penang');

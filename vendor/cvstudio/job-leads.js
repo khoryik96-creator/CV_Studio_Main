@@ -211,6 +211,7 @@
     if (className) value.className = className;
     return value;
   }
+  const estimateOf = row => typeof row?.date_posted_estimate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.date_posted_estimate) ? row.date_posted_estimate : '';
   function postedLabel(value) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return 'Not available';
     const date = new Date(value + 'T00:00:00Z');
@@ -323,7 +324,8 @@
       card.append(node('h3', row.company), node('p', row.role, 'job-lead-role'));
       const meta = node('div', '', 'job-lead-meta');
       meta.append(node('span', labels[row.status], 'job-lead-status'));
-      meta.append(node('span', 'Posted: ' + postedLabel(row.date_posted)));
+      // An estimate from LinkedIn's "2 weeks ago" is marked with ≈.
+      meta.append(node('span', 'Posted: ' + (row.date_posted || !row.date_posted_estimate ? postedLabel(row.date_posted) : '≈ ' + postedLabel(row.date_posted_estimate))));
       meta.append(node('span', 'Date created: ' + createdLabel(row.created_at)));
       meta.append(node('span', row.folder || 'Unfiled', 'job-lead-folder'));
       if (row.follow_up) meta.append(node('span', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : ''));
@@ -697,14 +699,15 @@
       checkHR();
       const complete=!finalSnapshot.hasNext && !omitted;
       saving=true;
-      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search:{company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
-        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>({...person,employment_status:person.joined?'observed':_employment==='observed'?'not_shown':'not_checked'}))}});
+      const search={company:row.company,company_name:finalSnapshot.company_name || companyName,company_url:finalSnapshot.company_url || companyURL,company_id:finalSnapshot.company_id,
+        country,keywords,source_url:finalSnapshot.source_url,complete,people:[...found.values()].map(({_employment,...person})=>({...person,employment_status:person.joined?'observed':_employment==='observed'?'not_shown':'not_checked'}))};
+      const response = await api({action:'save_hr',id:row.id,revision:row.revision,search});
       const index = rows.findIndex(item=>item.id===row.id); if (index >= 0) rows[index]=response.record;
       if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
       hrRow=''; render(); drawPreview();
       const employmentConfirmed=[...found.values()].filter(person=>person.joined).length;
       const message=`${found.size} HR matches saved · ${employmentConfirmed}/${found.size} employment dates confirmed · ${country || 'Any country'} · Last scan ${createdLabel(response.record.hr.scanned_at)}. ${complete ? 'No further results shown by LinkedIn.' : 'Page/result limit reached; more people may be available on LinkedIn.'}`+(expectedID?' The ad could not be reread; its previously saved company identity was reconfirmed.':'');
-      outcome={state:'saved',matches:found.size,employmentConfirmed,complete,message};notify(message);
+      outcome={state:'saved',matches:found.size,employmentConfirmed,complete,message,search};notify(message);
     } catch(error) {
       if(error.companionCode==='HR_COMPANY_REDIRECT' && recovery===0 && jobURL && !found.size && !finalSnapshot && !saving && error.companyURL)retryCompanyURL=error.companyURL;
       const saveUnconfirmed=saving && error.code!=='JOB_LEADS_CONFLICT';
@@ -790,10 +793,26 @@
     }
     bulkHRSummary();rememberBulkHR();lock(true);
     let stoppedReason='';
+    // HR people belong to the company, not the ad: each company is scanned
+    // once in a run and its saved result is copied to its other selected ads.
+    const companyKey=row=>String(row.company || '').trim().toLocaleLowerCase();
+    const scannedCompanies=new Map();
     try {
       for (const item of bulkHR.items.filter(item=>item.node.dataset.state!=='saved').sort((a,b)=>a.priority-b.priority)) {
         if (hrStopped) break;
-        const row=item.row;
+        const row=item.row,shared=scannedCompanies.get(companyKey(row));
+        if (shared) {
+          item.node.dataset.state='running';item.node.textContent=item.title+' · Copying from the same company…';
+          try {
+            const response=await api({action:'save_hr',id:row.id,revision:row.revision,search:{...shared.search,company:row.company}});
+            const index=rows.findIndex(value=>value.id===row.id);if(index>=0)rows[index]=response.record;
+            item.node.dataset.state='saved';item.node.textContent=item.title+` · ${shared.matches} HR matches copied from ${shared.title} (same company, no extra scan)`;
+            bulkHR.saved++;
+          } catch(error) {
+            item.node.dataset.state='failed';item.node.textContent=item.title+' · '+error.message+' Previous saved results and ad details were kept.';bulkHR.failed++;
+          }
+          bulkHR.completed++;bulkHRSummary();rememberBulkHR();render();continue;
+        }
         item.node.dataset.state='running';item.node.textContent=item.title+' · Scanning…';
         rememberBulkHR();
         const notify=message=>{
@@ -802,6 +821,7 @@
         };
         const showPeople=people=>{if (savedJob(previewUrl)?.id===row.id) hrPeople(people);};
         const outcome=await scanHR(row,{...settings,companyURL:row.hr?.company_url || ''},notify,showPeople);
+        if (outcome.state==='saved' && outcome.search) scannedCompanies.set(companyKey(row),{search:outcome.search,matches:outcome.matches,title:item.title});
         item.node.dataset.state=outcome.state;
         item.node.textContent=item.title+' · '+(outcome.state==='saved' ? `${outcome.matches} HR matches saved${outcome.complete ? '' : ' · Limited scan'} · ${outcome.employmentConfirmed}/${outcome.matches} employment dates confirmed` : outcome.message);
         bulkHR.completed++;if (outcome.state==='saved') bulkHR.saved++;else if (outcome.state==='failed') bulkHR.failed++;else bulkHR.cancelled++;
@@ -902,6 +922,7 @@
       if (!data.description?.trim()) throw Error('The full content was not available. Its search summary is kept.');
       // Reading a saved ad is a temporary preview; never overwrite its durable content or editing draft.
       previewCapture = {...row,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+        date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
         description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,full:true};
       const found = discovered.find(value => value.url === row.url); if (found) Object.assign(found,previewCapture);
       searchStatus(savedJob(row.url) ? 'Full ad captured for preview. To update the saved content, use Edit / view details → Refresh ad content, then save.' : 'Full ad captured for review. Select it and Add selected to list when ready.');
@@ -920,6 +941,7 @@
       if (folder && !folderNames.includes(folder)) throw Error('This folder changed in another window. Choose a folder again.');
       for (const row of selection) {
         const record = {url:row.url,company:row.company,role:row.role,location:row.location,date_posted:row.date_posted,
+          date_posted_estimate:row.date_posted ? '' : estimateOf(row),
           description:row.description,description_rich:row.description_rich,description_truncated:row.description_truncated,
           folder,status:'new',contact:'',notes:'',follow_up:''};
         const result = await api({action:'save',record});
@@ -1016,6 +1038,7 @@
       }
       const data = await prepareSource({...raw});
       const record = {url,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+        date_posted_estimate:data.date_posted ? '' : estimateOf(data),
         description:data.description || '',description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
         folder,status:'new',contact:'',notes:'',follow_up:''};
       const saved = await api({action:'save',record});

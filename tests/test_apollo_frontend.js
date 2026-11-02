@@ -38,7 +38,10 @@ function buttons(f){return f.el('HRResults').querySelectorAll('button')}
   await f.el('ApolloDisconnect').click();assert(!f.el('HRResults').querySelectorAll('span').some(x=>x.textContent==='person@example.test'));assert(buttons(f)[0].disabled);
   await f.el('ApolloConnect').click();await tick();assert.equal(f.state.popup.location.href,'https://app.apollo.io/#/oauth/authorize?state=fictional');assert.equal(f.el('ApolloState').textContent,'Connected as Second User');
   assert(!f.el('HRResults').querySelectorAll('span').some(x=>x.textContent==='person@example.test'));
-  const disabled=await setup({connected:false,available:false});assert(disabled.el('ApolloConnect').disabled);assert(buttons(disabled)[0].disabled);assert.match(disabled.el('ApolloMessage').textContent,/one-time/);
+  const disabled=await setup({connected:false,available:false});assert(disabled.el('ApolloConnect').disabled);assert(buttons(disabled)[0].disabled);assert.match(disabled.el('ApolloSetupMessage').textContent,/one-time/);
+  assert.match(disabled.el('ApolloMessage').textContent,/Settings → Integrations & Data/,'Job ads points to the Settings card');
+  assert.equal(disabled.document.getElementById('settingsApolloStatus').textContent,'Needs setup');
+  assert.equal(f.document.getElementById('settingsApolloStatus').textContent,'Connected');assert.match(f.el('ApolloSetupMessage').textContent,/connected/);
   const failed=await setup();failed.state.fail=true;await buttons(failed)[0].click();assert.match(failed.el('ApolloMessage').textContent,/network/);
   const stale=await setup();stale.el('notes').value='Retain this draft';stale.el('notes').handlers.input();stale.state.hold=true;const lookup=buttons(stale)[0].click();await tick();stale.apollo.begin(null);stale.state.release();await lookup;
   assert.equal(stale.el('notes').value,'Retain this draft');

@@ -7,8 +7,31 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.540 Job ads actions for Followed clients' saved ads (local, unmerged)**
-on `claude/job-leads-signed-clients`, from merged539 PR284 / `ee2ae86`. The owner asked for the same
+**Current checkpoint: v24.6.541 Posted-date estimates, one HR scan per company, Apollo in Settings (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged540 PR285 / `42cec2e`.
+- Modern LinkedIn layouts show only a relative age ("2 weeks ago"). The reader
+  turns it into `date_posted_estimate` (YYYY-MM-DD, approximate). It is a
+  separate optional payload field, validated like the other dates and kept on
+  form edits. The exact `date_posted` is still never guessed. Lists show it as
+  "≈ date"; sort and the "Last N days" filter use exact-or-estimate.
+- Followed clients: pulls backfill the estimate on saved ads that have neither
+  date (an update with the existing id+revision). The redundant tiles are gone.
+- Bulk Find HR people (Job ads and Followed clients) scans each company once
+  (key: lowercased, trimmed company name). Later ads of the same company get
+  `save_hr` with the first scan's search and their own company, with no extra
+  LinkedIn scan.
+- Apollo connect/disconnect/status moved to Settings → Integrations & Data
+  (`settingsApolloCard`; the element IDs are unchanged). Opening that tab
+  initialises the Apollo controller. Connection messages go to
+  `jobLeadsApolloSetupMessage`, and unlock results stay in
+  `jobLeadsApolloMessage` beside the HR cards. HR people "Connect Apollo" now
+  opens the Settings card (`cvStudioApollo.openSettings`).
+- Pre-existing, environment-only failures on master too:
+  `test_cv_startup_stale_registration` (another-installation case) and
+  `test_legacy_doc_requires_and_uses_verified_antiword`.
+
+**Previous checkpoint: v24.6.540 Job ads actions for Followed clients' saved ads (merged PR285)**
+from merged539 PR284 / `ee2ae86`. The owner asked for the same
 actions as Job ads on Followed clients' saved ads, with HR people and unlocked
 emails flowing to the HR people and Unlocked contacts tabs.
 - Saved client job ads has a row selection (page / all shown), plus:

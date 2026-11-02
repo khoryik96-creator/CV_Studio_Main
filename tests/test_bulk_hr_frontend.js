@@ -96,6 +96,13 @@ if(require.main===module)(async()=>{
   const busy=bulkFixture();busy.state.holdId='1'.repeat(32);await busy.init();busy.select();const busyRun=busy.start();await held(busy);
   await assert.rejects(busy.jobLeads().scanClientAds(['2'.repeat(32)]),/busy/,'a busy Job Leads is reported, not silently ignored');
   busy.state.release();await busyRun;
+  // Two selected ads from the same company: one scan, its result copied to the other.
+  const sameCo=bulkFixture();sameCo.state.records[1].company=sameCo.state.records[0].company;await sameCo.init();sameCo.select();await sameCo.start();
+  assert.equal(sameCo.state.starts.length,2,'the shared company is scanned once');
+  const saves=sameCo.requests.filter(r=>r.action==='save_hr');assert.equal(saves.length,3,'every selected ad still gets the HR result');
+  const copied=saves.find(r=>r.id==='2'.repeat(32));assert.equal(copied.search.company,sameCo.state.records[1].company);assert.equal(copied.search.people.length,1);
+  assert(sameCo.el('BulkHRResults').children.some(n=>/copied from .* \(same company, no extra scan\)/.test(n.textContent)));
+  assert.match(sameCo.el('BulkHRSummary').textContent,/3 of 3 ads processed · 3 saved/);
   const early=bulkFixture();await early.init();const pending=early.jobLeads().scanClientAds(['1'.repeat(32)]);early.jobLeads().stopHR();
   assert.equal(await pending,false);assert.equal(early.state.starts.length,0,'Stop while saved ads reload means nothing is scanned');
   assert.equal(early.requests.filter(r=>r.action==='save_hr').length,0);assert.match(early.el('ClientsHRMessage').textContent,/Stopped before the scan started/);
