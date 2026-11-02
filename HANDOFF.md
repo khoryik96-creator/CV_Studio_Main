@@ -7,8 +7,31 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.541 Posted-date estimates, one HR scan per company, Apollo in Settings (local, unmerged)**
-on `claude/job-leads-signed-clients`, from merged540 PR285 / `42cec2e`.
+**Current checkpoint: v24.6.542 Team setup file (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged541 PR286 / `7de5b82`.
+- Settings → Integrations & Data starts with a "Team setup file" card
+  (`vendor/cvstudio/setup-file.js`, appended to both FRONTEND_MODULES lists).
+- Import: the whole JSON file (`product: "CV Studio setup"`, `schema: 1`,
+  at most 64 KB) is checked before anything changes, then confirmed with a
+  list of what will be replaced. It fills the existing Settings fields and
+  runs each section's own Save: `saveJobAdderSettings`,
+  `ppcSaveOutlookSettingsFromPanel`, `oneNoteApiSaveSettings(true)`,
+  `saveKey`, `saveLeadKey`, `saveSearchProvider` and
+  `saveEnrichmentProvider`. So secrets land in the same protected store as
+  typed ones, and nothing new is kept in browser storage. Each part is
+  reported separately. A JobAdder Client ID without a secret (and no saved
+  secret for that ID) is only filled in.
+- Create: saved non-secret IDs and tenants (JobAdder Client ID, Outlook,
+  OneNote) are always included. Secrets are included only when typed into
+  the card for that file, after a plain-text warning, and the fields are
+  cleared afterwards. The download link is detached, so its click does not
+  trigger Settings' click-outside close.
+- Sign-ins (JobAdder, Outlook, Apollo, LinkedIn companion) stay per person.
+- Tests: `tests/test_setup_file_frontend.js` and
+  `tests/browser/setup_file.js` (signed_clients_server, port 5098).
+
+**Previous checkpoint: v24.6.541 Posted-date estimates, one HR scan per company, Apollo in Settings (merged PR286)**
+from merged540 PR285 / `42cec2e`.
 - Modern LinkedIn layouts show only a relative age ("2 weeks ago"). The reader
   turns it into `date_posted_estimate` (YYYY-MM-DD, approximate). It is a
   separate optional payload field, validated like the other dates and kept on

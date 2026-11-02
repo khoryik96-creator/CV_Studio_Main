@@ -78,6 +78,7 @@ FRONTEND_MODULES = (
     "settings.js",
     "locks.js",
     "input-file.js",
+    "setup-file.js",
 )
 FRONTEND_STATIC_ASSETS = (
     "app.css",

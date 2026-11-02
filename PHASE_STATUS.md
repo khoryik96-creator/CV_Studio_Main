@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.541 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.542 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged541/PR286/7de5b82. It adds a team setup file: Import fills JobAdder,
+  Outlook, OneNote and optional AI keys through the existing Save actions,
+  and Create exports saved IDs plus only the secrets typed for that file.
+  Frontend only; no route or schema change.
+- v24.6.541 (merged PR286) was local/unmerged on `claude/job-leads-signed-clients` from
   merged540/PR285/42cec2e. Job ads get an approximate posted date from
   LinkedIn's relative age (separate optional `date_posted_estimate`, no schema
   change). Saved client ads are backfilled, and the client-ads tiles are
