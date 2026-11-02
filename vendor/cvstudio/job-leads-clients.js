@@ -1,6 +1,8 @@
-/* Signed JobAdder clients in Job Leads. JobAdder is only read: the owner
- * follows a few signed clients, pulls their LinkedIn job ads through the
- * companion and adds the ads they choose to the main Job ads list. */
+/* Signed and followed JobAdder clients in Job Leads. JobAdder is only read.
+ * Signed clients: choose the signed statuses and follow clients. Followed
+ * clients: pull their LinkedIn job ads into CV Studio (or open one LinkedIn
+ * search to choose ads there), save the chosen ads to Job ads, and review the
+ * saved client ads in a dashboard. */
 (() => {
   'use strict';
   const el = id => document.getElementById('jobLeadsClients' + id);
@@ -9,12 +11,13 @@
   const COMPANY_URL = /^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9_-]{1,100}\/$/;
   const JOBADDER_URL = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.jobadder\.com\/companies\/[1-9][0-9]{0,9}$/;
   const LEGAL = new Set(['pt','tbk','sdn','bhd','berhad','pte','ltd','limited','inc','llc','corp','corporation','co','plc','gmbh','the']);
-  const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADD_LIMIT = 100, COMPANY_PAGE = 50;
+  const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADS_PAGE = 50, COMPANY_PAGE = 50;
+  const STATUS_LABELS = {new:'New', to_contact:'To contact', contacted:'Contacted', follow_up:'Following up', won:'Won', closed:'Closed'};
   const TICKS_KEY = 'cvstudio_signed_clients_ticks';
   const fresh = () => ({account:'', signed:[], statuses:null, followed:[], records:[], folders:[], companies:null, found:[], picked:new Set(),
-    chosen:null, foundPage:0, working:false, refreshing:false, resolving:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
+    chosen:null, foundPage:0, adsPage:0, adsShown:0, resolvedIds:new Map(), linkedinSearch:'', working:false, refreshing:false, resolving:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
   let state = fresh(), generation = 0, ready = false, resyncNeeded = false;
-  let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()};
+  let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()}, adsIndex = {records:null, followed:null, rows:[]};
 
   // Pure helpers (exported for tests) ---------------------------------------
 
@@ -35,6 +38,30 @@
     return match ? match.hr.company_id : '';
   }
   const eligible = client => !!linkedinId(client,state.records) || COMPANY_URL.test(client?.linkedin_url || '');
+  // A company number the companion already read from the client's page this
+  // session is reused, so the page is not reopened for every pull.
+  const knownId = client => linkedinId(client, state.records) || state.resolvedIds.get(client.company_id) || '';
+  // One LinkedIn job search for several companies; LinkedIn's company filter
+  // takes a comma-separated list of numeric company IDs.
+  function linkedinSearch(ids) {
+    const clean = [...new Set(ids)].filter(id => /^[0-9]{1,24}$/.test(id));
+    if (!clean.length) return '';
+    const url = new URL('https://www.linkedin.com/jobs/search/');
+    url.searchParams.set('f_C', clean.join(','));
+    return url.href;
+  }
+  // Saved, non-deleted Job ads whose company matches a followed client, the
+  // same name match the "Ads in Job ads" count uses. Each ad is listed once.
+  function clientAds(records, followed) {
+    const clients = (followed || []).map(client => ({client, words:words(client.name)}));
+    const rows = [];
+    for (const record of records || []) {
+      if (!record || record.deleted) continue;
+      const own = words(record.company), match = clients.find(item => subset(item.words, own));
+      if (match) rows.push({record, client:match.client});
+    }
+    return rows;
+  }
   function savedAds(client, records) {
     return (records || []).filter(row => !row.deleted && sameCompany(row.company, client.name)).length;
   }
@@ -101,7 +128,7 @@
       if (typeof window.applyJAPublicInfo === 'function') window.applyJAPublicInfo(info);
     } catch {}
   }
-  const message = text => { el('Message').textContent = text; };
+  const message = text => { el('Message').textContent = text; el('FollowedMessage').textContent = text; };
   const progress = text => { el('Progress').textContent = text; };
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const BUSY_MESSAGE = 'Job Leads is busy with another search, scan or save. Try again when it finishes.';
@@ -187,6 +214,8 @@
     // Job Leads' own busy state is checked when Pull/Add is clicked, so the
     // buttons never sit disabled after Job Leads finishes.
     el('Pull').disabled = locked || !state.recordsReady || !state.signed.length || stale || !pullable().length;
+    el('OpenLinkedIn').disabled = locked || !state.signed.length || stale || !pullable().length;
+    el('FollowedRefresh').disabled = locked;
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort','FiltersReset']) el(name).disabled=locked || !c?.rows.length;
     el('Stop').disabled = !(state.pulling || state.refreshing) || state.stopped;
     el('Pages').disabled = locked;
@@ -195,12 +224,20 @@
     const newOnPage = pageRows().filter(row => !savedJob(row.url));
     el('SelectNew').disabled = locked || !newOnPage.length;
     el('SelectNew').checked = !!newOnPage.length && newOnPage.every(row => state.picked.has(row.url));
-    el('Add').disabled = locked || !state.recordsReady || !state.found.some(row => state.picked.has(row.url) && !savedJob(row.url));
+    const waiting = state.found.filter(row => state.picked.has(row.url) && !savedJob(row.url)).length;
+    const allNew = state.found.filter(row => !savedJob(row.url)).length;
+    el('Add').disabled = locked || !state.recordsReady || !waiting;
+    el('SelectAll').disabled = locked || !allNew || waiting === allNew;
+    el('SelectNone').disabled = locked || !waiting;
+    el('Picked').textContent = state.found.length ? `${waiting} of ${allNew} new ad${allNew === 1 ? '' : 's'} selected` : '';
     el('Clear').disabled = locked || !state.found.length;
     el('Folder').disabled = locked;
     el('FoundPrevious').disabled = locked || state.foundPage === 0;
     el('FoundNext').disabled = locked || (state.foundPage + 1) * FOUND_PAGE >= state.found.length;
-    for (const control of el('Panel').querySelectorAll('[data-client-action]')) control.disabled = locked || control.dataset.clientAction === 'needs-link';
+    el('AdsPrevious').disabled = state.adsPage === 0;
+    el('AdsNext').disabled = (state.adsPage + 1) * ADS_PAGE >= state.adsShown;
+    for (const panel of [el('Panel'), el('FollowedPanel')])
+      for (const control of panel.querySelectorAll('[data-client-action]')) control.disabled = locked || control.dataset.clientAction === 'needs-link';
   }
   function drawStatuses() {
     const target = el('Statuses'); target.replaceChildren();
@@ -225,7 +262,7 @@
     const target = el('Followed'); target.replaceChildren();
     el('FollowedEmpty').hidden = !!state.followed.length || !state.loaded;
     for (const client of state.followed) {
-      const tr = node('tr'), id = linkedinId(client, state.records), canPull = eligible(client);
+      const tr = node('tr'), id = knownId(client), canPull = eligible(client);
       const pick = node('td'), box = node('input');
       // 'needs-link' keeps the box disabled whenever controls() re-enables the rest.
       box.type = 'checkbox'; box.checked = canPull && !!state.chosen?.has(client.company_id); box.disabled = !canPull; box.dataset.clientAction = canPull ? '' : 'needs-link';
@@ -233,13 +270,15 @@
       box.addEventListener('change', () => {
         if (box.checked && pullable().length >= MAX_PER_PULL) { box.checked = false; progress(`Tick up to ${MAX_PER_PULL} clients per pull.`); return; }
         if (box.checked) state.chosen.add(client.company_id); else state.chosen.delete(client.company_id);
+        // A prepared LinkedIn search no longer matches the ticked clients.
+        state.linkedinSearch = ''; drawLinkedIn();
         rememberTicks(); controls();
       });
       pick.append(box); tr.append(pick);
       const name = node('td'); name.append(link(client.name, client.jobadder_url, JOBADDER_URL)); tr.append(name);
       const page = node('td');
       if (client.linkedin_url) page.append(link('LinkedIn page', client.linkedin_url, COMPANY_URL));
-      page.append(node('small', id ? (client.linkedin_id ? 'Ready to pull' : 'Ready · company found in a saved HR scan') :
+      page.append(node('small', id ? (client.linkedin_id ? 'Ready to pull' : linkedinId(client, state.records) ? 'Ready · company found in a saved HR scan' : 'Ready · company number read from LinkedIn') :
         client.linkedin_url ? 'Company checked when pulling' : 'Add its LinkedIn company page'));
       const editor = node('details'), input = node('input');
       editor.append(node('summary', canPull ? 'Change link' : 'Add link'));
@@ -294,13 +333,81 @@
     }
     el('FoundPage').textContent = state.found.length ? `${state.foundPage * FOUND_PAGE + 1}–${Math.min((state.foundPage + 1) * FOUND_PAGE, state.found.length)} of ${state.found.length}` : '';
   }
+  // Saved client ads dashboard ---------------------------------------------
+
+  function allClientAds() {
+    if (adsIndex.records !== state.records || adsIndex.followed !== state.followed)
+      adsIndex = {records:state.records, followed:state.followed, rows:clientAds(state.records, state.followed)};
+    return adsIndex.rows;
+  }
+  const dayStart = days => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - days); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  function adsRows() {
+    // Folder choices are JSON strings, so Unfiled ("") differs from All folders ('').
+    const client = el('AdsClient').value, status = el('AdsStatus').value, folder = el('AdsFolder').value;
+    const days = Number(el('AdsPosted').value), since = days ? dayStart(days) : '';
+    const query = String(el('AdsQuery').value || '').trim().toLowerCase();
+    const sorts = {posted_desc:['date_posted',-1], posted_asc:['date_posted',1], saved_desc:['created_at',-1], saved_asc:['created_at',1],
+      role_asc:['role',1], company_asc:['company',1], client_asc:['client',1]};
+    const [field, direction] = sorts[el('AdsSort').value] || sorts.posted_desc;
+    const value = row => field === 'client' ? row.client.name : row.record[field] || '';
+    return allClientAds().filter(({record, client: owner}) =>
+      (!client || String(owner.company_id) === client) && (!status || record.status === status) &&
+      (!folder || JSON.stringify(record.folder || '') === folder) && (!since || (record.date_posted || '') >= since) &&
+      (!query || [record.role, record.company, record.location].some(text => String(text || '').toLowerCase().includes(query))))
+      .sort((a, b) => {
+        const x = value(a), y = value(b);
+        if (!x || !y) { if (x || y) return x ? -1 : 1; }
+        else { const difference = direction * compareText(x, y); if (difference) return difference; }
+        return compareText(a.record.role, b.record.role) || compareText(a.record.url, b.record.url);
+      });
+  }
+  function adsChoices(name, entries, all) {
+    const select = el(name), old = select.value, option = (value, label) => { const n = node('option', label); n.value = value; return n; };
+    select.replaceChildren(option(all[0], all[1]), ...entries.map(([value, label]) => option(value, label)));
+    select.value = [all[0], ...entries.map(entry => entry[0])].includes(old) ? old : all[0];
+  }
+  function drawAds() {
+    const every = allClientAds(), since = dayStart(7);
+    const clients = new Map(every.map(row => [String(row.client.company_id), row.client.name]));
+    adsChoices('AdsClient', [...clients].sort((a, b) => compareText(a[1], b[1])), ['', 'All clients']);
+    adsChoices('AdsStatus', Object.entries(STATUS_LABELS), ['', 'All statuses']);
+    adsChoices('AdsFolder', [['', 'Unfiled'], ...state.folders.map(name => [name, name])].map(([name, label]) => [JSON.stringify(name), label]), ['', 'All folders']);
+    const tiles = el('AdsTiles'); tiles.replaceChildren();
+    for (const [count, label] of [[every.length, 'Saved ads'], [clients.size, 'Clients with ads'],
+      [every.filter(row => (row.record.date_posted || '') >= since).length, 'Posted in the last 7 days'],
+      [every.filter(row => row.record.status === 'new').length, 'Status: New'],
+      [every.filter(row => !row.record.hr).length, 'No HR scan yet']]) {
+      const tile = node('div', undefined, 'job-leads-clients-tile'); tile.append(node('strong', String(count)), node('span', label)); tiles.append(tile);
+    }
+    const rows = adsRows(), target = el('AdsRows'); target.replaceChildren();
+    state.adsShown = rows.length; // controls() pages by this count without re-filtering
+    el('AdsCount').textContent = String(every.length);
+    state.adsPage = Math.min(state.adsPage, Math.max(0, Math.ceil(rows.length / ADS_PAGE) - 1));
+    el('AdsEmpty').hidden = !!rows.length;
+    el('AdsEmpty').textContent = !state.recordsReady ? 'Saved ads have not loaded yet. Click Refresh.' : every.length ? 'No saved client ads match the filters.' :
+      'No saved ads from followed clients yet. Pull ads and save them, or add them from LinkedIn.';
+    for (const {record, client} of rows.slice(state.adsPage * ADS_PAGE, (state.adsPage + 1) * ADS_PAGE)) {
+      const tr = node('tr'), role = node('td'), owner = node('td');
+      role.append(link(record.role, record.url, JOB_URL)); owner.append(link(client.name, client.jobadder_url, JOBADDER_URL));
+      tr.append(node('td', record.date_posted || '—'), role, node('td', record.company), owner, node('td', record.location || '—'),
+        node('td', STATUS_LABELS[record.status] || record.status || '—'), node('td', record.folder || 'Unfiled'),
+        node('td', String(record.created_at || '').slice(0, 10) || '—'), node('td', record.hr ? (String(record.hr.scanned_at || '').slice(0, 10) || 'Scanned') : 'Not scanned'));
+      target.append(tr);
+    }
+    el('AdsPage').textContent = rows.length ? `${state.adsPage * ADS_PAGE + 1}–${Math.min((state.adsPage + 1) * ADS_PAGE, rows.length)} of ${rows.length}` + (rows.length !== every.length ? ` (filtered from ${every.length})` : '') : '';
+  }
+  function drawLinkedIn() {
+    el('LinkedInReady').hidden = !state.linkedinSearch;
+    const a = el('LinkedInLink');
+    if (state.linkedinSearch) a.href = state.linkedinSearch; else a.removeAttribute('href');
+  }
   function drawFolders() {
     const select = el('Folder'), old = select.value; select.replaceChildren();
     const none = node('option', 'Unfiled'); none.value = ''; select.append(none);
     for (const name of state.folders) { const option = node('option', name); option.value = name; select.append(option); }
     select.value = state.folders.includes(old) ? old : '';
   }
-  function draw() { drawStatuses(); drawFollowed(); drawCompanies(); drawFound(); controls(); }
+  function draw() { drawStatuses(); drawFollowed(); drawCompanies(); drawFound(); drawAds(); drawLinkedIn(); controls(); }
 
   // Actions ------------------------------------------------------------------
 
@@ -368,7 +475,7 @@
         state.signed = overview.signed || [];
         setFollowed(overview.followed || []);
         state.loaded = true; state.statusDraft = null; state.statusDirty = false;
-        message(state.signed.length ? '' : 'Start by choosing which JobAdder statuses mean a signed client.');
+        message(state.signed.length ? '' : 'Start in Signed clients by choosing which JobAdder statuses mean a signed client.');
         if (!state.signed.length) el('Setup').open = true;
         draw(); // Followed clients must not wait for the unrelated ads read.
         let list = false;
@@ -435,7 +542,7 @@
       setFollowed(data.followed || []);
       const client = state.followed.find(row => row.company_id === company.company_id);
       state.linkGuide=client && !eligible(client)?client.company_id:0;
-      message(client && eligible(client) ? `Following ${client.name}.` : `Following ${company.name}. Add its LinkedIn company page to pull its ads.`);
+      message(client && eligible(client) ? `Following ${client.name}. Pull its ads in Followed clients.` : `Following ${company.name}. Add its LinkedIn company page in Followed clients to pull its ads.`);
     });
   }
   function unfollow(company) {
@@ -486,7 +593,7 @@
     state.run = run;
     let complete = true;
     try {
-      let companyId=linkedinId(client,state.records);
+      let companyId=knownId(client);
       if(!companyId) {
         state.resolving=true;
         try {
@@ -494,7 +601,7 @@
           check(token);
           if(resolved?.company_url!==client.linkedin_url || typeof resolved?.company_id!=='string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
             throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
-          companyId=resolved.company_id;
+          companyId=resolved.company_id;state.resolvedIds.set(client.company_id,companyId);
         } catch(error) {
           try {await app.rpc('jobReadCancel',{operation_id:run},1500);} catch {}
           throw error;
@@ -521,7 +628,7 @@
   async function pull() {
     const app = jobLeads();
     if (mine() || !app?.rpc || !window.cvStudioJobSearch) return;
-    if (!state.signed.length || staleStatuses().length) { el('Setup').open=true;progress('Choose valid signed-client statuses and click Save statuses before pulling ads.');return; }
+    if (!state.signed.length || staleStatuses().length) { el('Setup').open=true;progress('Choose valid signed-client statuses in Signed clients and click Save statuses before pulling ads.');return; }
     if (!state.recordsReady) { progress('Saved ads have not loaded yet. Click Refresh before pulling ads.'); return; }
     if (app.isBusy?.()) { progress(BUSY_MESSAGE); return; }
     const pages = Number(el('Pages').value);
@@ -577,6 +684,70 @@
     if(state.resolving && state.run){try{void jobLeads()?.rpc?.('jobReadCancel',{operation_id:state.run}).catch(()=>{});}catch{}}
     if (state.run) { try { void jobLeads()?.rpc?.('end', {run_id:state.run}).catch(() => {}); } catch {} }
   }
+  // Option 2: one visible LinkedIn search for the ticked clients. The owner
+  // chooses ads there with the companion's Add to CV Studio buttons. Company
+  // numbers that are not known yet are read once through the companion.
+  function openSearch(url, opened) {
+    state.linkedinSearch = url; drawLinkedIn();
+    let tab = null;
+    if (opened) { try { tab = window.open(url, '_blank', 'noopener,noreferrer'); } catch {} }
+    return tab;
+  }
+  async function openLinkedIn() {
+    if (mine()) return;
+    if (!state.signed.length || staleStatuses().length) { el('Setup').open=true;progress('Choose valid signed-client statuses in Signed clients and click Save statuses first.');return; }
+    const targets = pullable();
+    if (!targets.length) { progress('Tick at least one followed client that has a LinkedIn link.'); return; }
+    const tip = ' Use Add to CV Studio on the ads you want. Come back here and click Refresh to see them in Saved client ads.';
+    const missing = targets.filter(client => !knownId(client));
+    if (!missing.length) {
+      // Opened straight from the click, so the browser allows the new tab.
+      openSearch(linkedinSearch(targets.map(knownId)), true);
+      progress(`Opened LinkedIn job ads for ${targets.length} client${targets.length === 1 ? '' : 's'} in a new tab.` + tip + ' If no tab opened, use the link below.');
+      return;
+    }
+    const app = jobLeads();
+    if (!app?.rpc) { progress('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.'); return; }
+    if (app.isBusy?.()) { progress(BUSY_MESSAGE); return; }
+    const token = generation, failures = [];
+    state.pulling = true; state.stopped = false; state.linkedinSearch = ''; app.lock(true); draw();
+    try {
+      progress('Checking the browser companion…');
+      const status = await app.rpc('jobStatus', {}, 1500).catch(() => null);
+      check(token);
+      if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
+      if (status.job_search_company_link_revision !== 1) throw Error('Apply the latest companion update to read company numbers from LinkedIn company pages.');
+      if (status.busy) throw Error('Finish the current companion search or ad read first.');
+      for (const [index, client] of missing.entries()) {
+        check(token);
+        progress(`Reading the LinkedIn company number for ${client.name} (${index + 1} of ${missing.length})… Its page opens in a background tab.`);
+        const run = hex(); state.run = run; state.resolving = true;
+        try {
+          const resolved = await app.rpc('jobCompanyID', {company_url:client.linkedin_url, operation_id:run}, 35000);
+          check(token);
+          if (resolved?.company_url !== client.linkedin_url || typeof resolved?.company_id !== 'string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
+            throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
+          state.resolvedIds.set(client.company_id, resolved.company_id);
+        } catch (error) {
+          try { await app.rpc('jobReadCancel', {operation_id:run}, 1500); } catch {}
+          if (state.stopped || token !== generation) throw error;
+          failures.push(`${client.name}: ${error.message}`);
+        } finally { if (token === generation) { state.resolving = false; if (state.run === run) state.run = ''; } }
+      }
+      check(token);
+      const ready = targets.filter(client => knownId(client));
+      if (!ready.length) throw Error('No ticked client has a confirmed LinkedIn company yet.');
+      // The click that started this has passed, so the browser may block a
+      // new tab: the link below opens the search with one more click.
+      openSearch(linkedinSearch(ready.map(knownId)), false);
+      progress(`Ready: click "Open the LinkedIn search" below for ${ready.length} client${ready.length === 1 ? '' : 's'}.` + tip +
+        (failures.length ? ` ${failures.length} could not be included. ${failures.join(' ')}` : ''));
+    } catch (error) {
+      if (token === generation) progress((state.stopped ? 'Stopped. ' : '') + (state.stopped ? '' : error.message) + (failures.length ? ' ' + failures.join(' ') : ''));
+    } finally {
+      if (token === generation) { state.pulling = false; app.lock(false); draw(); }
+    }
+  }
   function addSelected() {
     if (!state.recordsReady) { progress('Saved ads have not loaded yet. Click Refresh before adding ads.'); return; }
     return work(async token => {
@@ -586,8 +757,9 @@
       if (folder && !state.folders.includes(folder)) throw Error('This folder changed in another window. Choose a folder again.');
       let added = 0, skipped = 0, failure = '';
       try {
-        for (const row of selected.slice(0, ADD_LIMIT)) {
+        for (const [index, row] of selected.entries()) {
           if (token !== generation) return;
+          progress(`Saving ${index + 1} of ${selected.length} to ${folder || 'Unfiled'}…`);
           const result = await leads({action:'save', record:{url:row.url, company:row.company, role:row.role, location:row.location, date_posted:row.date_posted,
             description:row.description, description_rich:[], description_truncated:true, folder, status:'new', contact:'', notes:'', follow_up:''}});
           if (result.duplicate) skipped++; else added++;
@@ -597,16 +769,19 @@
       if (token !== generation) return;
       try { await refreshRecords(); await jobLeads()?.refresh?.(); } catch (error) { failure = failure || error.message; }
       const remaining = state.found.filter(row => state.picked.has(row.url) && !savedJob(row.url)).length;
-      message(`Added ${added} ad${added === 1 ? '' : 's'} to ${folder || 'Unfiled'} in Job ads.` + (skipped ? ` ${skipped} were already saved; their details were kept.` : '') +
-        (failure ? ` ${failure}` : '') + (remaining ? ` ${remaining} selected ad${remaining === 1 ? ' is' : 's are'} still waiting: click Add selected again.` : ''));
+      const text = `Saved ${added} ad${added === 1 ? '' : 's'} to ${folder || 'Unfiled'} in Job ads.` + (skipped ? ` ${skipped} were already saved; their details were kept.` : '') +
+        (failure ? ` ${failure}` : '') + (remaining ? ` ${remaining} selected ad${remaining === 1 ? ' is' : 's are'} still waiting: click Save selected again.` : ' They are listed in Saved client ads below.');
+      progress(''); message(text);
     }, true);
   }
 
   // Views and account changes ------------------------------------------------
 
-  function show(visible) {
-    el('Panel').hidden = !visible; el('Tab').setAttribute('aria-pressed', String(visible));
-    if (!visible) return;
+  // view: 'signed', 'followed' or '' (another Job Leads view is showing).
+  function show(view) {
+    el('Panel').hidden = view !== 'signed'; el('Tab').setAttribute('aria-pressed', String(view === 'signed'));
+    el('FollowedPanel').hidden = view !== 'followed'; el('FollowedTab').setAttribute('aria-pressed', String(view === 'followed'));
+    if (!view) return;
     window.cvStudioPeople?.hideHR?.();
     for (const kind of ['Ads', 'Contacts']) {
       const panel = document.getElementById('jobLeadsApollo' + kind + 'Panel'), tab = document.getElementById('jobLeadsApollo' + kind + 'Tab');
@@ -629,14 +804,33 @@
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter'])el(name).value='';el('Sort').value='name_asc';draw();
   }
   window.clearJobLeadsClientsAccountState = clear;
-  window.cvStudioJobLeadsClients = {words, sameCompany, linkedinId, savedAds, cleanJobs, MAX_FOUND, MAX_PER_PULL};
+  window.cvStudioJobLeadsClients = {words, sameCompany, linkedinId, savedAds, cleanJobs, linkedinSearch, clientAds, MAX_FOUND, MAX_PER_PULL};
+  // Ads added on LinkedIn reach Job Leads directly; re-read them when the
+  // owner comes back to this tab so Saved client ads stays current.
+  function returned() {
+    if (document.hidden || el('FollowedPanel').hidden || mine() || !state.loaded) return;
+    const token = generation;
+    void refreshRecords(token).then(() => { if (token === generation && !mine()) draw(); }).catch(() => {});
+  }
 
   function init() {
     if (ready || !el('Panel')) return;
     ready = true;
-    el('Tab').addEventListener('click', () => show(true));
-    for (const id of ['jobLeadsApolloAdsTab', 'jobLeadsApolloContactsTab', 'peopleHRTab']) document.getElementById(id)?.addEventListener('click', () => show(false));
+    el('Tab').addEventListener('click', () => show('signed'));
+    el('FollowedTab').addEventListener('click', () => show('followed'));
+    for (const id of ['jobLeadsApolloAdsTab', 'jobLeadsApolloContactsTab', 'peopleHRTab']) document.getElementById(id)?.addEventListener('click', () => show(''));
     el('Refresh').addEventListener('click', () => load());
+    el('FollowedRefresh').addEventListener('click', () => load());
+    el('OpenLinkedIn').addEventListener('click', openLinkedIn);
+    el('SelectAll').addEventListener('click', () => { if (mine()) return; for (const row of state.found) if (!savedJob(row.url)) state.picked.add(row.url); draw(); });
+    el('SelectNone').addEventListener('click', () => { if (mine()) return; state.picked.clear(); draw(); });
+    for (const name of ['AdsClient','AdsStatus','AdsFolder','AdsPosted','AdsSort']) el(name).addEventListener('change', () => { state.adsPage = 0; drawAds(); controls(); });
+    el('AdsQuery').addEventListener('input', () => { state.adsPage = 0; drawAds(); controls(); });
+    el('AdsReset').addEventListener('click', () => { for (const name of ['AdsClient','AdsStatus','AdsFolder','AdsPosted','AdsQuery']) el(name).value = ''; el('AdsSort').value = 'posted_desc'; state.adsPage = 0; drawAds(); controls(); });
+    el('AdsPrevious').addEventListener('click', () => { state.adsPage = Math.max(0, state.adsPage - 1); drawAds(); controls(); });
+    el('AdsNext').addEventListener('click', () => { state.adsPage++; drawAds(); controls(); });
+    window.addEventListener('focus', returned);
+    document.addEventListener?.('visibilitychange', returned);
     el('RefreshFollowed').addEventListener('click',refreshFollowed);
     el('StatusesLoad').addEventListener('click', () => state.loaded ? loadStatuses() : load());
     el('StatusesSave').addEventListener('click', saveStatuses);
@@ -648,7 +842,7 @@
     el('CompaniesNext').addEventListener('click', () => { if (state.companies?.next !== null) void searchCompanies(state.companies.next); });
     el('Pull').addEventListener('click', pull);
     el('Stop').addEventListener('click', stop);
-    el('Untick').addEventListener('click', () => { if (!mine() && state.chosen) { state.chosen.clear(); rememberTicks(); draw(); } });
+    el('Untick').addEventListener('click', () => { if (!mine() && state.chosen) { state.chosen.clear(); state.linkedinSearch = ''; rememberTicks(); draw(); } });
     el('SelectNew').addEventListener('change', () => {
       for (const row of pageRows()) if (!savedJob(row.url)) { if (el('SelectNew').checked) state.picked.add(row.url); else state.picked.delete(row.url); }
       draw();
@@ -658,7 +852,7 @@
     el('FoundPrevious').addEventListener('click', () => { state.foundPage = Math.max(0, state.foundPage - 1); draw(); });
     el('FoundNext').addEventListener('click', () => { state.foundPage++; draw(); });
     window.addEventListener('pagehide', () => { if (state.pulling) stop(); });
-    el('Panel').hidden = true; draw();
+    el('Panel').hidden = true; el('FollowedPanel').hidden = true; draw();
   }
   init();
 })();

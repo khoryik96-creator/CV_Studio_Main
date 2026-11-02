@@ -7,7 +7,32 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.535 Find HR people captcha false positive (local, unmerged)**
+**Current checkpoint: v24.6.536 Signed / Followed clients split (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged535 PR280 / `0361880`. Owner
+asked for two ways to pull followed-client ads, a select-all save, and a
+dashboard of saved client ads, with followed clients in their own tab.
+- Job Leads tabs: Signed clients now holds only the status setup and Find
+  signed clients in JobAdder. New Followed clients tab (`jobLeadsClientsFollowed*`)
+  holds the followed table, pull controls, review list and dashboard. One
+  module (`job-leads-clients.js`) and one state drive both panels; `show(view)`
+  takes 'signed' | 'followed' | ''. `message()` writes to both message lines.
+- Pull into CV Studio = the existing companion pull into the review list.
+  Select all new ads (all pages) and Save selected now saves every selected ad
+  in one click (the 100-per-click cap is gone; MAX_FOUND 600 still bounds it).
+- Open on LinkedIn = one visible `jobs/search/?f_C=id1,id2` tab for the ticked
+  clients; the owner chooses ads with the companion's in-page Add to CV Studio
+  buttons. With all numbers known it opens straight from the click (pop-up
+  allowed); otherwise `jobCompanyID` reads the missing numbers first and the
+  search is offered as a link (a later window.open would be blocked). Numbers
+  read this session are cached in `state.resolvedIds` and reused by Pull.
+- Saved client job ads dashboard: non-deleted Job Leads records whose company
+  name matches a followed client (same match as the "Ads in Job ads" count),
+  with tiles, client/status/folder/posted/search filters, sort and paging. It
+  re-reads saved ads when the owner returns to the tab (focus/visibility).
+  Folder filter values are JSON strings so Unfiled differs from All folders.
+- No backend, route, schema or companion change.
+
+**Previous checkpoint: v24.6.535 Find HR people captcha false positive (merged PR280 / `0361880`)**
 on `claude/job-leads-signed-clients`, from merged534 PR279 / `a867965`. Owner
 still saw "LinkedIn needs sign-in or is showing a verification or usage
 restriction" on an ordinary ad after534. Remaining cause: `issue()` treated any
