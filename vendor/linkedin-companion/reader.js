@@ -22,10 +22,24 @@
   // A usage-limit notice must stay within one sentence, so unrelated words far
   // apart in a job ad or profile cannot combine into a false restriction.
   const restrictionNotice = /unusual activity|temporarily restricted|security verification|too many requests|you(?:.ve| have) reached[^.!?]{0,120}\b(?:(?:search|commercial)[^.!?]{0,120}\blimit|limit[^.!?]{0,120}\b(?:search|commercial))/i;
+  // Pages can load an invisible or parked reCAPTCHA frame in the background.
+  // Only a challenge the user can actually see is a verification check.
+  function challengeShown() {
+    const selector = 'iframe[src*="captcha" i], [data-test-id="captcha-internal"], #captcha-internal';
+    const nodes = document.querySelectorAll ? [...document.querySelectorAll(selector)] : [document.querySelector(selector)].filter(Boolean);
+    return nodes.some(node => {
+      const src = String(node.getAttribute?.('src') || ''), frame = String(node.tagName || '').toUpperCase() === 'IFRAME';
+      if (!(frame && /captcha/i.test(src) || node.id === 'captcha-internal' || node.getAttribute?.('data-test-id') === 'captcha-internal')) return false;
+      if (frame && /[?&]size=invisible(?:&|$)/i.test(src)) return false;
+      if (!visible(node)) return false;
+      const box = node.getBoundingClientRect?.();
+      return !box || box.width >= 40 && box.height >= 40 && box.bottom > 0 && box.right > 0;
+    });
+  }
   function issue(pageText = true) {
     const path = location.pathname;
     if (/^\/(checkpoint|challenge|authwall|login|uas)(\/|$)/i.test(path)) return 'LinkedIn needs you to sign in or complete a check. The agent will stop.';
-    if (document.querySelector('iframe[src*="captcha"], [data-test-id="captcha-internal"], #captcha-internal')) return 'LinkedIn needs a verification check. The agent will stop.';
+    if (challengeShown()) return 'LinkedIn needs a verification check. The agent will stop.';
     if (pageText && restrictionNotice.test(text(document.querySelector('main') || document.body).slice(0, 5000))) return 'LinkedIn is showing an access or usage restriction. The agent will stop.';
     return '';
   }

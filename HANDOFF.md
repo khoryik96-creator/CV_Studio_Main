@@ -7,7 +7,22 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.534 Find HR people false restriction fix (local, unmerged)**
+**Current checkpoint: v24.6.535 Find HR people captcha false positive (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged534 PR279 / `a867965`. Owner
+still saw "LinkedIn needs sign-in or is showing a verification or usage
+restriction" on an ordinary ad after534. Remaining cause: `issue()` treated any
+`iframe[src*="captcha"]` as a verification check, including invisible/parked
+background reCAPTCHA frames (`size=invisible`, hidden bframe). A fixture proves
+534 throws "LinkedIn needs a verification check" for such a frame alone.
+- `reader.js` `challengeShown()`: only a visible, sized, on-screen captcha frame
+  or LinkedIn's own visible `captcha-internal` element counts; the element is
+  re-checked so non-captcha nodes never qualify. Checkpoint/challenge/authwall
+  URLs still stop. Shared by Sourcer, HR and job reads.
+- `worker.js` ad-read access errors now name the signal (sign-in/checkpoint
+  page, captcha, or restriction notice) with a fixed reason; no page text.
+- Next owner report of this message will say which signal fired.
+
+**Previous checkpoint: v24.6.534 Find HR people false restriction fix (merged PR279 / `a867965`)**
 on `claude/job-leads-signed-clients`, from merged533 PR278 / `f674ed4`. Owner
 reported bulk Find HR people stopping with "LinkedIn needs sign-in or is showing
 a verification or usage restriction". Cause: the company-only ad read polls

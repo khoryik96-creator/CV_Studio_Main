@@ -549,13 +549,18 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
         try { return globalThis.SourcerReader.readJob(url,companyOnly); }
         catch (error) {
           if (error.cvstudioJobLoading) return {loading:true,unavailable:globalThis.SourcerReader.jobUnavailable()};
-          return {jobError:/sign in|verification|restriction/i.test(String(error?.message))?'access':'layout'};
+          const message=String(error?.message);
+          // A fixed reason names which LinkedIn signal stopped the read; no page text leaves the tab.
+          return /sign in|verification|restriction/i.test(message) ? {jobError:'access',reason:/sign in/i.test(message)?'signin':/verification/i.test(message)?'captcha':'notice'} : {jobError:'layout'};
         }
       }, args:[expected,companyOnly]},jobReaderReadError);
     const result=injection?.result;
     if (!verify(await chrome.tabs.get(id))) { injected=false;previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue; }
     if(result?.unavailable)throw safeError('LinkedIn says this job ad is unavailable. Its previous saved details were kept.','HR_AD_UNAVAILABLE');
-    if (result?.jobError) throw safeError(result.jobError==='access' ? 'LinkedIn needs sign-in or is showing a verification or usage restriction. Check the LinkedIn tab before trying again.' : jobReaderReadError,result.jobError==='access'?'HR_ACCESS_REQUIRED':'HR_AD_LAYOUT');
+    if (result?.jobError) {
+      const shown={signin:'a sign-in or checkpoint page',captcha:'a captcha check on the ad page',notice:'a restriction notice on the ad page'}[result.reason] || 'an access check';
+      throw safeError(result.jobError==='access' ? `LinkedIn needs sign-in or is showing a verification or usage restriction (${shown}). Check the LinkedIn tab before trying again.` : jobReaderReadError,result.jobError==='access'?'HR_ACCESS_REQUIRED':'HR_AD_LAYOUT');
+    }
     if (!result?.loading) {
       if (result?.url !== expected) throw safeError('The selected job could not be confirmed. Open its LinkedIn tab and try again.');
       if (companyOnly) {
