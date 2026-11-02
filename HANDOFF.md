@@ -27,6 +27,16 @@ emails flowing to the HR people and Unlocked contacts tabs.
 - HR results are saved on the ads, so they appear in HR people; unlocking
   there feeds Unlocked contacts. View calls `cvStudioPeople.showHR(companyId)`,
   which opens HR people filtered to that company.
+- Review fixes (same release):
+  - the selection follows the filtered list (hidden ads are never acted on);
+  - a client scan keeps Job ads' ticks;
+  - a busy Job Leads is reported;
+  - each view has its own resume checkpoint (`cvstudio_job_leads_client_hr_queue_v1` for Followed clients);
+  - HR settings sync across the HR, BulkHR and ClientsHR panels;
+  - client HR inputs are locked during a scan;
+  - `showHR` reads once;
+  - one saved-ads read per folder or Trash action (`load()` now returns its data);
+  - Stop is honoured while saved ads reload before a client scan (Codex P2).
 - The owner asked for less text: the Signed/Followed clients intro paragraphs,
   the Pull/Open explainer (now button tooltips), the dashboard description and
   the search placeholder are removed, and status messages are shortened.

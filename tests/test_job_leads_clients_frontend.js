@@ -89,7 +89,8 @@ function fixture(options={}){
   const app={
     statusLabels:{new:'New',to_contact:'To contact',contacted:'Contacted',follow_up:'Following up',won:'Won',closed:'Closed'},
     lock:value=>{state.locks.push(value);state.busy=value;},isBusy:()=>state.busy,
-    scanClientAds:async ids=>{state.scanned=[...ids];if(state.holdScan)await new Promise(resolve=>{state.releaseScan=resolve;});
+    clientScanResumes:()=>!!state.resumes,
+    scanClientAds:async ids=>{if(state.scanError)throw Error(state.scanError);state.scanned=[...ids];if(state.holdScan)await new Promise(resolve=>{state.releaseScan=resolve;});
       for(const id of ids){const record=state.records.find(row=>row.id===id);record.hr={company_url:'https://www.linkedin.com/company/example-client/',company_id:'4242',scanned_at:'2026-11-02T01:00:00Z',people:[{url:'https://www.linkedin.com/in/fictional-hr',name:'Fictional HR'}]};}
       return true;},
     stopHR:()=>{state.stoppedHR=(state.stoppedHR||0)+1;},hrRunning:()=>false,refresh:async()=>{state.refreshes++;},activityStart:()=>'activity',activityEnd:()=>{},
@@ -679,15 +680,25 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    await m.el('AdsSelectNone').click();await tick(0);const trashed=m.state.records.find(row=>row.role===ids()[0]);
    await m.el('AdsTrash').click();await settle();
    assert.equal(m.leadsCalls.at(-1).action,'trash');assert(trashed.deleted);assert.equal(m.el('AdsCount').textContent,'2');assert(m.el('AdsSelection').hidden,'the trashed ad leaves the selection');
+   // A filter change drops hidden ads from the selection, so actions never touch them.
+   await m.el('AdsSelectAll').click();assert.equal(m.el('AdsSelected').textContent,'2 selected');
+   m.el('AdsQuery').value='Role 71';await m.el('AdsQuery').dispatch('input');assert.equal(m.el('AdsSelected').textContent,'1 selected');
+   m.el('AdsQuery').value='';await m.el('AdsQuery').dispatch('input');assert.equal(m.el('AdsSelected').textContent,'1 selected','hidden ads do not come back selected');
+   await m.el('AdsSelectNone').click();
    // Find HR people runs Job ads' scanner with this view's own panel.
    await m.el('AdsSelectAll').click();m.state.holdScan=true;const scanning=m.el('HRStart').click();await settle();
    assert.equal(m.state.scanned.length,2);assert(m.el('AdsMove').disabled && m.el('Pull').disabled,'everything waits for the scan');assert(!m.el('HRStop').disabled);
+   assert(m.el('HRPages').disabled && m.el('HRKeywords').disabled,'scan settings are locked while it runs');
    await m.el('HRStop').click();assert.equal(m.state.stoppedHR,1);
    m.state.releaseScan();await scanning;await settle();
    assert(!m.el('AdsMove').disabled);
    const hrCell=m.el('AdsRows').children[0].children[9];assert.match(hrCell.text,/^1 found · 2026-11-02 View/);
    await hrCell.children.find(child=>child.tagName==='BUTTON').click();await settle();
-   assert.equal(m.state.shownHR,'4242','HR people opens filtered to that company');assert(m.el('FollowedPanel').hidden);}
+   assert.equal(m.state.shownHR,'4242','HR people opens filtered to that company');assert(m.el('FollowedPanel').hidden);
+   await m.el('FollowedTab').click();await settle();await m.el('AdsSelectAll').click();
+   m.state.scanError='Job Leads is busy with another search, scan or save. Try again when it finishes.';await m.el('HRStart').click();await settle();
+   assert.match(m.el('FollowedMessage').textContent,/busy with another search/,'a refused scan says why');
+   m.state.scanError='';m.state.resumes=true;await m.el('AdsSelectNone').click();await m.el('AdsSelectAll').click();assert.equal(m.el('HRStart').textContent,'Resume unfinished ads');}
 
   // Account change on screen, and a JobAdder outage.
   const down=fixture({down:true});await down.el('Tab').click();await settle();

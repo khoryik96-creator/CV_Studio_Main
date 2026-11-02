@@ -18,7 +18,7 @@ const ROWS=[person('Zara Demo','Penang',62,'Search card','2026-10-05T00:00:00+00
   person('Mia Demo','',75,'Search card','2026-10-03T00:00:00+00:00'),person('Ben Demo','Johor',48,'Profile detail','2026-10-02T00:00:00+00:00'),
   person('Kai Demo','Ipoh',91,'Search card','2026-10-01T00:00:00+00:00')];
 
-function fixture(stored=new Map(),rows=ROWS){
+function fixture(stored=new Map(),rows=ROWS,hrRows=[]){
   const ids=new Map(),posts=[];
   const document={getElementById:id=>{if(!ids.has(id))ids.set(id,new Element(/Sort|Order|MinScore|Read|Search|Company/.test(id)?'select':'div'));return ids.get(id);},
     createElement:tag=>new Element(tag),querySelectorAll:()=>[]};
@@ -29,7 +29,7 @@ function fixture(stored=new Map(),rows=ROWS){
   const fetch=async(url,init)=>{
     const body=JSON.parse(init.body);posts.push({url,body});
     if(body.action==='candidates')return {ok:true,json:async()=>({candidates:structuredClone(rows)})};
-    if(body.action==='hr_people')return {ok:true,json:async()=>({people:[]})};
+    if(body.action==='hr_people')return {ok:true,json:async()=>({people:structuredClone(hrRows)})};
     if(body.action==='export_candidates')return {ok:true,blob:async()=>'xlsx'};
     throw Error('unexpected '+body.action);
   };
@@ -41,9 +41,10 @@ function fixture(stored=new Map(),rows=ROWS){
   // The first column holds the select box and shortlist star; the name follows.
   const names=()=>el('CandidatesRows').children.map(tr=>tr.children[1].children[0].children[0].textContent);
   const choose=async(name,value)=>{el('Candidates'+name).value=value;await el('Candidates'+name).dispatch('change');};
-  return {el,posts,names,choose,stored};
+  return {el,posts,names,choose,stored,people:window.cvStudioPeople};
 }
 
+async function window_showHR(f,id){return f.people.showHR(id);}
 (async()=>{
   const f=fixture();
   await f.el('CandidatesTab').click();await settle();
@@ -81,5 +82,14 @@ function fixture(stored=new Map(),rows=ROWS){
   await parity.el('CandidatesTab').click();await settle();
   await parity.choose('Sort','name');await parity.choose('Order','asc');assert.deepEqual(parity.names(),ASC);
   await parity.choose('Order','desc');assert.deepEqual(parity.names(),DESC);
-  console.log('Candidate dashboard: sort by date, match, name and location both ways, blank-last, minimum match, profile read, export view, remembered order and screen/Excel order parity passed.');
+  // Followed clients' View: HR people opens filtered to one company with a single read.
+  {const hr=[{name:'Fictional HR One',url:'https://www.linkedin.com/in/fictional-hr-one',title:'HR Manager',company:'Example Client',company_id:'4242',location:'Kuala Lumpur',people_id:'1'},
+             {name:'Fictional HR Two',url:'https://www.linkedin.com/in/fictional-hr-two',title:'Recruiter',company:'Other Client',company_id:'5151',location:'Penang',people_id:'2'}];
+   const v=fixture(new Map(),ROWS,hr);Object.defineProperty(v.el('HRCompany'),'options',{get(){return this.children;}});
+   const reads=()=>v.posts.filter(post=>post.body.action==='hr_people').length;
+   await v.el('HRTab').click();await settle();assert.equal(reads(),1,'the tab itself reads once');
+   const before=reads();await window_showHR(v,'4242');await settle();
+   assert.equal(reads(),before+1,'View reads HR people once, not twice');
+   assert.equal(v.el('HRCompany').value,'4242');assert(!v.el('HRPanel').hidden);}
+  console.log('Candidate dashboard: View opens HR people for one company with one read, sort by date, match, name and location both ways, blank-last, minimum match, profile read, export view, remembered order and screen/Excel order parity passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

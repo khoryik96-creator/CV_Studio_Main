@@ -258,6 +258,8 @@
     el('AdsFolderDelete').disabled = locked || !chosenFolder;
     el('HR').hidden = !size && !state.hrScanning;
     el('HRStart').disabled = locked || !size;
+    el('HRStart').textContent = size && jobLeads()?.clientScanResumes?.([...state.adsPicked]) ? 'Resume unfinished ads' : 'Scan selected ads';
+    for (const name of ['HRCountryMode', 'HRCountry', 'HRPages', 'HRKeywords']) el(name).disabled = locked;
     el('HRStop').disabled = !state.hrScanning;
     el('AdsPrevious').disabled = state.adsPage === 0;
     el('AdsNext').disabled = (state.adsPage + 1) * ADS_PAGE >= state.adsShown;
@@ -403,13 +405,15 @@
       [every.filter(row => !row.record.hr).length, 'No HR scan yet']]) {
       const tile = node('div', undefined, 'job-leads-clients-tile'); tile.append(node('strong', String(count)), node('span', label)); tiles.append(tile);
     }
-    const live = new Set(every.map(row => row.record.id));
-    for (const id of [...state.adsPicked]) if (!live.has(id)) state.adsPicked.delete(id);
     // A just-created folder becomes the Move target once its option exists.
     const moveTo = el('AdsMoveFolder'), target0 = state.moveTo || moveTo.value; state.moveTo = '';
     moveTo.replaceChildren(...[['', 'Unfiled'], ...state.folders.map(name => [name, name])].map(([value, label]) => { const n = node('option', label); n.value = value; return n; }));
     moveTo.value = state.folders.includes(target0) ? target0 : '';
     const rows = adsRows(), target = el('AdsRows'); target.replaceChildren();
+    // Actions apply only to ads the filters still show: a hidden ad is never
+    // moved, deleted or scanned because of an earlier selection.
+    const shownIds = new Set(rows.map(row => row.record.id));
+    for (const id of [...state.adsPicked]) if (!shownIds.has(id)) state.adsPicked.delete(id);
     state.adsShown = rows.length; // controls() pages by this count without re-filtering
     el('AdsCount').textContent = String(every.length);
     state.adsPage = Math.min(state.adsPage, Math.max(0, Math.ceil(rows.length / ADS_PAGE) - 1));
@@ -500,7 +504,9 @@
     // Reads can overlap (a return-to-tab refresh and a save's refresh); only
     // the most recently started one may replace the saved ads.
     const read = ++recordsRead;
-    const data = await leads();
+    applyRecords(await leads(), token, read);
+  }
+  function applyRecords(data, token, read) {
     if (token !== generation || read !== recordsRead) return;
     state.records = Array.isArray(data.records) ? data.records : [];
     state.recordsReady = true;
@@ -840,7 +846,11 @@
   const identities = records => records.map(record => ({id:record.id, revision:record.revision}));
   // Job ads shows the same records; both lists are re-read after a change.
   async function afterAdsChange(token, text) {
-    try { await refreshRecords(token); await jobLeads()?.refresh?.(); } catch (error) { text += ' ' + error.message; }
+    // Job ads re-reads the store once; this view takes the same reply.
+    try {
+      const read = ++recordsRead, data = await jobLeads()?.refresh?.();
+      if (Array.isArray(data?.records)) applyRecords(data, token, read); else await refreshRecords(token);
+    } catch (error) { text += ' ' + error.message; }
     if (token === generation) message(text);
   }
   function moveAds() {
@@ -892,7 +902,7 @@
     const token = generation;
     state.hrScanning = true; draw();
     try { await app.scanClientAds(ids); }
-    catch (error) { if (token === generation) el('HRMessage').textContent = error.message; }
+    catch (error) { if (token === generation) message(error.message); }
     finally {
       if (token === generation) { state.hrScanning = false; try { await refreshRecords(token); } catch {} draw(); }
     }
@@ -966,7 +976,6 @@
     el('AdsFolderCancel').addEventListener('click', () => { el('AdsFolderEditor').hidden = true; el('AdsFolderName').value = ''; });
     el('AdsFolderCreate').addEventListener('click', createAdsFolder);
     el('AdsFolderDelete').addEventListener('click', deleteAdsFolder);
-    el('HRCountryMode').addEventListener('change', () => { el('HRCountry').hidden = el('HRCountryLabel').hidden = !el('HRCountryMode').value; });
     el('HRStart').addEventListener('click', scanAdsHR);
     el('HRStop').addEventListener('click', () => jobLeads()?.stopHR?.());
     el('AdsPrevious').addEventListener('click', () => { state.adsPage = Math.max(0, state.adsPage - 1); drawAds(); controls(); });
