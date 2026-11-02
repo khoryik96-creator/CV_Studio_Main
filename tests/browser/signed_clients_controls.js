@@ -4,7 +4,7 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CVSTUDIO_CHROMIUM?{executablePath:process.env.CVSTUDIO_CHROMIUM}:{})});
  try {
-  const origin='http://127.0.0.1:5098',output=path.resolve(__dirname,'../../runtime/signed-clients536');fs.mkdirSync(output,{recursive:true});
+  const origin='http://127.0.0.1:5098',output=path.resolve(__dirname,'../../runtime/signed-clients540');fs.mkdirSync(output,{recursive:true});
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   assert.equal((await(await page.request.get(origin+'/__signed_clients_fixture__')).json()).fictional_signed_clients_fixture,true);
@@ -39,8 +39,14 @@ const {chromium}=require(process.env.CVSTUDIO_PLAYWRIGHT || 'playwright');
   for (const [id,role,posted] of [['7001','Fictional Payroll Lead','2026-10-28'],['7002','Fictional Data Analyst','2026-10-12']])
     assert.equal(await page.evaluate(async([id,role,posted])=>(await fetch('/job-leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'save',record:{url:'https://www.linkedin.com/jobs/view/'+id,company:'Client 10 Sdn Bhd',role,location:'Kuala Lumpur',date_posted:posted,description:'',description_rich:[],description_truncated:true,folder:'',status:'new',contact:'',notes:'',follow_up:''}})})).status,[id,role,posted]),200);
   await page.locator('#jobLeadsClientsFollowedRefresh').click();await page.waitForFunction(()=>document.querySelector('#jobLeadsClientsAdsCount').textContent==='2');
-  assert.deepEqual(await page.locator('#jobLeadsClientsAdsRows tr td:nth-child(2)').allTextContents(),['Fictional Payroll Lead','Fictional Data Analyst']);
+  assert.deepEqual(await page.locator('#jobLeadsClientsAdsRows tr td:nth-child(3)').allTextContents(),['Fictional Payroll Lead','Fictional Data Analyst']);
   assert.equal(await page.locator('#jobLeadsClientsFollowed tr td:nth-child(4)').textContent(),'2','the Ads in Job ads count matches the dashboard');
+  // Saved client ads: select, move to a new folder, and the Find HR people panel.
+  await page.locator('#jobLeadsClientsAdsSelectAll').click();assert.equal(await page.locator('#jobLeadsClientsAdsSelected').textContent(),'2 selected');
+  assert(await page.locator('#jobLeadsClientsHR').isVisible(),'Find HR people appears for selected ads');
+  await page.locator('#jobLeadsClientsAdsFolderNew').click();await page.locator('#jobLeadsClientsAdsFolderName').fill('Fictional clients');await page.locator('#jobLeadsClientsAdsFolderCreate').click();
+  await page.waitForFunction(()=>document.querySelector('#jobLeadsClientsAdsMoveFolder').value==='Fictional clients');
+  await page.locator('#jobLeadsClientsAdsMove').click();await page.waitForFunction(()=>[...document.querySelectorAll('#jobLeadsClientsAdsRows tr td:nth-child(8)')].every(n=>n.textContent==='Fictional clients'));
   await page.locator('#jobLeadsClientsFollowedPanel').screenshot({path:path.join(output,'followed-clients-desktop.jpg')});
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no page-wide horizontal scroll on a phone');
   await page.locator('#jobLeadsClientsFollowedPanel').screenshot({path:path.join(output,'followed-clients-mobile.jpg')});await page.setViewportSize({width:1440,height:1000});

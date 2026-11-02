@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.539 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.540 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged539/PR284/ee2ae86. Followed clients' saved ads can be selected,
+  moved to folders (new/delete folder), deleted to Trash and HR-scanned with
+  Job ads' scanner. Found HR people appear in HR people (View opens it
+  filtered); unlocked emails go to Unlocked contacts. Frontend only.
+- v24.6.539 (merged PR284) was local/unmerged on `claude/job-leads-signed-clients` from
   merged538/PR283/68bae01. Client pulls follow LinkedIn's first redirect of a
   company Jobs page (a one-company search, a canonical name, or the main page
   meaning no open jobs). A no-jobs client counts as pulled. Every failed

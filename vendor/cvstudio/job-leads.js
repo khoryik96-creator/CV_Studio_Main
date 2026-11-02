@@ -22,19 +22,22 @@
   const discoveryPicked = new Set();
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
   let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
-  let bulkHR = null;
-  const bulkCheckpointKey='cvstudio_job_leads_hr_queue_v1';
-  let bulkCheckpoint=null;
-  try {
-    const raw=localStorage.getItem(bulkCheckpointKey);
-    if(raw && raw.length<=16000) {
-      const value=JSON.parse(raw),settings=value.settings;
-      if(value.version===1 && settings && typeof settings.country==='string' && settings.country.length<=100 &&
-          typeof settings.keywords==='string' && settings.keywords.length<=600 && Number.isInteger(settings.pages) && settings.pages>=1 && settings.pages<=15 &&
-          Array.isArray(value.items) && value.items.length>0 && value.items.length<=40 && new Set(value.items.map(item=>item?.id)).size===value.items.length &&
-          value.items.every(item=>item && /^[a-f0-9]{32}$/.test(item.id) && Number.isInteger(item.revision) && item.revision>0 && ['waiting','running','saved','failed','stopped'].includes(item.state))) bulkCheckpoint=value;
-    }
-  } catch {}
+  let bulkHR = null, clientScanPending = false;
+  // Each HR queue view (Job ads, Followed clients) resumes only its own runs.
+  const bulkCheckpointKeys={BulkHR:'cvstudio_job_leads_hr_queue_v1',ClientsHR:'cvstudio_job_leads_client_hr_queue_v1'};
+  const bulkCheckpoints={};
+  for (const [prefix,key] of Object.entries(bulkCheckpointKeys)) {
+    try {
+      const raw=localStorage.getItem(key);
+      if(raw && raw.length<=16000) {
+        const value=JSON.parse(raw),settings=value.settings;
+        if(value.version===1 && settings && typeof settings.country==='string' && settings.country.length<=100 &&
+            typeof settings.keywords==='string' && settings.keywords.length<=600 && Number.isInteger(settings.pages) && settings.pages>=1 && settings.pages<=15 &&
+            Array.isArray(value.items) && value.items.length>0 && value.items.length<=40 && new Set(value.items.map(item=>item?.id)).size===value.items.length &&
+            value.items.every(item=>item && /^[a-f0-9]{32}$/.test(item.id) && Number.isInteger(item.revision) && item.revision>0 && ['waiting','running','saved','failed','stopped'].includes(item.state))) bulkCheckpoints[prefix]=value;
+      }
+    } catch {}
+  }
   const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
   const guideNames = [...fields,'AutoFill','Save','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchRefresh','SearchStart','SearchSetupGuide','SearchAdd','PreviewSave','HRStart','HRCountryMode','HRCountry','HRKeywords','HRPages','HRCompanyURL','BulkHRStart','BulkHRCountryMode','BulkHRCountry','BulkHRKeywords','BulkHRPages','SelectPage'];
@@ -195,6 +198,7 @@
     previewCapture = null;
     picked.clear(); syncFolders(); render();
     drawDiscovery();
+    return data;
   }
   function filtered() {
     const term = el('Search').value.trim().toLocaleLowerCase(), filter = el('Filter').value, folder = el('FolderFilter').value;
@@ -507,7 +511,7 @@
     const value=validHRPreferences({countryMode:el(prefix+'CountryMode').value,country:el(prefix+'Country').value,pages:Number(el(prefix+'Pages').value)});
     if (!value) return;
     preferredHR=value;
-    setHRPreferenceControls(prefix === 'HR' ? 'BulkHR' : 'HR',value);
+    for (const other of ['HR','BulkHR','ClientsHR']) if (other!==prefix && el(other+'Pages')) setHRPreferenceControls(other,value);
     try { localStorage.setItem(hrPreferenceKey,JSON.stringify(value)); } catch {}
     bulkHRControls();
   }
@@ -721,13 +725,13 @@
   function bulkHRControls() {
     for (const name of ['CountryMode','Country','Pages','Keywords']) el('BulkHR'+name).disabled=busy;
     el('BulkHRStart').disabled=busy || !rows.some(row=>picked.has(row.id) && !row.deleted);
-    el('BulkHRStop').disabled=!bulkHR?.running || hrStopped;
+    el('BulkHRStop').disabled=!bulkHR?.running || bulkHR.ui!==jobAdsHRUI || hrStopped;
     let resume=false;
     try { resume=bulkHRPlan(rows.filter(row=>picked.has(row.id) && !row.deleted),hrSettings('BulkHR')).resume; } catch {}
     el('BulkHRStart').textContent=resume?'Resume unfinished ads':'Scan selected ads';
   }
-  function bulkHRPlan(selection,settings) {
-    const previous=bulkCheckpoint,ids=selection.map(row=>row.id).sort();
+  function bulkHRPlan(selection,settings,prefix='BulkHR') {
+    const previous=bulkCheckpoints[prefix],ids=selection.map(row=>row.id).sort();
     const same=previous && previous.items.length===ids.length && previous.items.map(item=>item.id).sort().every((id,index)=>id===ids[index]) &&
       ['country','keywords','pages'].every(key=>previous.settings[key]===settings[key]);
     const items=selection.map(row=>{
@@ -739,44 +743,50 @@
     return {resume,items};
   }
   function rememberBulkHR() {
-    bulkCheckpoint={version:1,settings:bulkHR.settings,items:bulkHR.items.map(item=>({id:item.row.id,
+    const checkpoint={version:1,settings:bulkHR.settings,items:bulkHR.items.map(item=>({id:item.row.id,
       revision:item.node.dataset.state==='saved' ? (rows.find(row=>row.id===item.row.id)?.revision || item.row.revision) : item.row.revision,state:item.node.dataset.state}))};
     // Only opaque ad IDs, revisions, outcomes and selected settings are kept.
     // No people, emails, URLs, partial results or automatic browser work.
-    try { localStorage.setItem(bulkCheckpointKey,JSON.stringify(bulkCheckpoint)); } catch {}
+    bulkCheckpoints[bulkHR.ui.prefix]=checkpoint;
+    try { localStorage.setItem(bulkCheckpointKeys[bulkHR.ui.prefix],JSON.stringify(checkpoint)); } catch {}
   }
   function stopHR() {
+    if (clientScanPending) { hrStopped=true; return; }
     if (!hrRunning) return;
     hrStopped=true;el('HRMessage').textContent='Stopping after the current read…';
     if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
-    if (bulkHR?.running) el('BulkHRMessage').textContent='Stopping after the current read. Completed ads are already saved; remaining ads will not start.';
+    if (bulkHR?.running) bulkHR.ui.part('Message').textContent='Stopping after the current read. Completed ads are already saved; remaining ads will not start.';
     discoveryControls();
   }
   function bulkHRSummary() {
-    el('BulkHRBar').value=bulkHR.completed;
-    el('BulkHRSummary').textContent=`${bulkHR.completed} of ${bulkHR.items.length} ads processed · ${bulkHR.saved} saved · ${bulkHR.failed} failed`+(bulkHR.cancelled ? ` · ${bulkHR.cancelled} stopped` : '');
+    bulkHR.ui.part('Bar').value=bulkHR.completed;
+    bulkHR.ui.part('Summary').textContent=`${bulkHR.completed} of ${bulkHR.items.length} ads processed · ${bulkHR.saved} saved · ${bulkHR.failed} failed`+(bulkHR.cancelled ? ` · ${bulkHR.cancelled} stopped` : '');
   }
-  async function startBulkHR() {
-    const selection=rows.filter(row=>picked.has(row.id) && !row.deleted).map(row=>({...row}));
-    if (busy || !selection.length) return;
-    chooseGuide('BulkHR');guideTried=true;
+  // The Job ads queue UI. Followed clients passes its own panel (same parts,
+  // another id prefix) so one scanner serves both views.
+  const jobAdsHRUI={prefix:'BulkHR',part:name=>el('BulkHR'+name),guide:true};
+  async function startBulkHR(ids=null,ui=jobAdsHRUI) {
+    const chosen=ids ? new Set(ids) : picked;
+    const selection=rows.filter(row=>chosen.has(row.id) && !row.deleted).map(row=>({...row}));
+    if (busy || !selection.length) return false;
+    if (ui.guide) { chooseGuide('BulkHR');guideTried=true; }
     let settings;
     try {
-      if (selection.length>40) { guideIssue='SelectPage'; throw Error('Select up to 40 ads for one HR scan. You can run the next group afterward.'); }
-      settings=hrSettings('BulkHR');
+      if (selection.length>40) { if (ui.guide) guideIssue='SelectPage'; throw Error('Select up to 40 ads for one HR scan. You can run the next group afterward.'); }
+      settings=hrSettings(ui.prefix);
     } catch(error) {
-      el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=true;el('BulkHRSummary').textContent='';el('BulkHRResults').replaceChildren();el('BulkHRMessage').textContent=error.message;nextGuide(true);return;
+      ui.part('Progress').hidden=false;ui.part('Bar').hidden=true;ui.part('Summary').textContent='';ui.part('Results').replaceChildren();ui.part('Message').textContent=error.message;if (ui.guide) nextGuide(true);return false;
     }
-    rememberHRPreferences('BulkHR');
-    const plan=bulkHRPlan(selection,settings);
+    rememberHRPreferences(ui.prefix);
+    const plan=bulkHRPlan(selection,settings,ui.prefix);
     const activity=beginScanActivity();
-    hrStopped=false;hrRunning=true;bulkHR={running:true,settings,completed:0,saved:0,failed:0,cancelled:0,items:[]};
-    el('BulkHRResults').replaceChildren();el('BulkHRProgress').hidden=false;el('BulkHRBar').hidden=false;
-    el('BulkHRBar').max=selection.length;
+    hrStopped=false;hrRunning=true;bulkHR={running:true,ui,settings,completed:0,saved:0,failed:0,cancelled:0,items:[]};
+    ui.part('Results').replaceChildren();ui.part('Progress').hidden=false;ui.part('Bar').hidden=false;
+    ui.part('Bar').max=selection.length;
     for (const entry of plan.items) {
       const {row,saved,priority}=entry,title=row.company+' — '+row.role,item=node('li',title+(saved?' · Previously saved':' · Waiting'));item.dataset.state=saved?'saved':'waiting';
       if(saved){bulkHR.completed++;bulkHR.saved++;}
-      bulkHR.items.push({row,title,node:item,priority});el('BulkHRResults').appendChild(item);
+      bulkHR.items.push({row,title,node:item,priority});ui.part('Results').appendChild(item);
     }
     bulkHRSummary();rememberBulkHR();lock(true);
     let stoppedReason='';
@@ -787,7 +797,7 @@
         item.node.dataset.state='running';item.node.textContent=item.title+' · Scanning…';
         rememberBulkHR();
         const notify=message=>{
-          el('BulkHRMessage').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · ${message}`;
+          ui.part('Message').textContent=`Ad ${bulkHR.completed+1} of ${selection.length} · ${item.title} · ${message}`;
           if (savedJob(previewUrl)?.id===row.id) el('HRMessage').textContent=message;
         };
         const showPeople=people=>{if (savedJob(previewUrl)?.id===row.id) hrPeople(people);};
@@ -808,9 +818,31 @@
       const remaining=bulkHR.items.length-bulkHR.completed;
       for (const item of bulkHR.items) if (item.node.dataset.state==='waiting') item.node.textContent=item.title+' · Not started';
       rememberBulkHR();
-      el('BulkHRMessage').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
+      ui.part('Message').textContent=(hrStopped || stoppedReason ? 'Queue stopped. ' : 'Queue finished. ')+`${bulkHR.saved} ads saved, ${bulkHR.failed} failed${bulkHR.cancelled ? ', '+bulkHR.cancelled+' stopped' : ''}${remaining ? ', '+remaining+' not started' : ''}. `+(stoppedReason || 'Completed results are saved with each ad.');
       bulkHRSummary();lock(false);finishScanActivity(activity,bulkHR.failed>0 || !!stoppedReason);
     }
+    return true;
+  }
+  // Followed clients: scan these saved ads with its own settings and progress
+  // panel. The latest saved ads are read first so revisions are current.
+  async function scanClientAds(ids) {
+    if (busy || hrRunning || clientScanPending) throw Error('Job Leads is busy with another search, scan or save. Try again when it finishes.');
+    // Stop is honoured while the saved ads are re-read, before the queue starts.
+    clientScanPending=true;hrStopped=false;
+    try {
+      // Re-reading saved ads must not drop the owner's Job ads ticks.
+      const kept=new Set(picked);
+      await load();
+      for (const id of kept) if (rows.some(row=>row.id===id && !row.deleted)) picked.add(id);
+      updateSelection();
+      if (hrStopped) { el('ClientsHRMessage').textContent='Stopped before the scan started. Nothing was scanned.'; return false; }
+    } finally { clientScanPending=false; }
+    return startBulkHR(ids,{prefix:'ClientsHR',part:name=>el('ClientsHR'+name),guide:false});
+  }
+  // Whether Scan would resume an unfinished Followed clients run for these ads.
+  function clientScanResumes(ids) {
+    try { const chosen=new Set(ids);return bulkHRPlan(rows.filter(row=>chosen.has(row.id) && !row.deleted),hrSettings('ClientsHR'),'ClientsHR').resume; }
+    catch { return false; }
   }
   function rememberJobs(snapshot) {
     for (const row of window.cvStudioJobSearch.rows(snapshot)) {
@@ -1057,9 +1089,15 @@
     ready = true;
     el('HRStart').addEventListener('click',startHR);
     el('HRStop').addEventListener('click',stopHR);
-    el('BulkHRStart').addEventListener('click',startBulkHR);el('BulkHRStop').addEventListener('click',stopHR);
+    el('BulkHRStart').addEventListener('click',()=>startBulkHR());el('BulkHRStop').addEventListener('click',stopHR);
     setHRPreferenceControls('BulkHR',preferredHR || {countryMode:'',country:'',pages:3});
     el('BulkHRKeywords').value=hrDefaultKeywords;el('BulkHRProgress').hidden=true;
+    if (el('ClientsHRPages')) {
+      setHRPreferenceControls('ClientsHR',preferredHR || {countryMode:'',country:'',pages:3});el('ClientsHRKeywords').value=hrDefaultKeywords;
+      el('ClientsHRCountryMode').addEventListener('change',()=>{el('ClientsHRCountry').hidden=el('ClientsHRCountryLabel').hidden=!el('ClientsHRCountryMode').value;rememberHRPreferences('ClientsHR');});
+      el('ClientsHRCountry').addEventListener('input',()=>rememberHRPreferences('ClientsHR'));
+      el('ClientsHRPages').addEventListener('change',()=>rememberHRPreferences('ClientsHR'));
+    }
     el('HRCountryMode').addEventListener('change',()=>{ el('HRCountry').hidden=el('HRCountryLabel').hidden=!el('HRCountryMode').value; rememberHRPreferences(); chooseGuide('HR'); });
     el('HRCountry').addEventListener('input',()=>{rememberHRPreferences();chooseGuide('HR');});
     el('HRPages').addEventListener('change',()=>{rememberHRPreferences();chooseGuide('HR');});
@@ -1231,6 +1269,6 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,scanClientAds,clientScanResumes,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

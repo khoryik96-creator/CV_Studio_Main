@@ -358,10 +358,20 @@
     } catch(error){el(kind+'Message').textContent=error.message;}
     finally{b.exporting=false;controls(kind);}
   }
+  let openingHR=false;
   window.cvStudioPeople={
     decorateDate,
     appBusy(value){appBusy=value;if(initialized)controls('HR');},
     hideHR(){el('HRPanel').hidden=true;el('HRTab').setAttribute('aria-pressed','false');},
+    // Followed clients opens HR people for one company (its LinkedIn number).
+    async showHR(companyId){
+      // The tab click switches views (other modules listen to it); this call
+      // does the one HR read itself, then applies the company filter.
+      openingHR=true;
+      try{el('HRTab').click();}finally{openingHR=false;}
+      await refresh('HR');
+      if(companyId && [...el('HRCompany').options].some(option=>option.value===companyId)){el('HRCompany').value=companyId;boards.HR.page=0;draw('HR');}
+    },
     sourcerChanged(){if(!el('CandidatesPanel').hidden)void refresh('Candidates');}
   };
   for(const kind of ['HR','Candidates']) {
@@ -375,7 +385,7 @@
   el('HRTab').addEventListener('click',()=>{
     el('HRPanel').hidden=false;el('HRTab').setAttribute('aria-pressed','true');
     for(const kind of ['Ads','Contacts']){document.getElementById('jobLeadsApollo'+kind+'Panel').hidden=true;document.getElementById('jobLeadsApollo'+kind+'Tab').setAttribute('aria-pressed','false');}
-    void refresh('HR');
+    if(!openingHR)void refresh('HR');
   });
   el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.connect());
   async function stopDate(){if(!dateBusy)return;dateStopped=true;controls('HR');if(dateOperation)try{await window.cvStudioJobLeads.rpc('jobReadCancel',{operation_id:dateOperation});}catch{}}

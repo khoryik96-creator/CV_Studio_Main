@@ -1770,6 +1770,9 @@
 .job-leads-clients-tile strong{display:block;font-size:20px;line-height:1.2}
 .job-leads-clients-tile span{font-size:11px;color:var(--text2)}
 .job-leads-clients-ads-filters{grid-template-columns:repeat(6,minmax(0,1fr)) auto}
+.job-leads-clients-ads-tools{align-items:center;flex-wrap:wrap;margin:8px 0}
+.job-leads-clients-ads-tools[hidden]{display:none}
+.job-leads-clients .job-leads-bulk-hr,.job-leads-clients .job-leads-bulk-progress{margin:8px 0}
 .job-leads-clients-filters input[type="search"]{width:100%;min-width:0;margin:4px 0 0;font:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:7px}
 @media(max-width:900px){.job-leads-clients-ads-filters{grid-template-columns:repeat(3,minmax(0,1fr))}.job-leads-clients-ads-filters>div{grid-column:1/-1;justify-content:flex-end}}
 @media(max-width:650px){.job-leads-clients-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.job-leads-clients-filters>div{grid-column:1/-1;justify-content:flex-end}}

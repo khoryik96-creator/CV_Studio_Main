@@ -46,7 +46,14 @@ function fixture(options={}){
       if(!init.body)state.recordGets=(state.recordGets||0)+1;
       if(!init.body && state.holdRecords)return new Promise(resolve=>state.recordsReply=resolve);
       if(!init.body)return reply({records:structuredClone(state.records),folders:[...state.folders]});
-      const body=JSON.parse(init.body);leadsCalls.push(body);assert.equal(body.action,'save');
+      const body=JSON.parse(init.body);leadsCalls.push(body);
+      // Folder and Trash actions on saved ads, as the Job Leads store applies them.
+      const find=identity=>state.records.find(record=>record.id===identity.id);
+      if(body.action==='move_folder'){for(const item of body.records)find(item).folder=body.folder;if(body.folder && !state.folders.includes(body.folder))state.folders.push(body.folder);return reply({});}
+      if(body.action==='trash'){for(const item of body.records)find(item).deleted=true;return reply({});}
+      if(body.action==='create_folder'){const name=String(body.folder||'').trim();if(!name)return fail(400,'Enter a folder name.');state.folders.push(name);return reply({folder:name});}
+      if(body.action==='delete_folder'){for(const item of body.records)find(item).folder='';state.folders=state.folders.filter(name=>name!==body.folder);return reply({});}
+      assert.equal(body.action,'save');
       if(state.holdSave)await new Promise(resolve=>{state.releaseSave=resolve;});
       const duplicate=state.records.find(row=>row.url===body.record.url);
       if(duplicate)return reply({record:duplicate,duplicate:true});
@@ -81,7 +88,12 @@ function fixture(options={}){
   const runs=new Map(),begun=[],ended=[];let tab=40;
   const app={
     statusLabels:{new:'New',to_contact:'To contact',contacted:'Contacted',follow_up:'Following up',won:'Won',closed:'Closed'},
-    lock:value=>{state.locks.push(value);state.busy=value;},isBusy:()=>state.busy,refresh:async()=>{state.refreshes++;},activityStart:()=>'activity',activityEnd:()=>{},
+    lock:value=>{state.locks.push(value);state.busy=value;},isBusy:()=>state.busy,
+    clientScanResumes:()=>!!state.resumes,
+    scanClientAds:async ids=>{if(state.scanError)throw Error(state.scanError);state.scanned=[...ids];if(state.holdScan)await new Promise(resolve=>{state.releaseScan=resolve;});
+      for(const id of ids){const record=state.records.find(row=>row.id===id);record.hr={company_url:'https://www.linkedin.com/company/example-client/',company_id:'4242',scanned_at:'2026-11-02T01:00:00Z',people:[{url:'https://www.linkedin.com/in/fictional-hr',name:'Fictional HR'}]};}
+      return true;},
+    stopHR:()=>{state.stoppedHR=(state.stoppedHR||0)+1;},hrRunning:()=>false,refresh:async()=>{state.refreshes++;},activityStart:()=>'activity',activityEnd:()=>{},
     rpc:async(action,args={})=>{
       rpcCalls.push({action,args:structuredClone(args)});
       if(action==='jobStatus')return state.companion;
@@ -107,7 +119,7 @@ function fixture(options={}){
       return {jobs,signature:run.page+':'+jobs.map(row=>row.url).join('|'),hasNext:run.page+1<(state.pages[run.company]||[]).length,atBottom:true,empty:!jobs.length};
     }};
   const opened=[];
-  const window={cvStudioJobLeads:app,cvStudioPeople:{hideHR:()=>{state.hrHidden=true;}},_jaAccountCacheNamespace:'ja'+ACCOUNT,addEventListener:(name,fn)=>{windowEvents[name]=fn;},
+  const window={cvStudioJobLeads:app,cvStudioPeople:{hideHR:()=>{state.hrHidden=true;},showHR:async id=>{state.shownHR=id;}},confirm:()=>state.confirm!==false,_jaAccountCacheNamespace:'ja'+ACCOUNT,addEventListener:(name,fn)=>{windowEvents[name]=fn;},
     open:(url,name,features)=>{opened.push({url,name,features});return null;}};
   window.applyJAPublicInfo=info=>{const next=info?.connected?'ja'+info.account_cache_namespace:'';const before=window._jaAccountCacheNamespace;window._jaAccountCacheNamespace=next;state.applied=(state.applied||0)+1;if(before && before!==next)window.clearJobLeadsClientsAccountState();};
   const localStorage={getItem:key=>storage.has(key)?storage.get(key):null,setItem:(key,value)=>storage.set(key,String(value))};
@@ -204,7 +216,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   assert.equal(f.el('Tab').getAttribute('aria-pressed'),'true');
   assert.deepEqual(f.calls.map(c=>c.action),['overview','statuses']);
   assert(f.el('Setup').open,'status setup opens until signed statuses are chosen');
-  assert.match(f.el('Message').textContent,/Start in Signed clients by choosing/);
+  assert.match(f.el('Message').textContent,/Start in Signed clients: choose the statuses/);
   assert(f.el('Search').disabled && f.el('Pull').disabled);
 
   // Choose the signed status, then find and follow clients.
@@ -227,8 +239,8 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   assert(box(rows(f)[0]).checked && !box(rows(f)[0]).disabled,'a client with a LinkedIn company id is ready to pull');
   assert(box(rows(f)[1]).disabled,'a client without a LinkedIn link cannot be pulled');
   assert(rows(f)[1].querySelectorAll('input')[1].getAttribute('data-guide')==='true','Follow reveals the link needed to enable selection');
-  assert.match(rows(f)[1].text,/Add its LinkedIn company page/);
-  assert.match(rows(f)[0].text,/Ready to pull/);
+  assert.match(rows(f)[1].text,/Add its LinkedIn page/);
+  assert.match(rows(f)[0].text,/Ready/);
   assert.equal(rows(f)[0].children[3].textContent,'2','saved ads are counted by company name, ignoring PT/Tbk');
 
   // A pasted named page links to an HR-scanned company id.
@@ -236,7 +248,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   await rows(f)[1].querySelectorAll('button')[0].click();await settle();
   assert.equal(f.calls.at(-1).action,'set_linkedin');assert.equal(f.calls.at(-1).account,ACCOUNT);
   assert(!box(rows(f)[1]).disabled && box(rows(f)[1]).checked,'the company id from a saved HR scan makes it pullable');
-  assert.match(rows(f)[1].text,/saved HR scan/);
+  assert.match(rows(f)[1].text,/Ready/);
   assert.equal(f.el('Ticked').textContent,'2 of 15 ticked');
 
   // An outdated or missing companion is reported before any search opens.
@@ -503,7 +515,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert.equal(o.opened.length,1);assert.equal(o.opened[0].url,'https://www.linkedin.com/jobs/search/?f_C=4242%2C5151');
    assert.match(o.opened[0].features,/noopener/);
    assert.equal(o.el('LinkedInLink').href,o.opened[0].url,'the same search stays available as a link');assert(!o.el('LinkedInReady').hidden);
-   assert.match(o.el('Progress').textContent,/Opened LinkedIn job ads for 2 clients.*Add to CV Studio/);
+   assert.match(o.el('Progress').textContent,/^Opened LinkedIn for 2 clients\. Add ads there with Add to CV Studio\.$/);
    assert(!o.rpcCalls.some(call=>['jobCompanyID','jobSearchBegin'].includes(call.action)),'known companies need no companion read or background search');
    const tick=box(rows(o)[1]);tick.checked=false;await tick.dispatch('change');
    assert(o.el('LinkedInReady').hidden,'changing the ticks drops the prepared search');
@@ -515,9 +527,9 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    const n=fixture({signed:[2],followed:[page],records:[]});await n.el('FollowedTab').click();await settle();
    await n.el('OpenLinkedIn').click();await settle(80);
    assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,1);assert.equal(n.opened.length,0,'no blocked pop-up after the companion read');
-   assert.equal(n.el('LinkedInLink').href,'https://www.linkedin.com/jobs/search/?f_C=4242');assert.match(n.el('Progress').textContent,/Open the LinkedIn search/);
+   assert.equal(n.el('LinkedInLink').href,'https://www.linkedin.com/jobs/search/?f_C=4242');assert.match(n.el('Progress').textContent,/^Ready for 1 client: click Open LinkedIn search\./);
    assert.deepEqual(n.state.locks,[true,false],'Job Leads is locked only while the company is read');
-   assert.match(n.el('Followed').text,/company number read from LinkedIn/);
+   assert.match(n.el('Followed').text,/Ready/);
    await n.el('OpenLinkedIn').click();await settle();
    assert.equal(n.opened.length,1,'the number read this session opens directly next time');assert.equal(n.rpcCalls.filter(call=>call.action==='jobCompanyID').length,1);
    await n.el('Pull').click();await settle(120);
@@ -544,7 +556,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    await all.el('SelectAll').click();assert.match(all.el('Picked').textContent,/^105 of 105/,'already-saved ads are never selected');
    assert(all.el('SelectAll').disabled);await all.el('SelectNone').click();assert.match(all.el('Picked').textContent,/^0 of 105/);
    await all.el('SelectAll').click();await all.el('Add').click();await settle(400);
-   assert.equal(all.leadsCalls.length,105);assert.match(all.el('FollowedMessage').textContent,/Saved 105 ads to Unfiled.*Saved client ads/);
+   assert.equal(all.leadsCalls.length,105);assert.match(all.el('FollowedMessage').textContent,/^Saved 105 ads to Unfiled\.$/);
    assert.equal(all.el('AdsCount').textContent,'107','saved ads join the dashboard straight away');}
 
   // Saved client ads dashboard: only live ads of followed clients, with filters.
@@ -557,12 +569,12 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    const d=fixture({signed:[2],followed:[client(11,'4242','Example Client'),client(12,'5151','Second Client')],records,folders:['Clients']});
    await d.el('FollowedTab').click();await settle();
    assert.deepEqual(Array.from(d.api.clientAds(records,d.state.followed),row=>[row.record.role,row.client.name]),[['Payroll Lead','Example Client'],['Data Analyst','Example Client'],['Accountant','Second Client']]);
-   const table=()=>d.el('AdsRows').children.map(tr=>tr.children[1].text);
+   const table=()=>d.el('AdsRows').children.map(tr=>tr.children[2].text);
    assert.equal(d.el('AdsCount').textContent,'3');assert.deepEqual(table(),['Payroll Lead','Accountant','Data Analyst'],'newest posted first');
    assert.deepEqual(d.el('AdsTiles').children.map(tile=>tile.text),['3 Saved ads','2 Clients with ads','1 Posted in the last 7 days','2 Status: New','2 No HR scan yet']);
    const first=d.el('AdsRows').children[0].children;
-   assert.deepEqual(first.map(cell=>cell.text),[day(2),'Payroll Lead','Example Client Sdn Bhd','Example Client','Kuala Lumpur','Contacted','Clients','2026-10-05','Not scanned']);
-   assert.equal(first[1].children[0].href,'https://www.linkedin.com/jobs/view/97');assert.equal(d.el('AdsRows').children[2].children[8].text,'2026-10-20');
+   assert.deepEqual(first.map(cell=>cell.text),['',day(2),'Payroll Lead','Example Client Sdn Bhd','Example Client','Kuala Lumpur','Contacted','Clients','2026-10-05','Not scanned']);
+   assert.equal(first[2].children[0].href,'https://www.linkedin.com/jobs/view/97');assert.equal(d.el('AdsRows').children[2].children[9].text,'0 found · 2026-10-20');
    const pick=async(name,value)=>{d.el(name).value=value;await d.el(name).dispatch('change');};
    await pick('AdsClient','12');assert.deepEqual(table(),['Accountant']);assert.match(d.el('AdsPage').textContent,/1–1 of 1 \(filtered from 3\)/);
    await pick('AdsClient','');await pick('AdsPosted','30');assert.deepEqual(table(),['Payroll Lead','Accountant']);
@@ -578,7 +590,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    await d.el('Tab').click();await settle();d.state.records.push(saved('g','Second Client'));const before=d.el('AdsCount').textContent;d.focus();await settle();
    assert.equal(d.el('AdsCount').textContent,before,'no background read while Followed clients is hidden');
    const empty=fixture({signed:[2],followed:[client(11,'4242','Example Client')],records:[]});await empty.el('FollowedTab').click();await settle();
-   assert.match(empty.el('AdsEmpty').textContent,/No saved ads from followed clients yet/);assert(!empty.el('AdsEmpty').hidden);}
+   assert.match(empty.el('AdsEmpty').textContent,/^No saved client ads yet\.$/);assert(!empty.el('AdsEmpty').hidden);}
 
   // Review fixes: attribution by pulled client, then the most specific name.
   {const rec=(id,company,patch={})=>({id:id.padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+id,company,role:'Role '+id,status:'new',folder:'',date_posted:'',created_at:'2026-10-01T00:00:00Z',deleted:false,...patch});
@@ -641,6 +653,52 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    const only=fixture({signed:[2],followed:[page(14,'Fictional Fingers','fictional-fingers')],companyErrors,records:[]});await only.el('FollowedTab').click();await settle();
    await only.el('OpenLinkedIn').click();await settle(80);
    assert.match(only.el('Progress').textContent,/None of the ticked clients has open jobs on LinkedIn right now\. No open jobs on LinkedIn: Fictional Fingers\./);}
+
+  // Saved client ads: select, move, new/delete folder, Trash, Find HR people, view HR people.
+  {const rec=(id,company,patch={})=>({id:id.padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+id,company,role:'Role '+id,status:'new',folder:'',date_posted:'2026-10-0'+id.slice(-1),created_at:'2026-10-01T00:00:00Z',deleted:false,...patch});
+   const records=[rec('71','Example Client'),rec('72','Example Client',{folder:'Old'}),rec('73','Second Client'),rec('74','Unrelated')];
+   const m=fixture({signed:[2],followed:[client(11,'4242','Example Client'),client(12,'5151','Second Client')],records,folders:['Clients','Old']});
+   await m.el('FollowedTab').click();await settle();
+   const ids=()=>m.el('AdsRows').children.map(tr=>tr.children[2].text);
+   const tick=async index=>{const box=m.el('AdsRows').children[index].children[0].children[0];box.checked=true;await box.dispatch('change');};
+   assert(m.el('AdsSelection').hidden && m.el('HR').hidden,'nothing selected yet');
+   await tick(0);assert(!m.el('AdsSelection').hidden && !m.el('HR').hidden);assert.equal(m.el('AdsSelected').textContent,'1 selected');
+   await m.el('AdsSelectAll').click();assert.equal(m.el('AdsSelected').textContent,'3 selected','only client ads can be selected');
+   const before=m.state.refreshes;m.el('AdsMoveFolder').value='Clients';await m.el('AdsMove').click();await settle();
+   const moved=m.leadsCalls.at(-1);assert.equal(moved.action,'move_folder');assert.equal(moved.folder,'Clients');assert.equal(moved.records.length,3);
+   assert(m.state.records.filter(row=>row.company!=='Unrelated').every(row=>row.folder==='Clients'));
+   assert.match(m.el('FollowedMessage').textContent,/^Moved 3 ads to Clients\./);assert.equal(m.state.refreshes,before+1,'Job ads reloads too');
+   await m.el('AdsFolderNew').click();assert(!m.el('AdsFolderEditor').hidden);m.el('AdsFolderName').value='Priority';await m.el('AdsFolderCreate').click();await settle();
+   assert.deepEqual({...m.leadsCalls.at(-1)},{action:'create_folder',folder:'Priority'});assert.equal(m.el('AdsMoveFolder').value,'Priority');assert(m.el('AdsFolderEditor').hidden);
+   assert(m.el('AdsFolderDelete').disabled,'Delete folder needs a chosen folder');
+   m.el('AdsFolder').value=JSON.stringify('Clients');await m.el('AdsFolder').dispatch('change');assert(!m.el('AdsFolderDelete').disabled);
+   m.state.confirm=false;await m.el('AdsFolderDelete').click();await settle();assert.equal(m.leadsCalls.at(-1).action,'create_folder','a declined confirm sends nothing');
+   m.state.confirm=true;await m.el('AdsFolderDelete').click();await settle();
+   const dropped=m.leadsCalls.at(-1);assert.equal(dropped.action,'delete_folder');assert.equal(dropped.folder,'Clients');assert.equal(dropped.records.length,3);
+   assert.equal(m.el('AdsFolder').value,'');assert(m.state.records.every(row=>row.folder===''));
+   m.state.busy=true;await m.el('AdsMove').click();await settle();assert.match(m.el('FollowedMessage').textContent,/busy/);assert.equal(m.leadsCalls.at(-1).action,'delete_folder','nothing runs while Job Leads is busy');m.state.busy=false;
+   await m.el('AdsSelectNone').click();await tick(0);const trashed=m.state.records.find(row=>row.role===ids()[0]);
+   await m.el('AdsTrash').click();await settle();
+   assert.equal(m.leadsCalls.at(-1).action,'trash');assert(trashed.deleted);assert.equal(m.el('AdsCount').textContent,'2');assert(m.el('AdsSelection').hidden,'the trashed ad leaves the selection');
+   // A filter change drops hidden ads from the selection, so actions never touch them.
+   await m.el('AdsSelectAll').click();assert.equal(m.el('AdsSelected').textContent,'2 selected');
+   m.el('AdsQuery').value='Role 71';await m.el('AdsQuery').dispatch('input');assert.equal(m.el('AdsSelected').textContent,'1 selected');
+   m.el('AdsQuery').value='';await m.el('AdsQuery').dispatch('input');assert.equal(m.el('AdsSelected').textContent,'1 selected','hidden ads do not come back selected');
+   await m.el('AdsSelectNone').click();
+   // Find HR people runs Job ads' scanner with this view's own panel.
+   await m.el('AdsSelectAll').click();m.state.holdScan=true;const scanning=m.el('HRStart').click();await settle();
+   assert.equal(m.state.scanned.length,2);assert(m.el('AdsMove').disabled && m.el('Pull').disabled,'everything waits for the scan');assert(!m.el('HRStop').disabled);
+   assert(m.el('HRPages').disabled && m.el('HRKeywords').disabled,'scan settings are locked while it runs');
+   await m.el('HRStop').click();assert.equal(m.state.stoppedHR,1);
+   m.state.releaseScan();await scanning;await settle();
+   assert(!m.el('AdsMove').disabled);
+   const hrCell=m.el('AdsRows').children[0].children[9];assert.match(hrCell.text,/^1 found · 2026-11-02 View/);
+   await hrCell.children.find(child=>child.tagName==='BUTTON').click();await settle();
+   assert.equal(m.state.shownHR,'4242','HR people opens filtered to that company');assert(m.el('FollowedPanel').hidden);
+   await m.el('FollowedTab').click();await settle();await m.el('AdsSelectAll').click();
+   m.state.scanError='Job Leads is busy with another search, scan or save. Try again when it finishes.';await m.el('HRStart').click();await settle();
+   assert.match(m.el('FollowedMessage').textContent,/busy with another search/,'a refused scan says why');
+   m.state.scanError='';m.state.resumes=true;await m.el('AdsSelectNone').click();await m.el('AdsSelectAll').click();assert.equal(m.el('HRStart').textContent,'Resume unfinished ads');}
 
   // Account change on screen, and a JobAdder outage.
   const down=fixture({down:true});await down.el('Tab').click();await settle();
