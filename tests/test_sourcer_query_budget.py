@@ -52,7 +52,7 @@ def test_recruiter_and_existing_filtered_search_are_unchanged(mode, reuse):
     assert service.handle({'action': 'plan', 'run_id': run})['plan']['query'] == LONG
 
 
-@pytest.mark.parametrize('query', [LONG + ' AND Architect', LONG + ' NOT intern',
+@pytest.mark.parametrize('query', [LONG + ' NOT intern',
                                   '(' + LONG + ' OR Other)',
                                   'A AND B AND C AND D AND E',
                                   '"A" OR "B" OR "C" OR "D" OR ""',
@@ -93,3 +93,32 @@ def test_rejected_paid_plan_is_not_automatically_replayed():
     assert provider.call_count == 1
     assert service.snapshot()['run']['calls'] == 1
     assert service.snapshot()['run']['tokens'] == 20
+
+
+@pytest.mark.parametrize(('query','expected'), [
+    ('(Oracle OR "Oracle Database" OR DBA) AND (Ansible OR Chef OR Puppet OR automation)', '(Oracle OR "Oracle Database") AND (Ansible OR Chef)'),
+    (LONG + ' AND Architect', '("SAP FICO" OR "SAP FI/CO" OR "SAP Finance") AND Architect'),
+    ('((Oracle OR DBA OR SQL) AND (Ansible OR Chef OR Puppet))', '(Oracle OR DBA) AND (Ansible OR Chef)'),
+    ('(A OR AA) AND (B OR BB) AND (C OR CC) AND (D OR DD)', 'A AND B AND C AND D'),
+])
+def test_joint_skill_queries_keep_every_required_group(query,expected):
+    service,provider,value,run=plan(query)
+    result=service.handle({'action':'plan','run_id':run})
+    assert result['plan']['query']==expected
+    assert result['plan']['requirements']==value['requirements']
+    assert result['plan']['country']=='Malaysia' and provider.call_count==1
+    assert result['run']['calls']==1 and result['run']['tokens']==20
+
+
+def test_positive_group_budget_preserves_all_mandatory_groups():
+    import re
+    from cvstudio_linkedin_sourcer import validate_standard_plan
+    for group_count in range(1,5):
+        for alternatives in range(2,6):
+            groups=[[f'Skill{index}']+[f'Alias{index}_{alias}' for alias in range(1,alternatives)] for index in range(group_count)]
+            query=' AND '.join('('+' OR '.join(group)+')' for group in groups)
+            original={'query':query,'country':'Malaysia','requirements':['Keep every mandatory skill']}
+            result=validate_standard_plan(original)
+            assert len(re.findall(r'\b(?:AND|OR|NOT)\b',result['query']))<=3
+            for index in range(group_count):assert re.search(r'\bSkill'+str(index)+r'\b',result['query'])
+            assert result['country']==original['country'] and result['requirements']==original['requirements']

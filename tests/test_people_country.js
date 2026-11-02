@@ -41,6 +41,20 @@ function countryFixture(country='Malaysia'){
   for(const problem of ['interrupt','missing']){
     const f=countryFixture();await f.start();f.state[problem]=true;assert((await f.country()).error);f.boot();f.state[problem]=false;assert((await f.country()).error);assert.equal(f.state.clicks.length,1,'ambiguous clicks never replay after worker suspension');
   }
+  // A remembered location and LinkedIn's auto-apply both keep the exact
+  // query and require the requested visible country before profiles are read.
+  for(const before of [0,3]){
+    const f=countryFixture();await f.start();for(let i=0;i<before;i++)await f.country();
+    const url=new URL(f.tabs.get(3).url);url.searchParams.set('geoUrn','["12345"]');f.tabs.get(3).url=url.href;
+    const clicks=f.state.clicks.length;
+    f.state.unchecked=true;assert.equal((await f.country()).result?.loading,true);assert.equal(f.state.clicks.length,clicks);
+    f.state.unchecked=false;assert.equal((await f.country()).result,true);assert.equal(f.state.clicks.length,clicks,'confirming an applied country never clicks again');
+    assert((await f.profiles()).result.profiles);
+  }
+  const pending=countryFixture();await pending.start();const upcoming=new URL(pending.tabs.get(3).url);upcoming.searchParams.set('geoUrn','["12345"]');
+  pending.tabs.get(3).pendingUrl=upcoming.href;assert.equal((await pending.country()).result?.loading,true);assert.equal(pending.state.clicks.length,0);
+  pending.tabs.get(3).url=upcoming.href;delete pending.tabs.get(3).pendingUrl;assert.equal((await pending.country()).result,true);
+  const foreign=countryFixture();await foreign.start();foreign.tabs.get(3).url+='&network=F&geoUrn=%5B%2212345%22%5D';assert((await foreign.country()).error,'a matching country never excuses other filter changes');
   const unready=countryFixture();await unready.start();assert((await unready.profiles()).result,'a no-country search remains compatible');
   const changed=countryFixture();await changed.start();await changed.country();assert((await changed.profiles()).error,'unconfirmed location never reaches scoring');
   const paging=countryFixture();await paging.start();for(let i=0;i<5;i++)await paging.country();

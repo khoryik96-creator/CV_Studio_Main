@@ -1755,6 +1755,11 @@
 .job-leads-clients .job-leads-pick input{flex:none;width:16px;min-width:16px}
 .job-leads-clients td input[type="url"]{width:100%;min-width:160px;font:inherit;padding:5px 7px;border:1px solid var(--border);border-radius:7px}
 .job-leads-clients .job-leads-actions input[type="search"]{flex:1;min-width:140px}
+.job-leads-clients-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end;margin:10px 0}
+.job-leads-clients-filters label{font-size:11px;font-weight:600;color:var(--text2);min-width:0}
+.job-leads-clients-filters select{width:100%;min-width:0;margin:4px 0 0}
+.job-leads-clients-filters>div{display:flex;align-items:center;gap:8px;padding-bottom:2px}
+@media(max-width:650px){.job-leads-clients-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.job-leads-clients-filters>div{grid-column:1/-1;justify-content:flex-end}}
 .job-leads-email-compact{border:0;padding:0;margin:0;min-width:145px}
 .job-leads-email-compact .job-leads-email-result p{margin:4px 0;font-size:11px}
 .job-leads-ja-dialog [data-guide="true"]{outline:2px solid #d92d20;outline-offset:2px}

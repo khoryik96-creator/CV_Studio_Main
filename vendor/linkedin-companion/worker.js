@@ -133,9 +133,15 @@ async function peopleCountry(bound, run, country) {
   if (search.country && search.country !== country) throw safeError('The requested country changed. Start a new search.');
   if (Date.now()-search.started > 120000 || search.stage === 'interrupted') throw safeError('The location selection was interrupted. Check LinkedIn and start a new search.');
   search.country=country;
-  let confirmedKey='';
+  let confirmedKey='',preselectedKey='';
+  const matchingCountryURL=url=>{
+    const resolved=new URL(url),expected=new URL(search.key),geo=resolved.searchParams.getAll('geoUrn');
+    resolved.searchParams.delete('geoUrn');expected.searchParams.delete('geoUrn');
+    return hrSearchKey(resolved.href)===hrSearchKey(expected.href) && geo.length===1 && /^\["[0-9]{1,24}"\]$/.test(geo[0]);
+  };
   const check=async()=>{
     live(bound,run);const tab=await chrome.tabs.get(bound.source);live(bound,run);
+    preselectedKey='';
     if (search.stage === 'waiting' && hrSearchKey(tab.url) === search.previous && (!tab.pendingUrl || hrSearchKey(tab.pendingUrl) === search.key)) return false;
     if (search.stage === 'country_wait') {
       const resolved=new URL(tab.url),expected=new URL(search.key),geo=resolved.searchParams.getAll('geoUrn');
@@ -146,13 +152,30 @@ async function peopleCountry(bound, run, country) {
       if (ready) confirmedKey=hrSearchKey(tab.url);
       return ready;
     }
-    if (hrSearchKey(tab.url)!==search.key || tab.pendingUrl && hrSearchKey(tab.pendingUrl)!==search.key) throw safeError('The People search changed during location selection. Start again.');
+    if (hrSearchKey(tab.url)!==search.key || tab.pendingUrl && hrSearchKey(tab.pendingUrl)!==search.key) {
+      // LinkedIn can restore the requested country or apply a suggestion
+      // before Show results. Verify that state without replaying any click.
+      if (['waiting','open','type','pick','apply'].includes(search.stage)) {
+        if (tab.pendingUrl && hrSearchKey(tab.pendingUrl)!==hrSearchKey(tab.url) && matchingCountryURL(tab.pendingUrl)) return false;
+        if (matchingCountryURL(tab.url) && (!tab.pendingUrl || hrSearchKey(tab.pendingUrl)===hrSearchKey(tab.url))) {
+          preselectedKey=hrSearchKey(tab.url);return tab.status==='complete';
+        }
+      }
+      throw safeError('The People search changed during location selection. Start again.');
+    }
     return tab.status==='complete';
   };
   if (!await check()) return {loading:true};
   if (search.stage==='waiting') search.stage='open';
   await jobScript({target:{tabId:bound.source},files:['reader.js']},jobReaderStartError);
   if (!await check()) return {loading:true};
+  if (preselectedKey) {
+    const observedKey=preselectedKey;
+    const [selected]=await jobScript({target:{tabId:bound.source},func:country=>globalThis.SourcerReader.peopleCountrySelected(country),args:[country]},jobReaderReadError);
+    live(bound,run);
+    if (!await check() || preselectedKey!==observedKey || selected?.result!==true) return {loading:true};
+    search.key=observedKey;search.stage='ready';await persist();return true;
+  }
   const stages={open:['hrCountryOpen','type'],type:['hrCountryType','pick'],pick:['hrCountryPick','apply'],apply:['hrCountryApply','country_wait']};
   const step=stages[search.stage],before=search.stage;
   if (step) {
@@ -615,7 +638,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrDate') {
     const bound=connection;
     if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');

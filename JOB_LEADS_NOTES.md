@@ -9,8 +9,9 @@ only read: nothing in JobAdder is changed.
 - **Which clients count as signed.** The owner ticks the JobAdder company
   statuses that mean a client has signed terms (for example "Signed Client").
   The choice is checked against JobAdder's current status list when saved.
-  Saving lists the signed clients straight away, and opening the view with
-  statuses chosen but nothing followed lists them once (v24.6.528). Reload
+  Saving lists the signed clients straight away. First open after reload also
+  reads the list once when statuses are chosen, even with followed clients
+  restored (v24.6.530). Reload
   statuses keeps ticks the owner changed but has not saved; boxes the owner did
   not touch follow the saved choice, even one saved in another window. While
   changed ticks are unsaved, Search and paging wait for Save statuses, because
@@ -21,6 +22,13 @@ only read: nothing in JobAdder is changed.
   is left out even if the filter were ignored. A page where JobAdder listed
   companies but none had a chosen status means the filter was ignored, so it is
   shown as an error instead of pages of unrelated companies.
+- **Loaded-page filters (v24.6.530).** Status, Owner (including Unassigned),
+  and Following filters intersect. Sort Company, Status or Owner in either
+  direction; blanks stay last. These controls affect this loaded page only,
+  shown by the count and This page label; they make no JobAdder request. Name
+  search remains server-side, and Previous/Next still navigate API pages.
+  Reset clears the local filters and restores Company A-Z. Account changes
+  clear account-specific filter choices.
 - **Following.** Following re-reads the company in JobAdder and is refused if
   its status is no longer a chosen one. Up to 200 clients per user. Following
   again keeps a pasted company number while JobAdder still shows the same named
@@ -28,14 +36,18 @@ only read: nothing in JobAdder is changed.
 - **Statuses removed from JobAdder.** A saved status JobAdder no longer lists is
   flagged, starts unticked, and is dropped by Save statuses, even when no
   status is left. Unticking every status and saving is allowed too; no company
-  then counts as a signed client until a status is chosen again.
+  then counts as a signed client until a status is chosen again. Pull also
+  refuses empty or stale signed statuses, preserving followed choices.
 - **LinkedIn link.** A followed client is pulled through its LinkedIn company
   number. It comes from, in order:
   1. the JobAdder company's LinkedIn link, when it is a numbered company page;
   2. a link the owner pastes: a company page, or the "See all jobs" search
      (`/jobs/search/?f_C=<number>`) of a named page;
   3. a saved HR scan of the same LinkedIn company page.
-  A client without a number cannot be ticked for pulling.
+  A client without a number cannot be ticked for pulling. Following it opens
+  **Enable selection** and highlights the link field (v24.6.530). Paste its
+  **See all jobs** search link to enable the checkbox. A named company page
+  alone has no number; this release does not automatically discover one.
 - **Ticks.** At most 15 clients can be ticked for a pull. The first 15
   pullable clients are ticked by default, and your ticks are remembered in this
   browser. **Untick all** clears them.

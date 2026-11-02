@@ -1,5 +1,42 @@
 # LinkedIn Sourcer module
 
+## New-search folders and readiness (v24.6.530)
+
+Search now has **Save to folder** and **New folder**. Folder creation and list
+reads are local protected-store actions: no DeepSeek consent or AI call is
+needed. The selected folder survives reload in this tab through sessionStorage,
+not an account credential or an automatic search. Returning from Candidates to
+Search refreshes the folder list. A deleted selection becomes Unfiled with a
+notice; a stale nonempty destination is rejected before the next run starts.
+
+The run captures its selected destination. New archived candidates use it;
+reassessing the same candidate in the same run keeps its existing folder,
+shortlist, Trash and notes. If the destination is deleted during the search,
+archive failure is visible and the completed paid output/usage stays in Search
+for export. No folder is recreated and no AI request is replayed. Existing
+vault version2/route contracts remain; `candidate_folders` is a lightweight
+action on the existing `/linkedin-sourcer` route.
+
+The normal-search query budget still permits at most three Boolean operators.
+It now also narrows optional alternatives in positive AND-of-OR plans, retaining
+at least the core term in **every** mandatory group. For example, a long Oracle
+AND automation plan becomes `(Oracle OR "Oracle Database") AND (Ansible OR Chef)`.
+Full assessment requirements stay unchanged, including the locality criteria;
+Malaysia is still applied through LinkedIn Locations. Overbudget exclusions,
+nested mixed logic or more than four required groups remain visible failures,
+with no paid retry. Recruiter/Lite and review-open-search behavior are unchanged.
+
+Location setup now accepts LinkedIn restoring/applying the requested country
+before the expected Show results stage only after read-only proof: exact visible
+country label, one observed numeric geography filter, unchanged keyword/other
+filters, and stable source before and after the read. Ambiguous interrupted
+clicks remain fatal and are never repeated. Pending same-search location
+navigation and slow hydration wait within 90 half-second polls; other reads keep
+the original 30-poll bound. Stop, the worker's 120-second setup expiry and later
+query/country-change guards remain. Fresh normal searches require the new
+`people_country_ready_revision: 1` capability before planning, so update both
+app and companion. Validation used synthetic browser states, not live LinkedIn.
+
 ## Candidate folders, shortlist and Trash (v24.6.529)
 
 The Candidates dashboard can be organised the way Job Leads ads are.
@@ -207,10 +244,11 @@ with the same native Malaysia geography filter.
 New standard searches therefore request at most three AND/OR/NOT operators
 outside quoted phrases. The original exact core role/skill comes first; full
 criteria remain in requirements for assessment. A deterministic validator can
-narrow only an overlong flat positive OR list to four aliases, deduplicating
+initially narrowed only an overlong flat positive OR list to four aliases (v530
+also supports the positive AND-of-OR case described above), deduplicating
 exact case-insensitive alternatives. Country and requirements are copied
 unchanged. Quoted operator words/parentheses remain literal. Empty/invalid
-aliases, nested logic, AND and NOT in an overbudget plan fail with guidance to
+aliases, nested mixed logic and NOT in an overbudget plan fail with guidance to
 use fewer alternatives or Recruiter, without silently losing constraints.
 This is a conservative product budget, not a claimed universal LinkedIn limit.
 

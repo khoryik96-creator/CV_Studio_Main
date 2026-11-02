@@ -213,6 +213,9 @@ class SourcerCandidates:
     def remember(self, run, candidates, stage):
         with self.lock:
             rows, folders = self._load()
+            target = _folder(getattr(run, 'folder', ''), allow_unfiled=True)
+            if target and target not in self._folder_names(rows, folders):
+                raise PeopleError('The search folder was deleted. Results are still shown in Search; export them before closing.')
             for person in candidates:
                 if '\x00' in person['name'] or '\x00' in run.brief:
                     raise PeopleError('This assessment contains unsupported text. Export the current search; existing saved candidates were kept.')
@@ -227,7 +230,8 @@ class SourcerCandidates:
                     notes=old['notes'] if old else '', revision=old['revision']+1 if old else 1)
                 # A new assessment keeps how the owner organised this candidate.
                 for name, default in _ORGANISATION.items():
-                    rows[key][name] = old.get(name, default) if old else default
+                    initial = target if name == 'folder' else default
+                    rows[key][name] = old.get(name, default) if old else initial
             if candidates:
                 self._write(rows, folders)
 
@@ -251,6 +255,15 @@ class SourcerCandidates:
         with self.lock:
             rows, folders = self._load()
             return {'candidates': self._listed(rows), 'folders': self._folder_names(rows, folders)}
+
+    def target_folder(self, name):
+        """Validate a new search's destination without creating it implicitly."""
+        name = _folder(name, allow_unfiled=True)
+        if name:
+            with self.lock:
+                if name not in self._folder_names(*self._load()):
+                    raise PeopleError('This candidate folder no longer exists. Choose a folder again before starting.')
+        return name
 
     def note(self, key, revision, notes):
         if not isinstance(key,str) or not re.fullmatch(r'[a-f0-9]{64}',key) or type(revision) is not int or not isinstance(notes,str) or len(notes)>2000 or '\x00' in notes:

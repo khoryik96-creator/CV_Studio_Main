@@ -4,7 +4,10 @@
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
   let agent = null, run = null, abort = null, results = [], browserRun = '', busy = false, runOptions = null, setupSequence = 0;
-  const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide'];
+  let folderBusy = false, folderChoice = '';
+  const folderPreference = 'cvstudio_linkedin_sourcer_folder';
+  try { const value=sessionStorage.getItem(folderPreference);if(typeof value==='string' && value.length<=80 && !/[\x00-\x1f]/.test(value))folderChoice=value; } catch {}
+  const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide','FolderName','FolderCreate'];
   let guideIssue = '', guideTried = false, guideNotice = '';
   function guide(name = '', invalid = false, focus = false) {
     for (const key of guideNames) {
@@ -27,11 +30,45 @@
   function invalidGuide(name) { guideNotice = el('Status').textContent; guide(name,true,true); }
   function tell(value) { el('Status').textContent = value; }
   function controls() {
-    el('Start').disabled = busy; el('Stop').disabled = !busy && (!run || run.stopped);
+    el('Start').disabled = busy || folderBusy; el('Stop').disabled = !busy && (!run || run.stopped);
     el('Export').disabled = !results.length; el('Clear').disabled = busy;
     for (const name of ['Brief', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
+    for (const name of ['Folder','FolderNew','FolderName','FolderCreate','FolderCancel']) el(name).disabled = busy || folderBusy;
     el('Limits').textContent = `Up to ${el('Pages').value} pages · ${el('Calls').value} API requests.`;
     nextGuide();
+  }
+  function folderNotice(value) { el('FolderStatus').textContent=value;el('FolderStatus').hidden=!value; }
+  function rememberFolder() { folderChoice=el('Folder').value;try{sessionStorage.setItem(folderPreference,folderChoice);}catch{} }
+  function folderOption(value) { const option=document.createElement('option');option.value=value;option.textContent=value || 'Unfiled';return option; }
+  async function readFolders(preferred=folderChoice) {
+    const data=await api('/api/candidate_folders',{});
+    if (!Array.isArray(data.folders) || data.folders.length>200 || data.folders.some(name=>typeof name!=='string' || !name || name.length>80)) throw Error('The candidate folder list could not be read.');
+    el('Folder').replaceChildren(folderOption(''),...data.folders.map(folderOption));
+    el('Folder').value=data.folders.includes(preferred)?preferred:'';rememberFolder();
+    folderNotice(preferred && !folderChoice?'That folder no longer exists. Choose a folder before starting.':'');
+  }
+  async function refreshFolders() {
+    if (busy || folderBusy) return;
+    folderBusy=true;controls();
+    try {await readFolders();}
+    catch(error){folderNotice(error.message);}
+    finally{folderBusy=false;controls();}
+  }
+  async function createFolder() {
+    if (busy || folderBusy) return;
+    const name=el('FolderName').value.trim();
+    if (!name || name.length>80 || /[\x00-\x1f]/.test(name)) {folderNotice('Enter a folder name of up to 80 characters.');guide('FolderName',true,true);return;}
+    folderBusy=true;controls();let created=false;
+    try {
+      const data=await api('/api/candidate_folder_create',{name});
+      if(typeof data.folder!=='string' || !data.folder || data.folder.length>80)throw Error('The folder could not be confirmed. Refresh the folder list before trying again.');
+      created=true;
+      if(![...el('Folder').options].some(option=>option.value===data.folder))el('Folder').append(folderOption(data.folder));
+      el('Folder').value=data.folder;rememberFolder();
+      await readFolders(data.folder);el('FolderEditor').hidden=true;el('FolderName').value='';
+      folderNotice(folderChoice===data.folder?'Folder created. New search results will save here.':'The folder changed before it could be selected. Choose a folder before starting.');
+    }catch(error){folderNotice((created?'The folder was created, but its list could not be refreshed. ':'')+error.message);}
+    finally{folderBusy=false;controls();}
   }
   const connectionHelp = 'Open this CV Studio page in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion if needed.';
   async function companionSetup() {
@@ -120,7 +157,7 @@
     async closeOwnedTab() { if (browserRun) { try { await rpc('end', {run_id: browserRun}); } finally { browserRun = ''; } } },
     async read(id, method, values) {
       await begin();
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < (method === 'setCountry' ? 90 : 30); attempt++) {
         if (abort?.signal.aborted) throw Error('Stopped.');
         const value = await rpc('read', {run_id: run.id, tab_id: id, method, values});
         if (abort?.signal.aborted) throw Error('Stopped.');
@@ -195,6 +232,13 @@
   };
   for (const name of ['Mode','OpenSearch']) el(name).addEventListener('change',window.refreshLinkedinSourcerTabs);
   for (const name of ['Pages','Calls']) el(name).addEventListener('input',controls);
+  el('Folder').addEventListener('change',()=>{rememberFolder();folderNotice('');});
+  el('FolderNew').addEventListener('click',()=>{if(busy || folderBusy)return;el('FolderEditor').hidden=false;el('FolderName').value='';guide('FolderName',false,true);});
+  el('FolderName').addEventListener('input',()=>guide(el('FolderName').value.trim()?'FolderCreate':'FolderName'));
+  el('FolderName').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void createFolder();}});
+  el('FolderCreate').addEventListener('click',createFolder);
+  el('FolderCancel').addEventListener('click',()=>{el('FolderEditor').hidden=true;el('FolderName').value='';nextGuide();});
+  document.getElementById('peopleSourcerSearchTab')?.addEventListener('click',()=>void refreshFolders());
   for (const name of ['Brief','Consent','Pages','Calls','Mode','OpenSearch','Source']) el(name).addEventListener(['Consent','Mode','OpenSearch','Source'].includes(name) ? 'change' : 'input', () => {
     if (guideNotice && el('Status').textContent === guideNotice) tell('');
     guideNotice = ''; guideIssue = ''; guideTried = false; nextGuide();
@@ -203,6 +247,7 @@
   window.initLinkedinSourcer = async function() {
     if (!el('Brief') || busy) return;
     window.refreshLinkedinSourcerTabs();
+    await refreshFolders();
     try {
       if (!agent && !busy && !results.length) { const saved = JSON.parse(sessionStorage.getItem('cvstudio_linkedin_sourcer') || 'null'); if (saved) { run = saved.run; results = saved.results || []; } }
       const state = await api('/api/status'); if (!busy) run = state.run;
@@ -212,10 +257,10 @@
     } catch (error) { tell(error.message); }
   };
   window.startLinkedinSourcer = async function() {
-    if (busy) return;
+    if (busy || folderBusy) return;
     guideIssue = ''; guideTried = true;
     const options = {brief: el('Brief').value.trim(), mode: el('Mode').value, max_pages: Number(el('Pages').value),
-      max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked};
+      max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked, folder:el('Folder').value};
     if (!options.confirm_paid) { tell('Tick “Use DeepSeek for this search” below your brief, then start.'); invalidGuide('Consent'); return; }
     if (options.brief.length < 5) { tell('Describe the role, location and skills you need.'); invalidGuide('Brief'); return; }
     if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); invalidGuide(!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 ? 'Pages' : 'Calls'); return; }
@@ -237,11 +282,11 @@
       if (!source) { guideIssue = 'Refresh'; throw Error('Open a LinkedIn People or Recruiter search in this browser, then start again. Your current candidate list is kept.'); }
       options.mode = options.mode === 'auto' ? sourceMode(source) : options.mode;
       const status=await rpc('jobStatus');
-      if (status?.profile_browsing_revision !== 1 || status?.concurrent_scans_revision !== 1 || options.mode === 'standard' && (status?.people_results_revision !== 1 || !options.use_open_search && status?.people_country_revision !== 1)) { guideIssue = 'SetupGuide'; el('Setup').open = true; }
+      if (status?.profile_browsing_revision !== 1 || status?.concurrent_scans_revision !== 1 || options.mode === 'standard' && (status?.people_results_revision !== 1 || !options.use_open_search && (status?.people_country_revision !== 1 || status?.people_country_ready_revision !== 1))) { guideIssue = 'SetupGuide'; el('Setup').open = true; }
       if(status?.profile_browsing_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
       if(status?.concurrent_scans_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if(options.mode==='standard'){
-        if(status?.people_results_revision!==1 || !options.use_open_search && status?.people_country_revision!==1)throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn. This search needs the current People-card, pagination and Locations readers.');
+        if(status?.people_results_revision!==1 || !options.use_open_search && (status?.people_country_revision!==1 || status?.people_country_ready_revision!==1))throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn. This search needs the current People-card, pagination and Locations readers.');
       }
       runOptions = {...options,source:source.id,openedSource:freshPeopleSearch() ? source : null};
       agent = new CVLinkedinCore.Agent({api, browser, signal: abort.signal, update: patch => {
