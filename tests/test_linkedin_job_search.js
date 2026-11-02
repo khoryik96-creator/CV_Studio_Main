@@ -101,6 +101,8 @@ if(require.main===module)(async()=>{
   assert.equal((await ai.read(aid)).result.jobs[0].url,row.url,'AI-search session/tracking/sort parameters and an empty keywords box keep the company search');
   ai.tabs.get(aid).url+='&searchSessionId=rotated&lipi=urn%3Ali%3Apage%3Asynthetic';
   assert((await ai.read(aid)).result,'rotating session parameters after the first read keep the confirmed search');
+  ai.tabs.get(aid).url=ai.tabs.get(aid).url.replace('sortBy=R','sortBy=DD');
+  assert((await ai.read(aid)).error,'a sort change after the search was confirmed revokes reads, so pages are never mixed');
   ai.tabs.get(aid).url='https://www.linkedin.com/jobs/search-results/?f_C=4242&geoId=106808692&f_WT=2&keywords=secret%20words';
   const narrowed=(await ai.read(aid)).error;assert(narrowed,'an added filter or keywords still revoke reads');await ai.end();
   const named=fixture();await named.arm();const nid=(await named.begin({query:'',location:'',company_id:'4242'})).result.tab_id;

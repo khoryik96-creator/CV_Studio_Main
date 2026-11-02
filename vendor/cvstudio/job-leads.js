@@ -1231,6 +1231,6 @@
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,employment:hrEmploymentLabel,rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  window.cvStudioJobLeads={refresh:load,lock:value=>lock(value),isBusy:()=>busy,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

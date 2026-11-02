@@ -7,7 +7,27 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.537 LinkedIn AI job search identity (local, unmerged)**
+**Current checkpoint: v24.6.538 review fixes for v534–v537 (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged537 PR282 / `c8524cd`. The owner
+asked for a code review of v534–v537 and for all findings to be fixed.
+- Job Leads records may carry an optional `client` `{company_id:int, name}`
+  (`cvstudio_job_leads.clean_client`): the followed JobAdder client an ad was
+  pulled for. It is validated, kept on edits that do not send it and kept by
+  backup/restore. It lives in the payload JSON only: no schema/user_version
+  change. Older builds ignore it.
+- Followed clients: Save selected tags each ad with its pulled client.
+  `clientAds()` uses the tag first, otherwise the most specific name match, and
+  "Ads in Job ads" counts the same rows as the dashboard.
+  `refreshRecords()` applies only the newest read. One return to the tab reads
+  once. "Last N days" means today plus N-1 days. `resolveCompany()` is shared by
+  Pull and Open on LinkedIn. The dashboard draws only while shown. Status labels
+  come from `cvStudioJobLeads.statusLabels`. Stop ends a save batch between ads.
+- Companion: `sortBy` is part of the search key; LinkedIn's default sort on load
+  is tolerated in settle, then pinned (a mid-run sort change revokes reads).
+- Known flaky: `test_job_leads.py::test_concurrent_saves_share_one_identity_without_lost_edits`
+  fails about 1 in 8 runs locally on master too (pre-existing).
+
+**Previous checkpoint: v24.6.537 LinkedIn AI job search identity (merged PR282 / `c8524cd`)**
 on `claude/job-leads-signed-clients`, from merged536 PR281 / `eb7451e`. Owner:
 Pull into CV Studio failed for every client with "LinkedIn changed the search
 keywords or filters", and the in-page Add to CV Studio buttons said "The

@@ -258,7 +258,22 @@ def clean_record(raw):
     result['description_rich'] = rich if re.sub(r'\s+', '', rich_text(rich)) == re.sub(r'\s+', '', result['description']) else []
     if raw.get('hr'):
         result['hr'] = clean_hr(raw['hr'], result['company'])
+    if raw.get('client') is not None:
+        result['client'] = clean_client(raw['client'])
     return result
+
+
+def clean_client(raw):
+    """The followed JobAdder client an ad was pulled for; display grouping only."""
+    def invalid():
+        raise JobLeadsError("The saved client of this ad is invalid. Refresh and try again.")
+    if not isinstance(raw, dict) or set(raw) != {'company_id', 'name'}:
+        invalid()
+    identity, name = raw['company_id'], raw['name']
+    if (type(identity) is not int or not 1 <= identity <= 9_999_999_999 or not isinstance(name, str) or not name.strip()
+            or len(name) > 200 or any(ord(c) < 32 or ord(c) == 127 for c in name)):
+        invalid()
+    return {'company_id': identity, 'name': name.strip()}
 
 
 def clean_hr(raw, company):
@@ -581,6 +596,9 @@ class JobLeadsStore:
                 data.pop('hr', None)
                 if previous['company'] == data['company'] and previous['url'] == data['url'] and previous.get('hr'):
                     data['hr'] = previous['hr']
+                # Ordinary edits do not send the client an ad was pulled for.
+                if 'client' not in data and previous.get('client'):
+                    data['client'] = previous['client']
                 data['deleted'] = False
                 connection.execute("UPDATE leads SET url=?,payload=?,revision=revision+1,updated_at=? WHERE id=?", (data["url"], json.dumps(data, ensure_ascii=False), now, identity))
             else:

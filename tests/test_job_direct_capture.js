@@ -34,7 +34,7 @@ function fixture(){
   // LinkedIn's AI job search rotates session/tracking parameters while the
   // page is open; the card's search is still the same search (synthetic values).
   f.tabs.get(2).url=search+'&referralSearchId=synthetic-2&searchSessionId=rotated&currentJobId=1234567890&sortBy=R';
-  assert((await f.pick({url:search+'&referralSearchId=synthetic-1&searchSessionId=first'})).result.ok,'rotating LinkedIn session parameters do not count as a page change');
+  assert((await f.pick({url:search+'&referralSearchId=synthetic-1&searchSessionId=first&sortBy=R'})).result.ok,'rotating LinkedIn session parameters do not count as a page change');
   f.tabs.get(2).url=search+'&f_WT=2';assert.match((await f.pick({url:search})).error,/LinkedIn page changed/,'a changed filter still counts as a page change');
   f.tabs.get(2).url=search;
   const run='b'.repeat(32);await f.rpc('jobSearchBegin',{run_id:run,max_pages:1,use_open:true,source_tab_id:2});assert.match((await f.pick()).error,/current search/);await f.rpc('end',{run_id:run});
