@@ -298,9 +298,14 @@ async function saveSearchProvider() {
     cvStudioDurableSettingSet('hy_search_provider', provider);
     localStorage.removeItem('hy_search_provider_key');
     if(provider!=='none') await _saveSecureAiSecret('search_'+provider,key,false);
-  } catch(e) {}
+  } catch(e) {
+    // The caller (and the team setup file import) is told the key was not stored.
+    showToast((e && e.message) || 'Could not save the search provider key', 'err');
+    return false;
+  }
   if (provider !== 'none' && !key) showToast('Search provider saved, but API key is blank', 'err');
   else showToast(provider === 'none' ? 'Search provider disabled — using AI web search' : 'Search provider saved', 'ok');
+  return true;
 }
 function getSearchProviderConfig() {
   // Runtime calls use saved Search Provider settings only. The visible fields
@@ -351,9 +356,14 @@ async function saveEnrichmentProvider() {
     cvStudioDurableSettingSet('hy_enrichment_provider', provider);
     localStorage.removeItem('hy_enrichment_provider_key');
     if(provider!=='none') await _saveSecureAiSecret('enrichment_'+provider,key,false);
-  } catch(e) {}
+  } catch(e) {
+    // The caller (and the team setup file import) is told the key was not stored.
+    showToast((e && e.message) || 'Could not save the enrichment provider key', 'err');
+    return false;
+  }
   if (provider !== 'none' && !key) showToast('Enrichment provider saved, but API key is blank', 'err');
   else showToast(provider === 'none' ? 'Enrichment provider disabled — using public web search only' : 'Enrichment provider saved', 'ok');
+  return true;
 }
 function getEnrichmentProviderConfig() {
   // Runtime email enrichment uses saved provider settings only. This prevents

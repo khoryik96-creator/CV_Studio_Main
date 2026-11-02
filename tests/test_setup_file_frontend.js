@@ -56,7 +56,7 @@ const file = (extra = {}) => JSON.stringify({product:'CV Studio setup', schema:1
     oneNoteApiSaveSettings:silent => { seen.onenote = [f.node('settingsOneNoteClientId').value, f.node('settingsOneNoteTenant').value, silent]; },
     onMainProviderChange:() => { seen.mainChange = f.node('mainProviderSel').value; },
     saveKey:async () => { seen.main = f.node('keyInput').value; f.node('keyInput').value = ''; },
-    saveSearchProvider:async () => { seen.search = [f.node('searchProviderSel').value, f.node('searchProviderKeyInput').value]; },
+    saveSearchProvider:async () => { seen.search = [f.node('searchProviderSel').value, f.node('searchProviderKeyInput').value]; return true; },
   });
   const result = await f.setup.apply(f.setup.parse(file()));
   assert.deepEqual(seen.ja, ['example-ja-client', 'example-ja-secret']);
@@ -70,9 +70,11 @@ const file = (extra = {}) => JSON.stringify({product:'CV Studio setup', schema:1
   // Partial outcomes are reported per part.
   let jaSaves = 0;
   const partial = fixture({hasJASavedSecretFor:() => false, saveJobAdderSettings:async () => { jaSaves++; return true; },
-    ppcSaveOutlookSettingsFromPanel:async () => false, saveKey:async () => {}});
+    ppcSaveOutlookSettingsFromPanel:async () => false, saveKey:async () => {}, saveSearchProvider:async () => false});
   const mixed = await partial.setup.apply(partial.setup.parse(JSON.stringify({product:'CV Studio setup', schema:1,
-    jobadder:{client_id:'example-ja-client'}, outlook:{client_id:GUID}, ai:{main:{provider:'openai', key:'sk-example'}}})));
+    jobadder:{client_id:'example-ja-client'}, outlook:{client_id:GUID}, ai:{main:{provider:'openai', key:'sk-example'}, search:{provider:'serpapi', key:'serp-example'}}})));
+  assert.equal(partial.node('searchProviderKeyInput').value, 'serp-example', 'an unsaved key stays in its box to retry');
+  assert.match(mixed.todo.join(' '), /Search provider key: not saved/);
   assert.equal(jaSaves, 0, 'a Client ID without a known secret is only filled in');
   assert.equal(partial.node('settingsJobAdderClientId').value, 'example-ja-client');
   assert.deepEqual(P(mixed.done), []);

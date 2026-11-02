@@ -112,11 +112,12 @@
     }
     if (plan.search) {
       choose('searchProviderSel', plan.search.provider); field('searchProviderKeyInput', plan.search.key);
-      await call('saveSearchProvider')?.(); field('searchProviderKeyInput', ''); done.push('Search provider');
+      // Only a confirmed save clears the box; a failure leaves the key to retry.
+      if (await call('saveSearchProvider')?.() === true) { field('searchProviderKeyInput', ''); done.push('Search provider'); } else todo.push('Search provider key: not saved.');
     }
     if (plan.enrichment) {
       choose('enrichmentProviderSel', plan.enrichment.provider); field('enrichmentProviderKeyInput', plan.enrichment.key);
-      await call('saveEnrichmentProvider')?.(); field('enrichmentProviderKeyInput', ''); done.push('Enrichment provider');
+      if (await call('saveEnrichmentProvider')?.() === true) { field('enrichmentProviderKeyInput', ''); done.push('Enrichment provider'); } else todo.push('Enrichment key: not saved.');
     }
     return {done, todo};
   }
