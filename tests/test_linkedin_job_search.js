@@ -92,7 +92,21 @@ if(require.main===module)(async()=>{
   client.tabs.get(ci2).url='https://www.linkedin.com/jobs/search/?f_C=4242&currentJobId=1234567890&origin=COMPANY_PAGE_JOBS_CLUSTER_EXPANSION';
   assert((await client.read(ci2)).result,'tracking parameters keep the company identity');
   client.tabs.get(ci2).url='https://www.linkedin.com/jobs/search/?keywords=finance';
-  assert((await client.read(ci2)).error,'a search that loses the company filter cannot be read');await client.end();
+  const lost=(await client.read(ci2)).error;assert(lost,'a search that loses the company filter cannot be read');await client.end();
+  // LinkedIn's AI job search rewrites the address on load with session,
+  // tracking and sort parameters (and an empty keywords box). Synthetic values.
+  const ai=fixture();await ai.arm();const aid=(await ai.begin({query:'',location:'',company_id:'4242'})).result.tab_id;
+  ai.tabs.get(aid).url='https://www.linkedin.com/jobs/search-results/?currentJobId=1234567890&f_C=4242&geoId=106808692&keywords=&origin=JOB_SEARCH_PAGE_JOB_FILTER'+
+    '&referralSearchId=SyntheticSearch%3D%3D&searchSessionId=synthetic-session&sortBy=R&spellCorrectionEnabled=true&originToLandingJobPostings=1234567890%2C1234567891';
+  assert.equal((await ai.read(aid)).result.jobs[0].url,row.url,'AI-search session/tracking/sort parameters and an empty keywords box keep the company search');
+  ai.tabs.get(aid).url+='&searchSessionId=rotated&lipi=urn%3Ali%3Apage%3Asynthetic';
+  assert((await ai.read(aid)).result,'rotating session parameters after the first read keep the confirmed search');
+  ai.tabs.get(aid).url='https://www.linkedin.com/jobs/search-results/?f_C=4242&geoId=106808692&f_WT=2&keywords=secret%20words';
+  const narrowed=(await ai.read(aid)).error;assert(narrowed,'an added filter or keywords still revoke reads');await ai.end();
+  const named=fixture();await named.arm();const nid=(await named.begin({query:'',location:'',company_id:'4242'})).result.tab_id;
+  named.tabs.get(nid).url='https://www.linkedin.com/jobs/search-results/?f_C=4242&keywords=secret%20words&f_WT=2';
+  const reason=(await named.read(nid)).error;
+  assert.match(reason,/\(f_WT, keywords\)/,'the error names the changed filters');assert(!reason.includes('secret'),'filter values never leave the worker');await named.end();
   const both=fixture();await both.arm();await both.begin({company_id:'77',location:'Malaysia'});
   const withKeywords=new URL(both.state.created[0].url);assert.equal(withKeywords.searchParams.get('keywords'),'finance');assert.equal(withKeywords.searchParams.get('f_C'),'77');await both.end();
   const badCompany=fixture();await badCompany.arm();

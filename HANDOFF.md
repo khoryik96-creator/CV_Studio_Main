@@ -7,7 +7,22 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.536 Signed / Followed clients split (local, unmerged)**
+**Current checkpoint: v24.6.537 LinkedIn AI job search identity (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged536 PR281 / `eb7451e`. Owner:
+Pull into CV Studio failed for every client with "LinkedIn changed the search
+keywords or filters", and the in-page Add to CV Studio buttons said "The
+LinkedIn page changed" / "Folders unavailable". LinkedIn now serves its AI job
+search, which rewrites the address on load and keeps rotating session,
+tracking and sort parameters.
+- `worker.js` `jobSearchKey()` is now an allowlist: only `keywords`, `location`,
+  `geoId`, `distance` and `f_*` filters identify a search; empty values are
+  ignored. Everything else (session/tracking/paging/sort ids) is dropped. The
+  same key drives search runs, settle checks and in-page picks.
+- The settle error names the changed filter parameters (names only, never
+  values), so a future LinkedIn change is diagnosable from one report.
+- Companion only; update app AND companion.
+
+**Previous checkpoint: v24.6.536 Signed / Followed clients split (merged PR281 / `eb7451e`)**
 on `claude/job-leads-signed-clients`, from merged535 PR280 / `0361880`. Owner
 asked for two ways to pull followed-client ads, a select-all save, and a
 dashboard of saved client ads, with followed clients in their own tab.

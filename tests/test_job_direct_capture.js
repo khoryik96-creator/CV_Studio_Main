@@ -31,6 +31,12 @@ function fixture(){
   assert((await f.pick({frameId:1})).error);assert((await f.pick({url:'https://attacker.invalid/jobs/search/'})).error);
   assert((await f.pick()).result.ok);assert.equal(f.state.saved[0].record.url,url);assert.equal(f.state.saved[0].record.company,'Example Finance');
   f.boot();assert((await f.pick()).result.duplicate,'bound picks survive normal worker suspension');
+  // LinkedIn's AI job search rotates session/tracking parameters while the
+  // page is open; the card's search is still the same search (synthetic values).
+  f.tabs.get(2).url=search+'&referralSearchId=synthetic-2&searchSessionId=rotated&currentJobId=1234567890&sortBy=R';
+  assert((await f.pick({url:search+'&referralSearchId=synthetic-1&searchSessionId=first'})).result.ok,'rotating LinkedIn session parameters do not count as a page change');
+  f.tabs.get(2).url=search+'&f_WT=2';assert.match((await f.pick({url:search})).error,/LinkedIn page changed/,'a changed filter still counts as a page change');
+  f.tabs.get(2).url=search;
   const run='b'.repeat(32);await f.rpc('jobSearchBegin',{run_id:run,max_pages:1,use_open:true,source_tab_id:2});assert.match((await f.pick()).error,/current search/);await f.rpc('end',{run_id:run});
   f.state.wrong=true;const before=f.state.saved.length;assert((await f.pick()).error);assert.equal(f.state.saved.length,before);f.state.wrong=false;
   f.tabs.get(2).pendingUrl='https://www.linkedin.com/login';assert((await f.pick()).error);delete f.tabs.get(2).pendingUrl;
