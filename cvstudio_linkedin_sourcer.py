@@ -74,9 +74,9 @@ def _text(value, maximum):
     return isinstance(value, str) and 0 < len(value.strip()) <= maximum
 
 
-def validate_plan(value):
-    if not isinstance(value, dict) or not _text(value.get("query"), 1000):
-        raise SourcerError("DeepSeek did not return a usable search query. No search was started.")
+def _plan_criteria(value):
+    if not isinstance(value, dict):
+        raise SourcerError("DeepSeek did not return usable search requirements.")
     must = value.get("requirements")
     if not isinstance(must, list) or not 1 <= len(must) <= 12 or not all(_text(s, 250) for s in must):
         raise SourcerError("DeepSeek did not return usable search requirements.")
@@ -84,10 +84,55 @@ def validate_plan(value):
     if (not isinstance(country, str) or len(country) > 100
             or re.search(r"[\x00-\x1f\x7f]", country)):
         raise SourcerError("DeepSeek did not return a usable country filter.")
-    country = country.strip()
+    return country.strip(), [s.strip() for s in must]
+
+
+def validate_plan(value):
+    if not isinstance(value, dict) or not _text(value.get("query"), 1000):
+        raise SourcerError("DeepSeek did not return a usable search query. No search was started.")
+    country, must = _plan_criteria(value)
     if country and re.search(r"(?<!\w)" + re.escape(country) + r"(?!\w)", value["query"], re.I):
         raise SourcerError("DeepSeek mixed the country into the keywords. No search was started; try again.")
-    return {"query": value["query"].strip(), "country": country, "requirements": [s.strip() for s in must]}
+    return {"query": value["query"].strip(), "country": country, "requirements": must}
+
+
+def validate_boolean_query(value, mode):
+    """Validate an owner-supplied search without narrowing or rewriting it."""
+    if not isinstance(value, str) or len(value) > 1000:
+        raise SourcerError("Use a Boolean search of up to 1000 characters.")
+    query = value.strip()
+    if not query:
+        return ''
+    message = 'Check Boolean brackets, quotes and AND/OR/NOT operators.'
+    if re.search(r'[\x00-\x1f\x7f“”]', query) or query.count('"') % 2:
+        raise SourcerError('Use a one-line Boolean search with straight double quotes.')
+    depth, operand, operators = 0, True, 0
+    for token in re.findall(r'"[^"]*"|[()]|[^\s()"]+', query):
+        if token == '(':
+            depth += 1
+            operand = True
+        elif token == ')':
+            if operand or depth == 0:
+                raise SourcerError(message)
+            depth -= 1
+            operand = False
+        elif token in {'AND', 'OR'}:
+            if operand:
+                raise SourcerError(message)
+            operators += 1
+            operand = True
+        elif token == 'NOT':
+            operators += 1
+            operand = True
+        else:
+            if token.startswith('"') and not token[1:-1].strip():
+                raise SourcerError(message)
+            operand = False
+    if operand or depth:
+        raise SourcerError(message)
+    if mode == 'standard' and operators > 3:
+        raise SourcerError('Your Boolean has too many operators for normal LinkedIn search. Use at most three, or choose Recruiter. Your Boolean was not changed.')
+    return query
 
 
 def validate_standard_plan(value):
@@ -283,6 +328,9 @@ STANDARD_PLAN_SCHEMA = {**PLAN_SCHEMA, "properties": {**PLAN_SCHEMA["properties"
         " For normal People search, use at most three Boolean operators total outside quotes."
         " Use at most four search terms total, including the user's exact core role/skill. For independent mandatory skills, keep AND between compact OR groups; for example (Oracle OR DBA) AND (Ansible OR automation)."
         " Keep the complete matching criteria in requirements; never drop mandatory exclusions to meet this budget."}}}
+CRITERIA_PLAN_SCHEMA = {"type": "object", "properties": {
+    name: PLAN_SCHEMA["properties"][name] for name in ("country", "requirements")},
+    "required": ["country", "requirements"], "additionalProperties": False}
 REVIEW_SCHEMA = {"type": "object", "properties": {"candidates": {"type": "array", "items": {
     "type": "object", "properties": {"id": {"type": "string"},
         "score": {"type": "integer", "minimum": 0, "maximum": 100},
@@ -337,6 +385,10 @@ class Run:
     expires: float = field(default_factory=lambda: time.monotonic() + 3600)
     busy: threading.Lock = field(default_factory=threading.Lock)
     folder: str = ''
+    boolean_query: str = ''
+    country_mode: str = 'auto'
+    country: str = ''
+    prompt_provided: bool = True
 
     def summary(self):
         return {"id": self.id, "calls": self.calls, "max_calls": self.max_calls,
@@ -383,8 +435,24 @@ class LinkedInSourcerService:
             raise SourcerError("The run has stopped or expired.")
         if action == "plan":
             normal = run.mode == "standard" and not run.review_open_search
+            context = {"mode": run.mode, "country_mode": run.country_mode, "country": run.country,
+                       "instruction": "An explicit country selection overrides geography in the prompt for search filtering only; keep all prompt criteria for profile review. Never put geography in generated keywords."}
+            if run.boolean_query:
+                if run.country_mode != 'auto' or not run.prompt_provided:
+                    return {"plan": {"query": run.boolean_query, "country": run.country,
+                            "requirements": ["Match the supplied Boolean and review prompt using observed evidence."]}, "run": run.summary()}
+                def criteria(value):
+                    country, requirements = _plan_criteria(value)
+                    return {"query": run.boolean_query, "country": country, "requirements": requirements}
+                return self.paid(run, "search_plan", CRITERIA_PLAN_SCHEMA,
+                    {**context, "boolean_query": run.boolean_query, "instruction": "The supplied Boolean is final. Infer only the requested country and review requirements from the prompt. Never generate a replacement query."}, criteria, "plan")
+            def generated(value):
+                value = validate_plan(value)  # Preserve the generated-geography keyword guard too.
+                if run.country_mode != 'auto':
+                    value = {**value, 'country': run.country}
+                return (validate_standard_plan if normal else validate_plan)(value)
             return self.paid(run, "search_plan", STANDARD_PLAN_SCHEMA if normal else PLAN_SCHEMA,
-                             {"mode": run.mode}, validate_standard_plan if normal else validate_plan, "plan")
+                             context, generated, "plan")
         if action == "review":
             profiles = clean_profiles(data.get("profiles"))
             stage, page = data.get("stage"), data.get("page")
@@ -403,7 +471,13 @@ class LinkedInSourcerService:
                         f" than {_REVIEW_TEXT_MAX} characters. Source passages preserve the observed text"
                         " in its original order. Use only that profile's supplied passage IDs;"
                         " never retype or rewrite supporting text. If no supporting passage is available for"
-                        " a profile, leave it out of candidates. Never invent evidence to fill a field."}
+                        " a profile, leave it out of candidates. Never invent evidence to fill a field."
+                        " For local residency or work eligibility, use only explicit profile statements."
+                        " Do not infer citizenship, ethnicity or work eligibility from names, languages, employers"
+                        " or a country's search filter. A location alone is not proof of citizenship or work eligibility;"
+                        " list unstated status as unknown.",
+                        "search_context": {"boolean_query": run.boolean_query, "country_mode": run.country_mode,
+                                           "country": run.country, "review_prompt": run.brief}}
             result = self.paid(run, "profile_review", schema, observed,
                                lambda value: resolve_review_evidence(value, profiles, maximum, references), "candidates")
             if self.candidates:
@@ -417,13 +491,27 @@ class LinkedInSourcerService:
         raise SourcerError("This sourcing action is not supported.")
 
     def start(self, data):
-        brief, mode = data.get("brief"), data.get("mode")
+        brief, mode = data.get("brief", ""), data.get("mode")
         pages, calls = data.get("max_pages"), data.get("max_calls")
         if data.get("confirm_paid") is not True:
             raise SourcerError("Confirm the DeepSeek API use and profile-data sharing before starting.")
-        if (not isinstance(brief, str) or not 5 <= len(brief.strip()) <= 4000
+        if (not isinstance(brief, str) or len(brief.strip()) > 4000
                 or not isinstance(mode, str) or mode not in {"standard", "lite", "recruiter"}):
-            raise SourcerError("Enter a brief and select a supported LinkedIn mode.")
+            raise SourcerError("Enter a prompt or Boolean and select a supported LinkedIn mode.")
+        query = validate_boolean_query(data.get('boolean_query', ''), mode)
+        if not query and len(brief.strip()) < 5:
+            raise SourcerError("Enter a prompt or Boolean search.")
+        country_mode, country = data.get('country_mode', 'auto'), data.get('country', '')
+        if (not isinstance(country_mode, str) or country_mode not in {'auto', 'any', 'specific'}
+                or not isinstance(country, str) or len(country) > 100 or re.search(r'[\x00-\x1f\x7f]', country)):
+            raise SourcerError('Choose a valid country filter.')
+        country = country.strip() if country_mode == 'specific' else ''
+        if country_mode == 'specific' and not country:
+            raise SourcerError('Enter the country name.')
+        if data.get('use_open_search') is True and (query or country_mode != 'auto'):
+            raise SourcerError('Turn off Review open search to apply your Boolean or country selection.')
+        if mode != 'standard' and country_mode == 'specific':
+            raise SourcerError('Automatic country filters use LinkedIn People search. In Recruiter set Locations there and review the open search.')
         if type(pages) is not int or not 1 <= pages <= 15 or type(calls) is not int or not 1 <= calls <= 80:
             raise SourcerError("Use 1–15 pages and 1–80 API requests.")
         folder = data.get("folder", "")
@@ -443,8 +531,10 @@ class LinkedInSourcerService:
             old = self.run
             if old and (old.busy.locked() or (not old.stopped and time.monotonic() < old.expires)):
                 raise SourcerError("Stop the current run before starting another.")
-            self.run = Run(brief.strip(), mode, pages, calls, "deepseek-v4-flash",
-                           review_open_search=data.get("use_open_search") is True, folder=folder)
+            self.run = Run(brief.strip() or query, mode, pages, calls, "deepseek-v4-flash",
+                           review_open_search=data.get("use_open_search") is True, folder=folder,
+                           boolean_query=query, country_mode=country_mode, country=country,
+                           prompt_provided=bool(brief.strip()))
         return {"run": self.run.summary()}
 
     def paid(self, run, task, schema, data, validate, field_name):

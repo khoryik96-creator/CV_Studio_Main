@@ -12,7 +12,7 @@
   const MAX_FOUND = 600, MAX_PER_PULL = 15, FOUND_PAGE = 50, ADD_LIMIT = 100, COMPANY_PAGE = 50;
   const TICKS_KEY = 'cvstudio_signed_clients_ticks';
   const fresh = () => ({account:'', signed:[], statuses:null, followed:[], records:[], folders:[], companies:null, found:[], picked:new Set(),
-    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0});
+    chosen:null, foundPage:0, working:false, pulling:false, stopped:false, run:'', loaded:false, statusDraft:null, statusDirty:false, linkGuide:0, recordsReady:false});
   let state = fresh(), generation = 0, ready = false, resyncNeeded = false;
   let savedIndex = {records:null, urls:new Map()}, countIndex = {records:null, followed:null, counts:new Map()};
 
@@ -54,19 +54,35 @@
 
   // Transport ----------------------------------------------------------------
 
+  async function readWithin(ms, message, read) {
+    const controller=new AbortController();let timer;
+    try {
+      return await Promise.race([read(controller.signal),new Promise((_,reject)=>{
+        timer=setTimeout(()=>{reject(Error(message));controller.abort();},ms);
+      })]);
+    } finally {clearTimeout(timer);}
+  }
   async function call(body) {
-    const response = await fetch('/jobadder/clients', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), cache:'no-store'});
-    let data = {};
-    try { data = await response.json(); } catch {}
-    if (!response.ok || data.ok === false || data.error) throw Error(data.error || data.message || 'The client list could not be loaded.');
-    return data;
+    const read=async signal=>{
+      const response = await fetch('/jobadder/clients', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), cache:'no-store',...(signal?{signal}:{})});
+      let data = {};
+      try { data = await response.json(); } catch {throw Error('The client list response could not be read. Click Refresh to load it again.');}
+      if (!response.ok || data.ok === false || data.error) throw Error(data.error || data.message || 'The client list could not be loaded.');
+      return data;
+    };
+    // Only reads have a UI deadline. Never time out/replay a choice write.
+    return ['overview','statuses','companies'].includes(body.action)
+      ? readWithin(60000,'JobAdder did not finish loading clients. Click Refresh to check again; saved client choices were kept.',read) : read();
   }
   async function leads(body) {
-    const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {cache:'no-store'});
-    let data = {};
-    try { data = await response.json(); } catch {}
-    if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
-    return data;
+    const read=async signal=>{
+      const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {cache:'no-store',signal});
+      let data = {};
+      try { data = await response.json(); } catch {throw Error('Saved ads could not be read. Click Refresh to load them again.');}
+      if (!response.ok || data.error) throw Error(data.error || 'Job Leads could not finish this request.');
+      return data;
+    };
+    return body ? read() : readWithin(15000,'Saved ads did not finish loading. Click Refresh to check again.',read);
   }
   const jobLeads = () => window.cvStudioJobLeads;
   const namespace = () => String(window._jaAccountCacheNamespace || '');
@@ -157,7 +173,7 @@
     el('Refresh').disabled = locked;
     const stale = staleStatuses().length;
     el('SetupSummary').textContent = state.signed.length ? '· ' + (signedNames.length ? signedNames.join(', ') : state.signed.length + ' chosen') + (stale ? ` · ${stale} no longer in JobAdder` : '') : '· not chosen yet';
-    el('StatusesLoad').disabled = locked || !state.loaded;
+    el('StatusesLoad').disabled = locked;
     const draft = state.statusDraft;
     // An empty choice saves too, so statuses JobAdder no longer lists can all be dropped.
     el('StatusesSave').disabled = locked || !draft || sameIds(draft, state.signed);
@@ -168,7 +184,7 @@
     el('CompaniesNext').disabled = locked || !c || c.next === null || unsaved;
     // Job Leads' own busy state is checked when Pull/Add is clicked, so the
     // buttons never sit disabled after Job Leads finishes.
-    el('Pull').disabled = locked || !state.signed.length || stale || !pullable().length;
+    el('Pull').disabled = locked || !state.recordsReady || !state.signed.length || stale || !pullable().length;
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort','FiltersReset']) el(name).disabled=locked || !c?.rows.length;
     el('Stop').disabled = !state.pulling || state.stopped;
     el('Pages').disabled = locked;
@@ -177,7 +193,7 @@
     const newOnPage = pageRows().filter(row => !savedJob(row.url));
     el('SelectNew').disabled = locked || !newOnPage.length;
     el('SelectNew').checked = !!newOnPage.length && newOnPage.every(row => state.picked.has(row.url));
-    el('Add').disabled = locked || !state.found.some(row => state.picked.has(row.url) && !savedJob(row.url));
+    el('Add').disabled = locked || !state.recordsReady || !state.found.some(row => state.picked.has(row.url) && !savedJob(row.url));
     el('Clear').disabled = locked || !state.found.length;
     el('Folder').disabled = locked;
     el('FoundPrevious').disabled = locked || state.foundPage === 0;
@@ -186,7 +202,7 @@
   }
   function drawStatuses() {
     const target = el('Statuses'); target.replaceChildren();
-    if (!state.statuses) { target.append(node('p', state.loaded ? 'Statuses load from JobAdder…' : '', 'job-leads-muted')); return; }
+    if (!state.statuses) { target.append(node('p', state.working ? 'Loading company statuses…' : 'Click Reload statuses to load company statuses.', 'job-leads-muted')); return; }
     // A saved status JobAdder no longer lists starts unticked, so saving drops it.
     if (!state.statusDraft) state.statusDraft = new Set(state.signed.filter(id => knownStatuses().has(id)));
     for (const status of state.statuses) {
@@ -327,39 +343,50 @@
     while (pullable().length > MAX_PER_PULL) state.chosen.delete(pullable().at(-1).company_id);
     rememberTicks();
   }
-  async function refreshRecords() {
+  async function refreshRecords(token = generation) {
     const data = await leads();
+    if (token !== generation) return;
     state.records = Array.isArray(data.records) ? data.records : [];
+    state.recordsReady = true;
     state.folders = Array.isArray(data.folders) ? data.folders : [];
     drawFolders();
   }
   function load(retried = false) {
     return work(async token => {
       message('Loading your signed clients…');
-      const [overview] = await Promise.all([call({action:'overview'}), refreshRecords()]);
-      if (token === generation && !sameAccount(overview.account) && retried) {
-        clear(); message('The JobAdder account changed. Reconnect JobAdder in Settings, then click Refresh.'); return;
-      }
-      if (!accept(overview, token)) return;
-      state.signed = overview.signed || [];
-      setFollowed(overview.followed || []);
-      state.loaded = true; state.statusDraft = null; state.statusDirty = false;
-      message(state.signed.length ? '' : 'Start by choosing which JobAdder statuses mean a signed client.');
-      if (!state.signed.length) el('Setup').open = true;
-      let list = false;
+      let recordsError='';
+      const records=refreshRecords(token).catch(error=>{recordsError=error.message;});
       try {
-        const data = await call({action:'statuses'});
-        if (!accept(data, token)) return;
-        state.statuses = data.statuses || []; state.signed = data.signed || state.signed; state.statusDraft = null; state.statusDirty = false;
-        if (staleStatuses().length) { el('Setup').open = true; message('A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'); }
-        // A page reload starts with no browse results, even when followed
-        // clients were restored. Read this list once on first open too.
-        else list = !!state.signed.length && state.companies === null;
-      } catch (error) { if (token === generation) message(error.message + (state.followed.length ? ' Followed clients are still listed.' : '')); return; }
-      if (!list) return;
-      el('Browse').open = true; draw();
-      try { await readCompanies(token, 0); }
-      catch (error) { if (token === generation) message('Your signed clients could not be listed. ' + error.message); }
+        const overview = await call({action:'overview'});
+        if (token === generation && !sameAccount(overview.account) && retried) {
+          clear(); message('The JobAdder account changed. Reconnect JobAdder in Settings, then click Refresh.'); return;
+        }
+        if (!accept(overview, token)) return;
+        state.signed = overview.signed || [];
+        setFollowed(overview.followed || []);
+        state.loaded = true; state.statusDraft = null; state.statusDirty = false;
+        message(state.signed.length ? '' : 'Start by choosing which JobAdder statuses mean a signed client.');
+        if (!state.signed.length) el('Setup').open = true;
+        draw(); // Followed clients must not wait for the unrelated ads read.
+        let list = false;
+        try {
+          const data = await call({action:'statuses'});
+          if (!accept(data, token)) return;
+          state.statuses = data.statuses || []; state.signed = data.signed || state.signed; state.statusDraft = null; state.statusDirty = false;
+          if (staleStatuses().length) { el('Setup').open = true; message('A saved signed status is no longer in JobAdder. Check the statuses and click Save statuses.'); }
+          // A page reload starts with no browse results, even when followed
+          // clients were restored. Read this list once on first open too.
+          else list = !!state.signed.length && state.companies === null;
+          draw(); // Show statuses even while saved ads are still loading.
+        } catch (error) { if (token === generation) message(error.message + (state.followed.length ? ' Followed clients are still listed.' : '')); return; }
+        if (!list) return;
+        el('Browse').open = true; draw();
+        try { await readCompanies(token, 0); }
+        catch (error) { if (token === generation) message('Your signed clients could not be listed. ' + error.message); }
+      } finally {
+        await records;
+        if (recordsError && token === generation) message(el('Message').textContent+' Saved ads could not be refreshed. '+recordsError);
+      }
     });
   }
   function loadStatuses() {
@@ -457,6 +484,7 @@
     const app = jobLeads();
     if (mine() || !app?.rpc || !window.cvStudioJobSearch) return;
     if (!state.signed.length || staleStatuses().length) { el('Setup').open=true;progress('Choose valid signed-client statuses and click Save statuses before pulling ads.');return; }
+    if (!state.recordsReady) { progress('Saved ads have not loaded yet. Click Refresh before pulling ads.'); return; }
     if (app.isBusy?.()) { progress(BUSY_MESSAGE); return; }
     const pages = Number(el('Pages').value);
     if (![1, 2, 3, 5].includes(pages)) { progress('Choose the pages per client.'); return; }
@@ -509,6 +537,7 @@
     if (state.run) { try { void jobLeads()?.rpc?.('end', {run_id:state.run}).catch(() => {}); } catch {} }
   }
   function addSelected() {
+    if (!state.recordsReady) { progress('Saved ads have not loaded yet. Click Refresh before adding ads.'); return; }
     return work(async token => {
       const selected = state.found.filter(row => state.picked.has(row.url) && !savedJob(row.url));
       if (!selected.length) return;
@@ -566,7 +595,7 @@
     el('Tab').addEventListener('click', () => show(true));
     for (const id of ['jobLeadsApolloAdsTab', 'jobLeadsApolloContactsTab', 'peopleHRTab']) document.getElementById(id)?.addEventListener('click', () => show(false));
     el('Refresh').addEventListener('click', () => load());
-    el('StatusesLoad').addEventListener('click', loadStatuses);
+    el('StatusesLoad').addEventListener('click', () => state.loaded ? loadStatuses() : load());
     el('StatusesSave').addEventListener('click', saveStatuses);
     el('Search').addEventListener('click', () => searchCompanies(0));
     for (const name of ['StatusFilter','OwnerFilter','FollowingFilter','Sort'])el(name).addEventListener('change',()=>{drawCompanies();controls();});

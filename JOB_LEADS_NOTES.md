@@ -1,5 +1,15 @@
 # Job Leads module
 
+## Client loading recovery (v24.6.531)
+
+Followed clients and company statuses display independently of saved-ad hydration.
+A stalled ad-list read no longer hides a ready status reply. Safe client reads
+have a60-second headers+JSON deadline; saved-ad reads15seconds. Errors keep
+existing choices visible and leave Refresh/Reload statuses available, including
+a failed first account read. Writes keep their existing non-replay semantics.
+Late replies cannot repopulate a changed account. Pull/Add wait until saved ads
+have loaded at least once; Refresh recovers that prerequisite after a failure.
+
 ## Signed clients dashboard (v24.6.527)
 
 Job Leads has a fourth view, **Signed clients**. The owner follows a few signed
