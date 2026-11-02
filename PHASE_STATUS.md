@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.538 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.539 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged538/PR283/68bae01. Client pulls follow LinkedIn's first redirect of a
+  company Jobs page (a one-company search, a canonical name, or the main page
+  meaning no open jobs). A no-jobs client counts as pulled. Every failed
+  client's reason is shown.
+- v24.6.538 (merged PR283) was local/unmerged on `claude/job-leads-signed-clients` from
   merged537/PR282/c8524cd. Review fixes:
   - saved client ads carry their pulled client (optional, validated `client` on
     a Job Leads record, payload only, no schema change);

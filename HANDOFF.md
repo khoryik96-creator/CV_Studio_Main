@@ -7,7 +7,27 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.538 review fixes for v534–v537 (local, unmerged)**
+**Current checkpoint: v24.6.539 client pulls follow company Jobs-page redirects (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged538 PR283 / `68bae01`. Owner: DeltaFrontier
+pulled, but 2X and 4FINGERS failed. 4FINGERS failed with "The saved company page
+changed" (it has no jobs), and only the last failure reason was shown.
+- `worker.js` `jobCompanyID` follows LinkedIn's own first redirect of
+  `/company/<slug>/jobs/`, accepted only after two checks 500 ms apart agree and
+  then pinned:
+  - a one-company job search returns its `f_C` number directly;
+  - a canonical page name is read where LinkedIn landed;
+  - the company main page is `HR_COMPANY_NO_JOBS`;
+  - anything else gets a clear error.
+  The redirected inactive tab is closed only while it is still on that
+  landing. The `owned` map keeps the requested URL, so restore validation is
+  unchanged.
+- Followed clients: `HR_COMPANY_NO_JOBS` counts as pulled ("No open jobs on
+  LinkedIn: ..."). Every failed client's reason is listed. Open on LinkedIn
+  reports the same way.
+- Workaround if a company still fails: paste its LinkedIn "See all jobs" search
+  link (with `f_C=<id>`) into Change link; the pull then skips the company page.
+
+**Previous checkpoint: v24.6.538 review fixes for v534–v537 (merged PR283 / `68bae01`)**
 on `claude/job-leads-signed-clients`, from merged537 PR282 / `c8524cd`. The owner
 asked for a code review of v534–v537 and for all findings to be fixed.
 - Job Leads records may carry an optional `client` `{company_id:int, name}`

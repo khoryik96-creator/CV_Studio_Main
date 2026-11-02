@@ -88,6 +88,8 @@ function fixture(options={}){
       if(action==='jobCompanyID'){
         if(state.holdCompany)await new Promise(resolve=>state.releaseCompany=resolve);
         if(state.failCompany)throw Error('Company could not be read.');
+        const planned=state.companyErrors?.[args.company_url];
+        if(planned){const error=Error(planned.message);if(planned.code)error.companionCode=planned.code;throw error;}
         return {company_url:args.company_url,company_id:state.companyIds?.[args.company_url] || '4242'};
       }
       if(action==='jobReadCancel')return true;
@@ -619,6 +621,26 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    st.state.holdSave=false;st.state.releaseSave();await saving;await settle(60);
    assert.equal(st.leadsCalls.length,1,'no further ad is saved after Stop');
    assert.match(st.el('FollowedMessage').textContent,/^Stopped\. Saved 1 ad.*29 selected ads are still waiting/);}
+
+  // Every client's outcome is reported; a company with no open jobs is not a failure.
+  {const page=(id,name,slug)=>({...client(id,'',name),linkedin_url:'https://www.linkedin.com/company/'+slug+'/'});
+   const followed=[client(11,'4242','Example Client'),page(14,'Fictional Fingers','fictional-fingers'),page(15,'Fictional Moved','fictional-moved'),page(16,'Fictional Other','fictional-other')];
+   const companyErrors={'https://www.linkedin.com/company/fictional-fingers/':{message:'LinkedIn shows no Jobs page for this company, so it has no open jobs right now.',code:'HR_COMPANY_NO_JOBS'},
+     'https://www.linkedin.com/company/fictional-moved/':{message:'The saved company page changed (LinkedIn opened a different kind of page).'},
+     'https://www.linkedin.com/company/fictional-other/':{message:'LinkedIn did not show this company number.'}};
+   const o=fixture({signed:[2],followed,companyErrors});await o.el('FollowedTab').click();await settle();
+   await o.el('Pull').click();await settle(200);
+   const text=o.el('Progress').textContent;
+   assert.match(text,/^Finished\. 2 clients pulled/,'a no-jobs company counts as pulled');
+   assert.match(text,/No open jobs on LinkedIn: Fictional Fingers\./);
+   assert.match(text,/2 could not be pulled: Fictional Moved: The saved company page changed \(LinkedIn opened a different kind of page\)\. Fictional Other: LinkedIn did not show this company number\./,'every failure is listed, not only the last');
+   assert(o.calls.some(call=>call.action==='pulled' && call.company_id===14),'the no-jobs client is marked as pulled');
+   await o.el('OpenLinkedIn').click();await settle(120);
+   assert.equal(o.el('LinkedInLink').href,'https://www.linkedin.com/jobs/search/?f_C=4242');
+   assert.match(o.el('Progress').textContent,/No open jobs on LinkedIn: Fictional Fingers\. 2 could not be included\. Fictional Moved: .* Fictional Other: /);
+   const only=fixture({signed:[2],followed:[page(14,'Fictional Fingers','fictional-fingers')],companyErrors,records:[]});await only.el('FollowedTab').click();await settle();
+   await only.el('OpenLinkedIn').click();await settle(80);
+   assert.match(only.el('Progress').textContent,/None of the ticked clients has open jobs on LinkedIn right now\. No open jobs on LinkedIn: Fictional Fingers\./);}
 
   // Account change on screen, and a JobAdder outage.
   const down=fixture({down:true});await down.el('Tab').click();await settle();

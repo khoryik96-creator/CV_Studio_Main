@@ -22,5 +22,25 @@ const install=f=>{f.state.fastWait=true;f.state.onScript=args=>args.args?.[0]===
  const loading=fixture();install(loading);await loading.arm();loading.state.onScript=args=>args.args?.[0]==='readCompanyJobsID'?[{result:{loading:true}}]:undefined;
  assert.match((await read(loading)).error,/See all jobs/);assert.equal(loading.state.created.length,1,'bounded polling never repeats tab creation');assert.deepEqual(loading.state.removed,[11]);
  const late=fixture();install(late);await late.arm();late.state.onScript=args=>{if(args.args?.[0]==='readCompanyJobsID'){late.tabs.get(11).url='https://www.linkedin.com/company/wrong/jobs/';return [{result:{company_url:root,company_id:'4242'}}];}};assert((await read(late)).error,'post-read URL check rejects stale evidence');
- console.log('Company Jobs worker: scoped authority, validation, bounded loading, cancellation, post-read identity and safe tab cleanup passed.');
+ // LinkedIn's own first redirect of a company Jobs page (synthetic IDs).
+ const toSearch=fixture();install(toSearch);await toSearch.arm();let reads=0;const base=toSearch.state.onScript;toSearch.state.onScript=args=>{if(args.args?.[0]==='readCompanyJobsID')reads++;return base(args);};
+ toSearch.state.onCreated=tab=>{toSearch.tabs.get(tab.id).url='https://www.linkedin.com/jobs/search-results/?currentJobId=1234567890&keywords=jobs&f_C=13702795';};
+ const searched=(await read(toSearch)).result;assert.deepEqual({...searched},{company_url:root,company_id:'13702795'},'a redirect to a one-company job search gives its number');
+ assert.equal(reads,0,'no page read is needed');assert.deepEqual(toSearch.state.removed,[11],'the redirected tab is closed');
+ const settling=fixture();install(settling);await settling.arm();let hops=0;
+ settling.state.onCreated=tab=>{settling.tabs.get(tab.id).url=root+'jobs/';};
+ const realGet=settling.tabs.get.bind(settling.tabs);settling.tabs.get=id=>{const tab=realGet(id);if(id===11 && tab && ++hops===2)tab.url='https://www.linkedin.com/jobs/search-results/?keywords=jobs&f_C=24242';return tab;};
+ assert.equal((await read(settling)).result.company_id,'24242','an address rewritten just after load is followed before anything is read');
+ const many=fixture();install(many);await many.arm();many.state.onCreated=tab=>{many.tabs.get(tab.id).url='https://www.linkedin.com/jobs/search-results/?f_C=1%2C2';};
+ assert.match((await read(many)).error,/not for one company/);assert.deepEqual(many.state.removed,[11]);
+ const renamed=fixture();await renamed.arm();renamed.state.fastWait=true;let readRoot='';
+ renamed.state.onCreated=tab=>{renamed.tabs.get(tab.id).url='https://www.linkedin.com/company/fictional-client-group/jobs/?viewAsMember=true';};
+ renamed.state.onScript=args=>{if(args.args?.[0]==='readCompanyJobsID'){readRoot=args.args[1];return [{result:{company_url:readRoot,company_id:'5151'}}];}};
+ assert.deepEqual({...(await read(renamed)).result},{company_url:root,company_id:'5151'},'a canonical page name is read where LinkedIn landed');
+ assert.equal(readRoot,'https://www.linkedin.com/company/fictional-client-group/');assert.deepEqual(renamed.state.removed,[11]);
+ const none=fixture();install(none);await none.arm();none.state.onCreated=tab=>{none.tabs.get(tab.id).url='https://www.linkedin.com/company/fictional-client/';};
+ const empty=await read(none);assert.equal(empty.error_code,'HR_COMPANY_NO_JOBS');assert.match(empty.error,/no open jobs/);assert.deepEqual(none.state.removed,[11]);
+ const elsewhere=fixture();install(elsewhere);await elsewhere.arm();elsewhere.state.onCreated=tab=>{elsewhere.tabs.get(tab.id).url='https://www.linkedin.com/feed/';};
+ assert.match((await read(elsewhere)).error,/different kind of page/);
+ console.log('Company Jobs worker: scoped authority, validation, bounded loading, cancellation, post-read identity, first-load redirects (one-company search, canonical name, no-jobs page) and safe tab cleanup passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});

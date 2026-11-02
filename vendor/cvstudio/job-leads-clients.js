@@ -659,6 +659,7 @@
     if (state.found.length >= MAX_FOUND) { progress(`The review list is full (${MAX_FOUND} ads). Add or clear ads, then pull again.`); return; }
     const token = generation, activity = app.activityStart?.() ?? null, tally = {ads:0};
     let done = 0, failed = 0, skipped = 0, partial = 0, failure = '';
+    const failures = [], empty = [];
     state.pulling = true; state.stopped = false; app.lock(true); controls();
     try {
       progress('Checking the browser companion…');
@@ -681,7 +682,13 @@
           try { const data = await call({action:'pulled', company_id:client.company_id, account:state.account}); if (token === generation && sameAccount(data.account)) setFollowed(data.followed || state.followed); } catch {}
         } catch (error) {
           if (state.stopped || token !== generation) break;
-          failed++; failure = `${client.name}: ${error.message}`;
+          // A company with no open jobs on LinkedIn is a finished pull, not a failure.
+          if (error.companionCode === 'HR_COMPANY_NO_JOBS') {
+            done++; empty.push(client.name);
+            try { const data = await call({action:'pulled', company_id:client.company_id, account:state.account}); if (token === generation && sameAccount(data.account)) setFollowed(data.followed || state.followed); } catch {}
+            continue;
+          }
+          failed++; failures.push(`${client.name}: ${error.message}`);
         }
       }
     } catch (error) { if (!state.stopped && token === generation) failure = error.message; }
@@ -692,10 +699,12 @@
         progress((state.stopped ? 'Stopped. ' : failure && !started ? '' : 'Finished. ') +
           (started ? `${done} client${done === 1 ? '' : 's'} pulled, ${tally.ads} ads found, ${fresh} new to review.` : '') +
           (partial || skipped ? ` The review list is full (${MAX_FOUND} ads): ${partial + skipped} client${partial + skipped === 1 ? ' was' : 's were'} not fully pulled. Add or clear ads, then pull again.` : '') +
-          (failed ? ` ${failed} could not be pulled.` : '') + (failure ? ' ' + failure : ''));
+          (empty.length ? ` No open jobs on LinkedIn: ${empty.join(', ')}.` : '') +
+          // Every client's reason is listed, not only the last one.
+          (failed ? ` ${failed} could not be pulled: ${failures.join(' ')}` : '') + (failure ? ' ' + failure : ''));
         draw();
       }
-      app.activityEnd?.(activity, !!failure);
+      app.activityEnd?.(activity, !!(failure || failed));
     }
   }
   function stop() {
@@ -729,7 +738,7 @@
     const app = jobLeads();
     if (!app?.rpc) { progress('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.'); return; }
     if (app.isBusy?.()) { progress(BUSY_MESSAGE); return; }
-    const token = generation, failures = [];
+    const token = generation, failures = [], empty = [];
     state.pulling = true; state.stopped = false; state.linkedinSearch = ''; app.lock(true); draw();
     try {
       progress('Checking the browser companion…');
@@ -745,16 +754,18 @@
         try { await resolveCompany(app, token, client, run); }
         catch (error) {
           if (state.stopped || token !== generation) throw error;
-          failures.push(`${client.name}: ${error.message}`);
+          if (error.companionCode === 'HR_COMPANY_NO_JOBS') empty.push(client.name);
+          else failures.push(`${client.name}: ${error.message}`);
         } finally { if (token === generation && state.run === run) state.run = ''; }
       }
       check(token);
       const ready = targets.filter(client => knownId(client));
-      if (!ready.length) throw Error('No ticked client has a confirmed LinkedIn company yet.');
+      const none = empty.length ? ` No open jobs on LinkedIn: ${empty.join(', ')}.` : '';
+      if (!ready.length) throw Error((empty.length && !failures.length ? 'None of the ticked clients has open jobs on LinkedIn right now.' : 'No ticked client has a confirmed LinkedIn company yet.') + none);
       // The click that started this has passed, so the browser may block a
       // new tab: the link below opens the search with one more click.
       openSearch(linkedinSearch(ready.map(knownId)), false);
-      progress(`Ready: click "Open the LinkedIn search" below for ${ready.length} client${ready.length === 1 ? '' : 's'}.` + tip +
+      progress(`Ready: click "Open the LinkedIn search" below for ${ready.length} client${ready.length === 1 ? '' : 's'}.` + tip + none +
         (failures.length ? ` ${failures.length} could not be included. ${failures.join(' ')}` : ''));
     } catch (error) {
       if (token === generation) progress((state.stopped ? 'Stopped. ' : '') + (state.stopped ? '' : error.message) + (failures.length ? ' ' + failures.join(' ') : ''));
