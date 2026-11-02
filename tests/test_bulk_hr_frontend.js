@@ -12,7 +12,7 @@ function bulkFixture(options={}){
     if(action==='jobFromLink'){
       const row=s.records.find(r=>r.url===args.url);s.active=row;
       if(row.id===s.failId){reply(null,'The company link is unavailable.');return true;}
-      reply({url:row.url,company:row.company,company_url:'https://www.linkedin.com/company/example-'+row.id[0]+'/'});return true;
+      reply({url:row.url,company:row.company,company_url:'https://www.linkedin.com/company/'+(s.slugs?.[row.id[0]] || 'example-'+row.id[0])+'/'});return true;
     }
     if(action==='hrBegin'){s.starts.push({...args});reply({tab_id:30});return true;}
     if(action==='hrRead'){
@@ -97,16 +97,29 @@ if(require.main===module)(async()=>{
   await assert.rejects(busy.jobLeads().scanClientAds(['2'.repeat(32)]),/busy/,'a busy Job Leads is reported, not silently ignored');
   busy.state.release();await busyRun;
   // Two selected ads from the same company: one scan, its result copied to the other.
-  const sameCo=bulkFixture();sameCo.state.records[1].company=sameCo.state.records[0].company;await sameCo.init();sameCo.select();await sameCo.start();
+  const sameCo=bulkFixture();sameCo.state.records[1].company=sameCo.state.records[0].company;sameCo.state.slugs={2:'example-1'};await sameCo.init();sameCo.select();await sameCo.start();
   assert.equal(sameCo.state.starts.length,2,'the shared company is scanned once');
   const saves=sameCo.requests.filter(r=>r.action==='save_hr');assert.equal(saves.length,3,'every selected ad still gets the HR result');
   const copied=saves.find(r=>r.id==='2'.repeat(32));assert.equal(copied.search.company,sameCo.state.records[1].company);assert.equal(copied.search.people.length,1);
   assert(sameCo.el('BulkHRResults').children.some(n=>/copied from .* \(same company, no extra scan\)/.test(n.textContent)));
   assert.match(sameCo.el('BulkHRSummary').textContent,/3 of 3 ads processed · 3 saved/);
-  // A same-named ad whose earlier scan found another LinkedIn company is scanned on its own.
-  const otherCo=bulkFixture();otherCo.state.records[1].company=otherCo.state.records[0].company;otherCo.state.records[1].hr={company_id:'99999999',company_url:'',people:[]};
+  // A same-named ad whose own employer link is another LinkedIn company is scanned on its own.
+  const otherCo=bulkFixture();otherCo.state.records[1].company=otherCo.state.records[0].company;
   await otherCo.init();otherCo.select();await otherCo.start();
   assert.equal(otherCo.state.starts.length,3,'a different company identity is never copied');
+  assert.equal(otherCo.state.records[1].hr.company_url,'https://www.linkedin.com/company/example-2/');
+  // An unreadable ad is scanned normally, never given another ad's result.
+  const unread=bulkFixture();unread.state.records[1].company=unread.state.records[0].company;unread.state.slugs={2:'example-1'};
+  await unread.init();unread.select();const reads=unread.state.onRPC;let firstRead=true;
+  unread.state.onRPC=(message,reply)=>{if(message.action==='jobFromLink'&&message.args.url===unread.state.records[1].url&&firstRead){firstRead=false;reply(null,'Synthetic read failure');return true;}return reads(message,reply);};
+  await unread.start();assert.equal(unread.state.starts.length,3,'an unconfirmed company is scanned');
+  // A copied save whose response is lost stops the queue like a scanned save.
+  const lost=bulkFixture();lost.state.records[1].company=lost.state.records[0].company;lost.state.slugs={2:'example-1'};await lost.init();lost.select();
+  const saves0=lost.state.onRequest;lost.state.onRequest=async data=>{const result=await saves0(data);return data.action==='save_hr'&&data.id==='2'.repeat(32)?{ok:false,json:async()=>({error:'Network interrupted',code:'JOB_LEADS_STORAGE_ERROR'})}:result;};
+  await lost.start();
+  assert.equal(lost.state.starts.length,1,'no further ad is scanned after an unconfirmed copy');
+  assert.match(lost.el('BulkHRResults').children[1].textContent,/could not be confirmed/);assert.doesNotMatch(lost.el('BulkHRResults').children[1].textContent,/were kept/);
+  assert.match(lost.el('BulkHRMessage').textContent,/Queue stopped/);
   const early=bulkFixture();await early.init();const pending=early.jobLeads().scanClientAds(['1'.repeat(32)]);early.jobLeads().stopHR();
   assert.equal(await pending,false);assert.equal(early.state.starts.length,0,'Stop while saved ads reload means nothing is scanned');
   assert.equal(early.requests.filter(r=>r.action==='save_hr').length,0);assert.match(early.el('ClientsHRMessage').textContent,/Stopped before the scan started/);

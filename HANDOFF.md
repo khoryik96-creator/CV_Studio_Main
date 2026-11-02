@@ -31,7 +31,13 @@ on `claude/job-leads-signed-clients`, from merged540 PR285 / `42cec2e`.
     no longer shuts it.
   - A copied HR save updates the open edit form's revision and redraws the
     preview.
-  - Same-named ads whose saved `hr.company_id` differs are scanned separately.
+  - Copies are keyed by the scanned LinkedIn company page. Another ad with the
+    same employer name first has its own employer link read
+    (`adCompanyPage`, `company_only`). Only an exact page match is copied;
+    an unread or different link is scanned normally (Codex P2).
+  - A copied save that fails for anything but a revision conflict is treated
+    like an unconfirmed scan save: it stops the queue and asks for a refresh
+    (Codex P2).
   - "N hours ago" counts back from now, so it is right across midnight.
   - After Disconnect, Job ads shows where to reconnect.
   - The bulk message shows copy progress.
