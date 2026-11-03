@@ -7,8 +7,9 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Local work: v24.6.551 job-ad card visual refresh (unmerged)**
-on `codex/job-search-results-scroll`, following the unmerged v24.6.550 work below.
+**Latest source: v24.6.551 job-ad cards and background capture — [PR295](https://github.com/khoryik96-creator/CV_Studio_Main/pull/295)**
+on `codex/job-search-results-scroll`, including the v24.6.550 work below.
+The PR records current CI, review and merge status.
 - Job search cards now have contained rounded surfaces, company initials, clear
   role/company hierarchy, a compact location/readiness row, header selection and
   saved indicators, and aligned compact actions. Preview/selected states are
@@ -20,9 +21,9 @@ on `codex/job-search-results-scroll`, following the unmerged v24.6.550 work belo
   whitespace and repository consistency pass. Chromium rechecked the background
   workflow and desktop/390px/320px layouts, including long titles/employers and
   no card overflow. Sample screenshots are under `/tmp/cvstudio551`.
-  No live LinkedIn/provider action, push, merge or installed-app update.
+  No live LinkedIn/provider action or installed-app update.
 
-**Local work: v24.6.550 job-search scrolling and background full ads (unmerged)**
+**Included checkpoint: v24.6.550 job-search scrolling and background full ads**
 on `codex/job-search-results-scroll`, from merged v24.6.549 / PR294.
 - Search lists keyword-matched summaries first, then loads full descriptions
   sequentially after the search run closes. Results, selection and saving stay

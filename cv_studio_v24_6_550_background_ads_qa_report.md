@@ -1,7 +1,9 @@
 # CV Studio v24.6.550 — search scrolling and background job descriptions
 
 Source work on `codex/job-search-results-scroll`, based on merged v24.6.549
-(PR294). Not published, merged or installed on the owner's machine.
+(PR294), included with the v24.6.551 card refresh in
+[PR295](https://github.com/khoryik96-creator/CV_Studio_Main/pull/295). See the PR
+for current CI, review and merge status. Not installed on the owner's machine.
 
 ## Behavior
 

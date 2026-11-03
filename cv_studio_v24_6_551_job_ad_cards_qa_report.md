@@ -1,7 +1,8 @@
 # CV Studio v24.6.551 — job-ad card visual refresh
 
-Local source work on `codex/job-search-results-scroll`, following unmerged
-v24.6.550. Not pushed, merged, published or installed on the owner's machine.
+Source work on `codex/job-search-results-scroll`, including v24.6.550.
+[PR295](https://github.com/khoryik96-creator/CV_Studio_Main/pull/295) records current
+CI, review and merge status. Not installed on the owner's machine.
 
 Search-result cards now group role/company beside a company-initial tile, place
 selection/saved indicators in the header, and present location and capture state
