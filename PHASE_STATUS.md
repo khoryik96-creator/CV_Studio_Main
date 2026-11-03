@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.547 is local/unmerged on `codex/job-leads-email-composer`, from merged546
+- v24.6.548 source is on `codex/email-banner-placement-toolbar`, from
+  merged547 PR292/eee33ad. Fixes cursor-based banner insertion and editable lines,
+  compact font/color controls, rich-editor caret visibility and in-place editing
+  after confirmed sends. Edited follow-ups receive fresh ids and still confirm.
+
+- v24.6.547 (merged PR292) was local/unmerged on `codex/job-leads-email-composer`, from merged546
   PR291/ea046fa. Adds multiple To/CC/BCC, attachments, recipient autofill and saved
   rich email templates with signature/banner embedding. Sending always confirms.
   Same routes, Microsoft consent scopes and durable send non-replay boundary.

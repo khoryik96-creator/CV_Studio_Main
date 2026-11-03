@@ -26,6 +26,31 @@ with sync_playwright() as p:
     page.locator('#jobLeadsEmailAccount').filter(has_text='owner@example.com').wait_for()
     page.wait_for_function("()=>!document.getElementById('jobLeadsEmailTemplateRefresh').disabled")
     assert page.locator('#jobLeadsEmailTo').input_value()=='alex@example.com'
+    color=page.locator('#jobLeadsEmailColor').bounding_box()
+    assert color['width']<=34 and color['height']<=30,'color control must be a compact swatch'
+    assert page.locator('#jobLeadsEmailFont').bounding_box()['width']<=130
+    assert page.locator('#jobLeadsEmailSize').bounding_box()['width']<=70
+    # Use the real chooser to exercise focus/selection changes around file picking.
+    page.locator('#jobLeadsEmailEditor').fill('')
+    page.locator('#jobLeadsEmailEditor').click()
+    with page.expect_file_chooser() as chooser:
+        page.locator('#jobLeadsEmailImageChoose').click()
+    chooser.value.set_files({'name':'placement.png','mimeType':'image/png','buffer':image.getvalue()})
+    page.locator('#jobLeadsEmailEditor img').wait_for()
+    page.wait_for_function("()=>document.getElementById('jobLeadsEmailEditor').contentEditable==='true'")
+    page.keyboard.type('Below the banner')
+    assert 'Below the banner' in page.locator('#jobLeadsEmailEditor').inner_text()
+    y_before=page.locator('#jobLeadsEmailEditor img').bounding_box()['y']
+    page.evaluate("""()=>{const image=document.querySelector('#jobLeadsEmailEditor img'),line=image.parentElement.previousElementSibling,range=document.createRange();range.setStart(line,0);range.collapse(true);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);document.getElementById('jobLeadsEmailEditor').focus();}""")
+    page.keyboard.press('Enter');page.keyboard.type('Above the banner')
+    assert page.locator('#jobLeadsEmailEditor img').bounding_box()['y']>y_before+8,'Enter above the image must push it down'
+    assert 'Above the banner' in page.locator('#jobLeadsEmailEditor').inner_text()
+    page.evaluate("""()=>{const editor=document.getElementById('jobLeadsEmailEditor');editor.innerHTML='<p>Before paragraph</p><p>After paragraph</p>';editor.dispatchEvent(new Event('input',{bubbles:true}));const range=document.createRange();range.setStartAfter(editor.firstElementChild);range.collapse(true);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);editor.focus();}""")
+    with page.expect_file_chooser() as chooser:
+        page.locator('#jobLeadsEmailImageChoose').click()
+    chooser.value.set_files({'name':'middle.png','mimeType':'image/png','buffer':image.getvalue()})
+    page.locator('#jobLeadsEmailEditor img').wait_for()
+    assert page.evaluate("""()=>{const editor=document.getElementById('jobLeadsEmailEditor'),image=editor.querySelector('img');return !!(editor.firstElementChild.compareDocumentPosition(image)&Node.DOCUMENT_POSITION_FOLLOWING) && !!(image.compareDocumentPosition(editor.lastElementChild)&Node.DOCUMENT_POSITION_FOLLOWING);}"""),'banner must stay between the chosen paragraphs'
     page.locator('#jobLeadsEmailTo').fill('alex@example.com; second@example.com')
     page.locator('#jobLeadsEmailCc').fill('cc@example.com')
     page.locator('#jobLeadsEmailBcc').fill('private@example.com')
@@ -104,8 +129,36 @@ with sync_playwright() as p:
     page.locator('#jobLeadsEmailSend').click()
     page.locator('#jobLeadsEmailMessage').filter(has_text='Accepted by Outlook').wait_for()
     assert len(email_posts)==2 and email_posts[-1]['confirmed'] is True
-    page.locator('#jobLeadsEmailSend').click(force=True,timeout=1000) if not page.locator('#jobLeadsEmailSend').is_disabled() else None
-    assert len(email_posts)==2
+    assert page.locator('#jobLeadsEmailEditor').get_attribute('contenteditable')=='true'
+    sent_id=email_posts[-1]['request_id']
+    # A banner as the first edit after sending must retain the caret below it.
+    page.locator('#jobLeadsEmailEditor').click();page.keyboard.press('Control+End')
+    with page.expect_file_chooser() as chooser:
+        page.locator('#jobLeadsEmailImageChoose').click()
+    chooser.value.set_files({'name':'followup-banner.png','mimeType':'image/png','buffer':image.getvalue()})
+    page.locator('#jobLeadsEmailMessage').filter(has_text='Banner embedded').wait_for()
+    assert page.evaluate("document.activeElement.id")=='jobLeadsEmailEditor','sent-message banner insertion must keep editor focus'
+    page.keyboard.type('Below followup banner')
+    assert 'Below followup banner' in page.locator('#jobLeadsEmailEditor').inner_text()
+    page.locator('#jobLeadsEmailEditor').fill('Edited follow-up in the same composer')
+    page.locator('#jobLeadsEmailSubject').fill('Follow-up')
+    assert not page.locator('#jobLeadsEmailSend').is_disabled()
+    page.once('dialog',lambda d:d.dismiss());page.locator('#jobLeadsEmailSend').click()
+    page.wait_for_function("()=>!document.getElementById('jobLeadsEmailSend').disabled")
+    assert len(email_posts)==2,'edited sent messages must still confirm'
+    page.once('dialog',lambda d:d.accept());page.locator('#jobLeadsEmailSend').click()
+    page.locator('#jobLeadsEmailMessage').filter(has_text='Accepted by Outlook').wait_for()
+    assert len(email_posts)==3 and email_posts[-1]['request_id']!=sent_id
+    # Paste as the first edit of the next sent message must also retain focus.
+    page.locator('#jobLeadsEmailEditor').click();page.keyboard.press('Control+End')
+    page.evaluate("""()=>{const data=new DataTransfer();data.setData('text/plain',' Pasted follow-up');document.getElementById('jobLeadsEmailEditor').dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));}""")
+    page.wait_for_function("()=>document.getElementById('jobLeadsEmailEditor').contentEditable==='true'")
+    assert page.evaluate("document.activeElement.id")=='jobLeadsEmailEditor','sent-message paste must keep editor focus'
+    page.keyboard.type(' typed immediately')
+    assert 'Pasted follow-up typed immediately' in page.locator('#jobLeadsEmailEditor').inner_text()
+
+    assert len(email_posts)==3
+    page.once('dialog',lambda d:d.accept())
     page.locator('#jobLeadsEmailNew').click()
     page.wait_for_function("()=>!document.getElementById('jobLeadsEmailTemplate').disabled")
     page.locator('#jobLeadsEmailTemplate').select_option(template_id)
@@ -114,6 +167,13 @@ with sync_playwright() as p:
     page.locator('#jobLeadsEmailTemplateMessage').filter(has_text='Template deleted').wait_for()
     assert page.locator('#jobLeadsEmailEditor img').count()==1,'deleting a template preserves current message'
     assert page.locator('#jobLeadsEmailTemplate option[value="'+template_id+'"]').count()==0
+    page.evaluate("document.body.classList.add('cv-caret-guard')")
+    for tag in ['b','i','a','p']:
+        for color in page.locator('#jobLeadsEmailEditor '+tag).evaluate_all('(nodes)=>nodes.map(node=>getComputedStyle(node).caretColor)'):
+            assert color not in {'transparent','rgba(0, 0, 0, 0)'},'formatted text must have a visible caret'
+    page.set_viewport_size({'width':390,'height':844})
+    assert page.locator('#jobLeadsEmailColor').bounding_box()['width']<=34
+    assert page.locator('.email-format-toolbar').evaluate('(node)=>node.scrollWidth<=node.clientWidth+1'),'toolbar must wrap within mobile width'
     assert not errors,errors
-    print('Browser passed: recipient autofill, multiple To/CC/BCC, rich signature and inline banner upload, attachment upload, template create/update/refresh/apply/delete, recipient and file separation, cancelled/confirmed send, draft creation, completed editor lock; fictional Outlook only.')
+    print('Browser passed: recipient autofill, multiple To/CC/BCC, rich signature and inline banner upload, attachment upload, template create/update/refresh/apply/delete, recipient and file separation, cancelled/confirmed send, draft creation, draft/uncertain locking, real chooser banner placement and editable lines, compact desktop/mobile toolbar, formatted caret visibility and confirmed edited follow-up; fictional Outlook only.')
     browser.close()
