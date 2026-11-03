@@ -7,7 +7,51 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source: v24.6.549 company-header resolution and pull summary**
+**Latest source: v24.6.551 job-ad cards and background capture — [PR295](https://github.com/khoryik96-creator/CV_Studio_Main/pull/295)**
+on `codex/job-search-results-scroll`, including the v24.6.550 work below.
+The PR records current CI, review and merge status.
+- Job search cards now have contained rounded surfaces, company initials, clear
+  role/company hierarchy, a compact location/readiness row, header selection and
+  saved indicators, and aligned compact actions. Preview/selected states are
+  visible without changing the card geometry. Full errors stay readable.
+- Preview typography, spacing and content separation match the updated cards.
+  Existing cached reads, background capture, selection, scroll/focus preservation,
+  saved data and all capture behavior remain unchanged.
+- Validation: all 94 frontend fixtures, five version-source tests, syntax,
+  whitespace and repository consistency pass. Chromium rechecked the background
+  workflow and desktop/390px/320px layouts, including long titles/employers and
+  no card overflow. Sample screenshots are under `/tmp/cvstudio551`.
+  PR295 review also corrected keyboard focus on LinkedIn links and expandable
+  summaries during background redraws; the Chromium regression fails before
+  correction and passes afterwards.
+  No live LinkedIn/provider action or installed-app update.
+
+**Included checkpoint: v24.6.550 job-search scrolling and background full ads**
+on `codex/job-search-results-scroll`, from merged v24.6.549 / PR294.
+- Search lists keyword-matched summaries first, then loads full descriptions
+  sequentially after the search run closes. Results, selection and saving stay
+  usable. Ready descriptions use the cache; loading/failures are visible per ad.
+- Stop and resume/retry controls cancel the exact companion operation. A new
+  search, Clear, pagehide or foreground companion action drains/cancels the queue;
+  late cancelled results are ignored. Access/connection failures pause the queue,
+  individual ad layout/timeouts retain their summaries and let other ads proceed.
+- Full reads now wait up to 48 passive DOM polls (previously 16), and no longer
+  return an empty description after six polls. Full-read RPC allows 55 seconds.
+  `full_ad_background_revision:1` gates automatic background reads; apply the
+  companion update as well as updating the app. No live LinkedIn layout fix is
+  claimed. Existing tab ownership, access and exact-ad identity checks remain.
+- Job search results scroll independently within 70vh / 720px, with a visible
+  scrollbar gutter and keyboard-focusable labeled region. Same-page redraws
+  preserve scroll, keyboard focus and expanded summaries; pagination starts at
+  the top. Saved ad records and editing drafts are never overwritten by prefetch.
+- Validation: all 94 frontend fixtures, 234 focused backend/version tests,
+  syntax, whitespace and repository consistency passed. Chromium checked a
+  fictional 25-ad list-first workflow, rich capture, selection, stable scroll,
+  focus/expanded content, Stop/Clear, desktop/mobile bounded scrolling and no
+  horizontal overflow. See `cv_studio_v24_6_550_background_ads_qa_report.md`.
+  No live LinkedIn/provider action, publication, merge or installed-app update.
+
+**Previous checkpoint: v24.6.549 company-header resolution and pull summary (merged PR294)**
 on `codex/client-company-resolution-summary`, from merged v24.6.548 / PR293.
 - The reported Lear Corporation company URL is a valid named company-page link.
   Its authenticated live DOM has not been reproduced in this environment.

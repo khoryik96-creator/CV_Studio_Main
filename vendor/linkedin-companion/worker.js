@@ -546,7 +546,7 @@ function updated(id,change) { return event(async () => {
 function activated(info) { return event(() => protectViewed(info.tabId)); }
 async function readJobTab(bound, id, expected, companyOnly=false) {
   const verify = tab => {
-    if(jobCapture?.cancelled)throw safeError('The job company read was stopped.','HR_STOPPED');
+    if(jobCapture?.cancelled)throw safeError('The job ad read was stopped.','HR_STOPPED');
     if(linkedinAccessPage(tab.url) || linkedinAccessPage(tab.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in its browser tab before scanning again.','HR_ACCESS_REQUIRED');
     if (connection !== bound || bound.run || jobURL(tab.url) !== expected || tab.pendingUrl && jobURL(tab.pendingUrl) !== expected) throw safeError('The selected job changed. Open its LinkedIn tab and try again.');
     return tab.status==='complete';
@@ -554,7 +554,7 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
   let injected=false, previousCompany='',hadCompany=false;
   // A complete browser load can precede LinkedIn's React detail panel. Wait on
   // that same DOM briefly; never re-navigate or replay a failed network request.
-  const limit=companyOnly?48:16;
+  const limit=48;
   for (let attempt=0;attempt<limit;attempt++) {
     if (!verify(await chrome.tabs.get(id))) { injected=false;previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue; }
     if (!injected) { await jobScript({target:{tabId:id}, files:['reader.js']},jobReaderStartError);injected=true; }
@@ -586,7 +586,7 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
           if (signature===previousCompany) { bound.jobCompany=evidence;await persist();return result; }
           previousCompany=signature;
         } else previousCompany='';
-      } else if (result.description || attempt >= 5) return result;
+      } else if (result.description?.trim()) return result;
     } else previousCompany='';
     // A same-URL reload may finish between polls. Reinject into the current
     // document before the next passive read instead of trusting the old world.
@@ -594,7 +594,7 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
     if (attempt+1 < limit) await new Promise(resolve => setTimeout(resolve,350));
   }
   if(companyOnly && hadCompany)throw safeError('The ad loaded, but LinkedIn did not provide a single employer link. Open the ad or set its confirmed company page in Search options.','HR_EMPLOYER_LINK_MISSING');
-  throw safeError('The job header did not finish loading or its layout is not recognized. Open the ad in Chrome or Brave and try again.','HR_AD_TIMEOUT');
+  throw safeError('The job details did not finish loading or this LinkedIn layout is not recognized. Its summary is kept; open the ad in Chrome or Brave, wait for its description, then retry.','HR_AD_TIMEOUT');
 }
 async function pickJob(message, sender) {
   await ready;
@@ -673,7 +673,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,full_ad_background_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrDate') {
     const bound=connection;
     if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
@@ -873,7 +873,7 @@ async function handle(message, sender) {
       let tab = tabs.find(value => jobURL(value.url) === expected && value.status === 'complete') || tabs.find(value => jobURL(value.url) === expected);
       if (!tab) { tab = await chrome.tabs.create({url:expected, active:false}); created = tab.id; owned.set(created, expected); await persist(); }
       for (let attempt = 0; attempt < 40; attempt++) {
-        if(token.cancelled)throw safeError('The job company read was stopped.','HR_STOPPED');
+        if(token.cancelled)throw safeError('The job ad read was stopped.','HR_STOPPED');
         if (connection !== bound || bound.run) throw Error('The companion connection changed.');
         const current = await chrome.tabs.get(tab.id);
         if(linkedinAccessPage(current.url) || linkedinAccessPage(current.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in its browser tab before scanning again.','HR_ACCESS_REQUIRED');

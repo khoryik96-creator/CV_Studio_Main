@@ -23,7 +23,7 @@ const root = path.resolve(__dirname, '..');
       scriptCalls.push(args);
       if(args.files)return [{}];
       if(!args.args)return [{result:true,documentId:'bound-document'}];
-      return [{result:{url,company:'Example Company',role:'Finance Manager'}}];
+      return [{result:{url,company:'Example Company',role:'Finance Manager',description:'Full sample job description'}}];
     }},runtime:{onMessage:{addListener:fn=>hooks.message=fn}}
   };
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
