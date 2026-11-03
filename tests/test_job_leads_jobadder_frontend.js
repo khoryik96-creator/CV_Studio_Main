@@ -8,7 +8,7 @@ const response=data=>({ok:true,json:async()=>({ok:true,...data})});
   f.state.onJA=async data=>{
     calls.push(data);
     if(data.action==='companies')return response({account:'a'.repeat(64),companies:[{id:12,name:'Example Company'}]});
-    if(data.action==='review')return response({state:'review',review_token:'fictional-review',company:'Example Company',message:'Check the contact'});
+    if(data.action==='review')return f.state.existing?response({state:'exists',matches:f.state.existing,message:'A JobAdder contact already uses this email. No new record was created.'}):response({state:'review',review_token:'fictional-review',company:'Example Company',message:'Check the contact'});
     if(data.action==='create'){
       if(f.state.hold)await new Promise(resolve=>{f.state.release=resolve});
       return response({state:f.state.unknown?'unconfirmed':'created',contact_id:f.state.unknown?null:45,contact_url:f.state.contactURL || 'https://au3.jobadder.com/contacts/45',message:f.state.unknown?'Check previous result':'Contact created'});
@@ -49,6 +49,17 @@ const response=data=>({ok:true,json:async()=>({ok:true,...data})});
     await button.click();await f.el('JASearch').click();f.el('JACompany').value='12';await f.el('JAReview').click();f.state.unknown=false;f.state.contactURL=url;await f.el('JACreate').click();
     assert(f.el('JAOpen').hidden,'unsafe/mismatched link is rejected: '+url);
   }
+  // A review that finds the email already in JobAdder links the existing contact(s).
+  const reviewExisting=async existing=>{f.state.existing=existing;await button.click();await f.el('JASearch').click();f.el('JACompany').value='12';await f.el('JAReview').click();f.state.existing=null;};
+  await reviewExisting([{contact_id:77,company:'Other Company',company_id:90,url:'https://au3.jobadder.com/contacts/77'}]);
+  assert.match(f.el('JAMessage').textContent,/already uses this email[^]*Company: Other Company/);
+  assert(!f.el('JAOpen').hidden,'one existing contact: Open in JobAdder links it');assert.equal(f.el('JAOpen').href,'https://au3.jobadder.com/contacts/77');assert(f.el('JAMatches').hidden);
+  assert(f.el('JACreate').hidden,'an existing email offers no create');
+  await reviewExisting([{contact_id:77,company:'Other Company',url:'https://au3.jobadder.com/contacts/77'},{contact_id:78,company:'',url:'https://au3.jobadder.com/contacts/78'},
+    {contact_id:79,company:'Unsafe',url:'https://au3.jobadder.com/contacts/80'},{contact_id:81,company:'No link'}]);
+  assert(f.el('JAOpen').hidden);assert(!f.el('JAMatches').hidden,'several existing contacts: one link each');
+  assert.deepEqual(f.el('JAMatches').children.map(a=>[a.textContent,a.href,a.target,a.rel]),[['Open Other Company · #77','https://au3.jobadder.com/contacts/77','_blank','noopener noreferrer'],['Open existing contact · #78','https://au3.jobadder.com/contacts/78','_blank','noopener noreferrer']],'only links whose id matches are shown');
+  f.el('JAFirst').handlers.input();assert(f.el('JAMatches').hidden && !f.el('JAMatches').children.length,'editing the details clears the links');
   assert(!calls.some(c=>Object.keys(c).some(k=>/secret|access_token|refresh_token/.test(k))));
-  f.pagehide();console.log('JobAdder contact UI: existing-company choice, source fill, review invalidation, explicit single create, read-only recovery and draft safety passed.');
+  f.pagehide();console.log('JobAdder contact UI: existing-company choice, source fill, review invalidation, explicit single create, read-only recovery, links to existing contacts and draft safety passed.');
 })().catch(error=>{console.error(error);process.exit(1)});

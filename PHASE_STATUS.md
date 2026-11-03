@@ -4,7 +4,12 @@
 
 ## Release state
 
-- v24.6.544 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.545 is local/unmerged on `claude/job-leads-signed-clients` from
+  merged544/PR289/e431752. It removes static explanation and filler text from
+  LinkedIn Sourcer and Email Verifier; consent, setup and export warnings stay.
+  Create JobAdder contact now links every existing contact a Review finds
+  (route adds `url` to each match). No route, schema or paid-call change.
+- v24.6.544 (merged PR289) was local/unmerged on `claude/job-leads-signed-clients` from
   merged543/PR288/3f9b87d:
   - Update my clients (pull every followed client, save to today's folder,
     find HR people);

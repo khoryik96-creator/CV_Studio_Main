@@ -126,7 +126,7 @@
     for (const [name, state] of [['Accepted','accepted'],['Invalid','invalid'],['CatchAll','catch_all'],['Unknown','unknown'],['Domain','domain_ok']]) {
       el(name).textContent = rows.filter(row => row.status === state).length;
     }
-    el('Total').textContent = rows.length ? complete + ' of ' + rows.length + ' checked' : 'Your results will appear here';
+    el('Total').textContent = rows.length ? complete + ' of ' + rows.length + ' checked' : '';
     el('Progress').value = complete; el('Progress').max = rows.length || 1;
     el('Progress').hidden = !rows.length;
     const visible = shown();
@@ -148,7 +148,7 @@
       tr.append(email,state,detail); el('Results').appendChild(tr);
     }
     el('Empty').hidden = visible.length > 0;
-    el('Empty').textContent = rows.length ? 'No emails match this filter.' : 'Add an email or a list to start your first check.';
+    el('Empty').textContent = rows.length ? 'No emails match this filter.' : 'No results yet.';
     el('Export').disabled = !visible.some(row => row.status !== 'not_checked');
     el('Clear').disabled = running || importing || !rows.length;
     el('Start').disabled = running || importing;

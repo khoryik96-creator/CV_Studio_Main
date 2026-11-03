@@ -7,8 +7,30 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.544 Update my clients, HR scan reuse, auto email check, bulk unlock, full setup-file columns (local, unmerged)**
-on `claude/job-leads-signed-clients`, from merged543 PR288 / `3f9b87d`.
+**Current checkpoint: v24.6.545 Sourcer/Email Verifier text tidy-up, links to existing JobAdder contacts (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged544 PR289 / `e431752`.
+- LinkedIn Sourcer and Email Verifier lose static explanation and filler
+  text. Kept:
+  - the DeepSeek consent/cost disclosure;
+  - setup steps;
+  - the dynamic `liSourcerConnectionHint`;
+  - the export warning.
+
+  Moved or changed:
+  - The LinkedIn automation notice moved into the companion setup details.
+  - The engine explanation moved into "What do the results mean?".
+  - Empty states are "No people yet." / "No results yet.".
+  - `ev-eyebrow`, `ev-explainer` and the `.ev-heading p` CSS were removed.
+- Create JobAdder contact: a Review that finds the email already in
+  JobAdder (`state:'exists'` + `matches`, no `contact_id`) used to show no
+  link.
+  - The route now adds `url` to every match with a valid id.
+  - The dialog shows one link (`#jobLeadsJAOpen`) for one match, or one link
+    per company in `#jobLeadsJAMatches`.
+  - A link is shown only when its URL id equals the contact id.
+
+**Previous checkpoint: v24.6.544 Update my clients, HR scan reuse, auto email check, bulk unlock, full setup-file columns (merged PR289)**
+from merged543 PR288 / `3f9b87d`.
 - Followed clients "Update my clients" (`updateClients`):
   - Pulls every followed client with a link, in groups of `MAX_PER_PULL`.
     `pull(targets)` and `addSelected(folder)` now take arguments and return

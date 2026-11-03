@@ -1454,14 +1454,12 @@
 .job-leads-totals { display:flex; gap:18px; flex-wrap:wrap; color:var(--text2); }
 .job-leads-totals strong { color:var(--accent); font-size:22px; }
 .ev-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin:8px 0 24px; }
-.ev-eyebrow { color:var(--accent); font-size:10px; font-weight:750; letter-spacing:1.4px; }
 .ev-heading h2 { font-size:30px; letter-spacing:-1px; margin:7px 0; }
-.ev-heading p { color:var(--text3); font-size:14px; }
 .ev-local { color:var(--green); background:var(--green-light); border-radius:30px; padding:9px 14px; font-size:11px; font-weight:600; }
 .ev-local span { font-size:8px; margin-right:5px; }
 .ev-layout { display:grid; grid-template-columns:minmax(280px,.75fr) minmax(0,1.4fr); gap:22px; align-items:start; }
 .ev-panel { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; min-width:0; box-shadow:0 3px 12px #162e4e04; }
-.ev-panel-title { display:flex; gap:10px; align-items:center; }
+.ev-panel-title { display:flex; gap:10px; align-items:center; margin-bottom:14px; }
 .ev-panel-title h3 { font-size:16px; letter-spacing:-.3px; }
 .ev-step { background:var(--blue-light); color:var(--blue); border-radius:8px; display:grid; place-items:center; width:28px; height:28px; font-weight:700; font-size:12px; }
 .ev-panel label { display:block; font-size:12px; font-weight:650; margin:20px 0 8px; }
@@ -1473,10 +1471,7 @@
 .ev-import label { margin:0; padding:8px 12px; border:1px solid var(--border); border-radius:8px; color:var(--accent); cursor:pointer; }
 .ev-import span { color:var(--text3); font-size:10px; }
 .ev-import input { width:100%; font-size:11px; color:var(--text3); }
-.ev-explainer { background:var(--surface2); padding:14px; border-radius:10px; margin:18px 0; font-size:11px; line-height:1.7; color:var(--text3); }
-.ev-explainer strong { color:var(--text2); font-weight:650; }
-.ev-explainer p { margin-top:7px; }
-.ev-actions { display:flex; gap:10px; }
+.ev-actions { display:flex; gap:10px; margin-top:18px; }
 .ev-actions .primary { flex:1; display:flex; justify-content:space-between; align-items:center; }
 .ev-actions button,.ev-results-panel button { min-height:35px; border-radius:8px; font-size:11px; }
 .ev-message { font-size:12px; line-height:1.6; color:var(--text2); min-height:20px; margin:13px 0 6px; white-space:pre-wrap; }
