@@ -528,48 +528,7 @@
     return {name:text(links[0]),url:urls[0]};
   }
   const normalized = value => compact(value).toLocaleLowerCase();
-  // The saved company URL, not a JobAdder display-name guess, is authority.
-  // Read public, visible filter links from this exact company page only.
-  function readCompanyJobsID(expected) {
-    const problem=issue();if(problem)throw Error(problem);
-    if(companyURL(location.href)!==expected || !/\/jobs\/?$/.test(location.pathname))throw Error('The company page changed.');
-    const main=document.querySelector('main'),heading=[...document.querySelectorAll('main h1, h1')].find(visible);
-    if(!main || !heading)return {loading:true};
-    const ids=new Set();
-    const header=heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
-    for(const link of [...(main.querySelectorAll('a[href]') || [])].filter(visible)) {
-      try {
-        const u=new URL(link.href);
-        if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash)continue;
-        // All-jobs calls to action belong to the company jobs panel. Individual
-        // job links/recommendations are never treated as company evidence.
-        if(/^\/jobs\/search(?:-results)?\/?$/.test(u.pathname) &&
-            /^(?:(?:see|view|show)(?: all)?(?: [0-9,]+)? jobs|all jobs)(?: at .+)?$/i.test(text(link)) &&
-            u.searchParams.getAll('f_C').length===1 && /^[0-9]{1,24}$/.test(u.searchParams.get('f_C')))ids.add(u.searchParams.get('f_C'));
-      } catch {}
-    }
-    for(const link of [...(header?.querySelectorAll('a[href]') || [])].filter(visible)) {
-      try {
-        const u=new URL(link.href),values=JSON.parse(u.searchParams.get('currentCompany'));
-        if(u.origin==='https://www.linkedin.com' && !u.username && !u.password && !u.hash &&
-            /^\/search\/results\/people\/?$/.test(u.pathname) && u.searchParams.getAll('currentCompany').length===1 &&
-            Array.isArray(values) && values.length===1 && typeof values[0]==='string' && /^[0-9]{1,24}$/.test(values[0]))ids.add(values[0]);
-      } catch {}
-    }
-    if(ids.size>1)throw Error('LinkedIn showed different company numbers. Save the exact company See all jobs search link.');
-    return ids.size===1 ? {company_url:expected,company_id:[...ids][0]} : {loading:true};
-  }
-  function readHRCompany(expected, company, sourceConfirmed=false, expectedId='') {
-    const problem = issue(); if (problem) throw Error(problem);
-    if (companyURL(location.href) !== expected || !/\/people\/?$/.test(location.pathname)) throw Error('The company page changed.');
-    const heading = [...document.querySelectorAll('main h1, h1')].find(visible);
-    if (!heading) return {loading:true,...(document.body && !text(document.body)?{blank_document:true}:{})};
-    const pinned=typeof expectedId==='string' && /^[0-9]{1,24}$/.test(expectedId);
-    if(expectedId && !pinned)throw Error('The previous company identity is invalid.');
-    if (normalized(text(heading)) !== normalized(company) && sourceConfirmed!==true && !pinned) throw Error('The company page does not match the saved ad company.');
-    const identity=sourceConfirmed===true || pinned?{company_name:text(heading).slice(0,200)}:{};
-    // Scope to the company header, excluding suggested/affiliated companies.
-    const scope = heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
+  function companyHeaderEvidence(scope) {
     const evidence = [...(scope?.querySelectorAll('a[href]') || [])].filter(visible).map(link=>{
       try {
         const u = new URL(link.href), ids = JSON.parse(u.searchParams.get('currentCompany'));
@@ -592,6 +551,47 @@
         item.u.searchParams.getAll('network').length === 1 && item.u.searchParams.get('network') === '["F"]';
     });
     const ids = [...new Set(singles.map(item=>item.ids[0]))];
+    return {ids,groups};
+  }
+  // The saved company URL, not a JobAdder display-name guess, is authority.
+  // Read public, visible filter links from this exact company page only.
+  function readCompanyJobsID(expected) {
+    const problem=issue();if(problem)throw Error(problem);
+    if(companyURL(location.href)!==expected || !/\/jobs\/?$/.test(location.pathname))throw Error('The company page changed.');
+    const main=document.querySelector('main'),heading=[...document.querySelectorAll('main h1, h1')].find(visible);
+    if(!main || !heading)return {loading:true};
+    const ids=new Set();
+    const header=heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
+    for(const link of [...(main.querySelectorAll('a[href]') || [])].filter(visible)) {
+      try {
+        const u=new URL(link.href);
+        if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash)continue;
+        // All-jobs calls to action belong to the company jobs panel. Individual
+        // job links/recommendations are never treated as company evidence.
+        if(/^\/jobs\/search(?:-results)?\/?$/.test(u.pathname) &&
+            /^(?:(?:see|view|show)(?: all)?(?: [0-9,]+)? jobs|all jobs)(?: at .+)?$/i.test(text(link)) &&
+            u.searchParams.getAll('f_C').length===1 && /^[0-9]{1,24}$/.test(u.searchParams.get('f_C')))ids.add(u.searchParams.get('f_C'));
+      } catch {}
+    }
+    // Share the HR reader's header evidence rules. Some company headers use
+    // an HTTP-valued connections link; its ID is usable only when corroborated
+    // by the visible HTTPS associated-members group. Never follow that link.
+    for(const id of companyHeaderEvidence(header).ids)ids.add(id);
+    if(ids.size>1)throw Error('LinkedIn showed different company numbers. Save the exact company See all jobs search link.');
+    return ids.size===1 ? {company_url:expected,company_id:[...ids][0]} : {loading:true};
+  }
+  function readHRCompany(expected, company, sourceConfirmed=false, expectedId='') {
+    const problem = issue(); if (problem) throw Error(problem);
+    if (companyURL(location.href) !== expected || !/\/people\/?$/.test(location.pathname)) throw Error('The company page changed.');
+    const heading = [...document.querySelectorAll('main h1, h1')].find(visible);
+    if (!heading) return {loading:true,...(document.body && !text(document.body)?{blank_document:true}:{})};
+    const pinned=typeof expectedId==='string' && /^[0-9]{1,24}$/.test(expectedId);
+    if(expectedId && !pinned)throw Error('The previous company identity is invalid.');
+    if (normalized(text(heading)) !== normalized(company) && sourceConfirmed!==true && !pinned) throw Error('The company page does not match the saved ad company.');
+    const identity=sourceConfirmed===true || pinned?{company_name:text(heading).slice(0,200)}:{};
+    // Scope to the company header, excluding suggested/affiliated companies.
+    const scope = heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
+    const {ids,groups} = companyHeaderEvidence(scope);
     if(pinned && (ids.length===1 && ids[0]!==expectedId || !ids.length && groups.length && groups.some(group=>!group.ids.includes(expectedId)))){
       const error=Error('The company link points to a different company.');error.cvstudioHRIdentity=true;throw error;
     }

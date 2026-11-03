@@ -285,8 +285,14 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   assert.match(found(f)[1].text,/Already in Job ads/);assert.equal(found(f)[1].querySelectorAll('input').length,0,'saved ads cannot be added twice');
   assert.equal(found(f)[4].children[2].textContent,'Second Client','each ad keeps the client it was pulled for');
   assert.deepEqual(f.calls.filter(c=>c.action==='pulled').map(c=>c.company_id),[11,12]);
-  assert.match(f.el('Progress').textContent,/Finished\. 2 clients pulled, 5 ads found, 4 new to review/);
+  assert.match(f.el('Progress').textContent,/Finished\. 2 clients pulled, 5 ads added this pull, 4 unsaved ads in review/);
   assert(!f.el('Review').hidden);assert.equal(f.el('FoundCount').textContent,'5');
+
+  // Pulling the same ads again retains the existing review list. Per-pull
+  // additions and total unsaved ads must not look like contradictory counts.
+  await f.el('Pull').click();await settle(120);
+  assert.match(f.el('Progress').textContent,/0 ads added this pull, 4 unsaved ads in review\. Includes 4 from earlier pulls\./);
+  assert.equal(found(f).length,5,'a repeat pull does not clear or duplicate reviewed ads');
 
   // Review, then add the chosen ads to Job ads.
   assert(f.el('Add').disabled,'nothing is added until ads are chosen');
@@ -431,7 +437,7 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    assert(s.state.release,'the second page read is in progress');assert(!s.el('Stop').disabled);
    await s.el('Stop').click();assert(s.ended.length>=1,'Stop ends the companion run straight away');
    s.state.release();await running;await settle();
-   assert.match(s.el('Progress').textContent,/^Stopped\. 0 clients pulled, 2 ads found, 2 new to review/);assert.equal(found(s).length,2);
+   assert.match(s.el('Progress').textContent,/^Stopped\. 0 clients pulled, 2 ads added this pull, 2 unsaved ads in review/);assert.equal(found(s).length,2);
    assert.equal(s.calls.filter(c=>c.action==='pulled').length,0,'a stopped client is not marked as pulled');
    assert.deepEqual(s.state.locks,[true,false]);assert(allEnded(s));}
 
@@ -643,6 +649,17 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    const only=fixture({signed:[2],followed:[page(14,'Fictional Fingers','fictional-fingers')],companyErrors,records:[]});await only.el('FollowedTab').click();await settle();
    await only.el('OpenLinkedIn').click();await settle(80);
    assert.match(only.el('Progress').textContent,/None of the ticked clients has open jobs on LinkedIn right now\. No open jobs on LinkedIn: Fictional Fingers\./);}
+
+  // A repeat pull with an unresolved company must distinguish retained ads
+  // from this run's additions, matching the reported 0/31 summary case.
+  {const named={...client(22,'','Fictional Global Automotive'),linkedin_url:'https://www.linkedin.com/company/fictional-global-automotive/'};
+   const r=fixture({signed:[2],followed:[client(11,'4242','Example Client'),named],records:[],pages:{'4242':[bulk(70000,31)]},
+     companyErrors:{[named.linkedin_url]:{message:'LinkedIn did not show this company number.'}}});
+   await r.el('FollowedTab').click();await settle();await r.el('Pull').click();await settle(160);
+   assert.equal(found(r).length,31);await r.el('Pull').click();await settle(160);
+   assert.match(r.el('Progress').textContent,/1 client pulled, 0 ads added this pull, 31 unsaved ads in review\. Includes 31 from earlier pulls\./);
+   assert.match(r.el('Progress').textContent,/1 could not be pulled: Fictional Global Automotive:/);
+   assert.equal(found(r).length,31,'a failed company never clears earlier review entries');}
 
   // Update my clients: every followed client with a link, in groups of 15; the
   // new ads go to today's folder; then Job ads finds their HR people.

@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.549 source is on `codex/client-company-resolution-summary`, from
+  merged548/PR293. Shares HR's corroborated header-ID parsing with company Jobs,
+  and separates per-pull additions from retained unsaved review ads in summaries.
+  No route, schema, account, paid-call or companion authority change. Lear's live
+  company DOM is not claimed as tested; both app and companion need this source.
+
 - v24.6.548 source is on `codex/email-banner-placement-toolbar`, from
   merged547 PR292/eee33ad. Fixes cursor-based banner insertion and editable lines,
   compact font/color controls, rich-editor caret visibility and in-place editing

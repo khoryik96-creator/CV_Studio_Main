@@ -28,4 +28,16 @@ state.headerLinks=[];state.links.push(link('See all jobs',jobs('42')));assert.th
 location.href=root.replace('fictional-client','other')+'jobs/';assert.throws(read,/changed/);
 location.href=root+'people/';location.pathname='/company/fictional-client/people/';assert.throws(read,/changed/);
 location.href='https://www.linkedin.com/login';location.pathname='/login';assert.throws(read,/sign in/);
+location.href=root+'jobs/';location.pathname='/company/fictional-client/jobs/';
+// Corroborated company-header connections links use the same rules as HR.
+state.links=[];
+const people=(ids,protocol='https:',extra='')=>protocol+'//www.linkedin.com/search/results/people/?currentCompany='+encodeURIComponent(JSON.stringify(ids))+'&origin=COMPANY_PAGE_CANNED_SEARCH'+extra;
+const group=link('Associated members',people(['42','99']));
+const connection=link('Connections',people(['42'],'http:','&network=%5B%22F%22%5D'));
+state.headerLinks=[group,connection];assert.equal(read().company_id,'42');
+state.headerLinks=[connection];assert(read().loading,'an uncorroborated HTTP link is never company evidence');
+state.headerLinks=[link('Associated members',people(['11','99'])),connection];assert(read().loading,'the group must corroborate the exact company id');
+state.headerLinks=[group,link('Connections',people(['42'],'http:'))];assert(read().loading,'the exact connections-filter evidence is required');
+state.headerLinks=[group];assert(read().loading,'a multi-company group never selects an arbitrary member');
+state.headerLinks=[group,connection];state.links=[link('See all jobs',jobs('99'))];assert.throws(read,/different company numbers/);
 console.log('Company Jobs reader: visible CTA/header identity, same-root authority, loading, ambiguity and hostile links passed.');
