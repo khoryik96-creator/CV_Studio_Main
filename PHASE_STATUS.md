@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.551 is local/unmerged on `codex/job-search-results-scroll`, following
+  local550. Refreshes search-result cards and the preview with clearer hierarchy,
+  company initials, compact indicators/actions and responsive spacing. All 94
+  frontend fixtures, five version checks and Chromium workflow/layout checks pass.
+
 - v24.6.550 is local/unmerged on `codex/job-search-results-scroll`, from merged549
   PR294. Search lists ads first, then loads full descriptions in a sequential,
   cancellable background queue with per-ad failures, cache, Stop/resume/retry and

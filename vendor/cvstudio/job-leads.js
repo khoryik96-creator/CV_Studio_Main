@@ -827,23 +827,33 @@
     if (savedJob(previewUrl) && !savedJob(previewUrl).deleted) el('Curation').className += ' has-hr';
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     for (const row of discovered.slice(discoveryPage*20, (discoveryPage+1)*20)) {
-      const card = node('article','','job-leads-discovery-card' + (row.url === previewUrl ? ' is-previewing' : ''));
+      const card = node('article','','job-leads-discovery-card' + (row.url === previewUrl ? ' is-previewing' : '') + (discoveryPicked.has(row.url) && !savedJob(row.url) ? ' is-selected' : ''));
       card.dataset.url = row.url;
-      card.append(node('h3',row.role),node('p',row.company),node('p',row.location || '', 'job-leads-muted'));
-      card.append(node('p',row.full ? 'Full ad captured' : row.fullState === 'reading' ? 'Loading full ad…' : row.fullError ? 'Full ad could not be loaded · ' + row.fullError : 'Search summary only', 'job-leads-muted'));
-      const saved = savedJob(row.url), actions = node('div','','job-leads-actions');
-      if (saved) { discoveryPicked.delete(row.url); actions.append(node('span',saved.deleted ? 'Already in Trash' : 'Already saved', 'job-leads-muted')); }
+      const heading = node('div','','job-ad-card-heading'), identity = node('div','','job-ad-card-identity');
+      const initials = String(row.company || '').trim().split(/\s+/).slice(0,2).map(word => Array.from(word)[0] || '').join('').toLocaleUpperCase() || 'AD';
+      const mark = node('span',initials,'job-ad-company-mark'); mark.setAttribute('aria-hidden','true');
+      identity.append(node('h3',row.role),node('p',row.company,'job-ad-company'));
+      heading.append(mark,identity);
+      const saved = savedJob(row.url), actions = node('div','','job-leads-actions job-ad-card-actions');
+      if (saved) { discoveryPicked.delete(row.url); heading.append(node('span',saved.deleted ? 'Already in Trash' : 'Already saved','job-ad-saved')); }
       else {
         const pick = node('label','','job-leads-pick'), input = node('input');
         input.type = 'checkbox'; input.value = row.url; input.checked = discoveryPicked.has(row.url);
         input.setAttribute('aria-label','Select found ad ' + row.company + ' — ' + row.role);
         input.addEventListener('change', () => { if (busy) return; if (input.checked) discoveryPicked.add(row.url); else discoveryPicked.delete(row.url); drawDiscovery(); });
-        pick.append(input,document.createTextNode('Select')); actions.append(pick);
+        pick.append(input,document.createTextNode('Select')); heading.append(pick);
       }
-      const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; actions.append(link);
-      const preview = node('button','Preview','sec'); preview.type = 'button'; preview.addEventListener('click',() => { if (!busy) selectPreview(row.url, true, 'search'); }); actions.append(preview);
+      card.append(heading);
+      const meta = node('div','','job-ad-card-meta');
+      if (row.location) meta.append(node('p',row.location,'job-ad-location'));
+      const state = row.full ? 'ready' : row.fullState === 'reading' ? 'loading' : row.fullError ? 'error' : 'summary';
+      meta.append(node('span',row.full ? 'Full ad captured' : state === 'loading' ? 'Loading full ad…' : state === 'error' ? 'Could not load full ad' : 'Search summary only','job-ad-state is-' + state));
+      card.append(meta);
+      if (row.fullError && !row.full) card.append(node('p',row.fullError,'job-ad-card-error'));
+      const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'job-ad-source';
+      const preview = node('button','Preview','sec job-ad-preview'); preview.type = 'button'; preview.addEventListener('click',() => { if (!busy) selectPreview(row.url, true, 'search'); }); actions.append(preview);
       const read = node('button',row.full ? 'View full ad' : row.fullError ? 'Retry full ad' : 'Read full ad','sec'); read.type = 'button'; read.addEventListener('click', () => previewDiscovered(row)); actions.append(read);
-      card.append(actions);
+      actions.append(link); card.append(actions);
       const details = node('details'), summary = node('summary',row.full ? 'View job ad content' : 'View search summary');
       details.open = expanded.has(row.url);
       details.append(summary); const body = node('div'); content(body,row.description,row.description_rich); details.append(body); card.append(details);

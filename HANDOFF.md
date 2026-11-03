@@ -7,6 +7,21 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.551 job-ad card visual refresh (unmerged)**
+on `codex/job-search-results-scroll`, following the unmerged v24.6.550 work below.
+- Job search cards now have contained rounded surfaces, company initials, clear
+  role/company hierarchy, a compact location/readiness row, header selection and
+  saved indicators, and aligned compact actions. Preview/selected states are
+  visible without changing the card geometry. Full errors stay readable.
+- Preview typography, spacing and content separation match the updated cards.
+  Existing cached reads, background capture, selection, scroll/focus preservation,
+  saved data and all capture behavior remain unchanged.
+- Validation: all 94 frontend fixtures, five version-source tests, syntax,
+  whitespace and repository consistency pass. Chromium rechecked the background
+  workflow and desktop/390px/320px layouts, including long titles/employers and
+  no card overflow. Sample screenshots are under `/tmp/cvstudio551`.
+  No live LinkedIn/provider action, push, merge or installed-app update.
+
 **Local work: v24.6.550 job-search scrolling and background full ads (unmerged)**
 on `codex/job-search-results-scroll`, from merged v24.6.549 / PR294.
 - Search lists keyword-matched summaries first, then loads full descriptions
