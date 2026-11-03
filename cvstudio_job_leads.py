@@ -253,6 +253,10 @@ def clean_record(raw):
     if type(truncated) is not bool:
         raise JobLeadsError("The job description excerpt marker is invalid.")
     result["description_truncated"] = truncated
+    favorite = raw.get('favorite', False)
+    if type(favorite) is not bool:
+        raise JobLeadsError("The favorite marker is invalid.")
+    result['favorite'] = favorite
     deleted = raw.get('deleted', False)
     if type(deleted) is not bool:
         raise JobLeadsError("The saved lead state is invalid.")
@@ -597,6 +601,8 @@ class JobLeadsStore:
                     raise JobLeadsError("This lead changed in another window. Refresh and reopen it before saving. Your draft is still here.", 409, "JOB_LEADS_CONFLICT")
                 previous = self._record(current)
                 data.pop('hr', None)
+                if 'favorite' not in raw:
+                    data['favorite'] = previous.get('favorite', False)
                 if previous['company'] == data['company'] and previous['url'] == data['url'] and previous.get('hr'):
                     data['hr'] = previous['hr']
                 # Ordinary edits do not send the client an ad was pulled for.

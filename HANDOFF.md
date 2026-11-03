@@ -7,7 +7,37 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.545 Sourcer/Email Verifier text tidy-up, links to existing JobAdder contacts (local, unmerged)**
+**Local work: v24.6.546 Job ads favorites and Outlook client email (unmerged)**
+on `codex/job-ads-favorites-outlook`, based on merged v24.6.545 / `19ee040`.
+- Job ads removes the status field/filter/column; existing stored statuses remain
+  compatible. The star button persists `favorite` in the ad payload (defaults
+  false for old records), survives ordinary form edits and backup/restore, and
+  uses the existing revision conflict guard. Show → Favorites lists starred ads.
+- Job Leads has a shared email composer, reachable from ads and Unlocked contacts.
+  Users can create an Outlook draft or confirm a direct send. The composer shows
+  the connected sender and escapes message text before generating HTML.
+- Sending is optional: Enable sending requests delegated `Mail.Send` through the
+  existing Outlook device login. Draft-only connections retain the existing scope.
+  Granted scopes stay in the protected Outlook store. No new Flask route.
+- `/job-leads` action `outlook_send` calls OutlookService. It validates confirmation,
+  permission and sender, pins that account's access token, and disables transport
+  retries. `job_leads_email_attempts.sqlite3` next to the protected Outlook store
+  durably reserves each request before sending; only request ids, payload hashes
+  and attempt states are stored. An uncertain result is never replayed, including
+  after restart. Microsoft acceptance is reported separately from delivery.
+- Independent review corrected four findings: late Outlook refresh/profile/login
+  responses cannot overwrite a newer connection; definitive email failures retain
+  the composed message for an explicit retry; unsaved/in-flight emails warn before
+  unload; starring an ad preserves its open editor's fields and current revision.
+  Follow-up review verified every correction. Hosted review additionally required
+  completed/uncertain email fields to remain read-only until New message; fixed
+  with draft, uncertain-result and safe-retry regression checks.
+- Validation: 216 focused backend/contract/version tests, all 92 frontend fixtures,
+  repository consistency, and Chromium workflow checks passed with isolated state
+  and fictional Outlook calls. No live Microsoft consent or real email was tested.
+  No push, merge, release or installed-app update was performed.
+
+**Previous checkpoint: v24.6.545 Sourcer/Email Verifier text tidy-up, links to existing JobAdder contacts (merged PR290)**
 on `claude/job-leads-signed-clients`, from merged544 PR289 / `e431752`.
 - LinkedIn Sourcer and Email Verifier lose static explanation and filler
   text. Kept:

@@ -72,7 +72,7 @@ function fixture(){
   switched.state.publicError='JOB_AD_RATE_LIMITED';switched.state.captureFail=true;await switched.read();
   assert.equal(switched.el('url').value,url);assert.equal(switched.el('notes').value,'Old job notes');
   switched.state.captureFail=false;switched.el('url').value=other;await switched.read();
-  assert.equal(switched.el('url').value,other);assert.equal(switched.el('notes').value,'');assert.equal(switched.el('folder').value,'Priority');assert.equal(switched.el('status').value,'new');
+  assert.equal(switched.el('url').value,other);assert.equal(switched.el('notes').value,'');assert.equal(switched.el('folder').value,'Priority');
   const refresh=fixture();await refresh.init();refresh.el('url').value=url;refresh.el('description').value='Existing full content';
   refresh.state.empty=true;await refresh.el('RefreshContent').click();assert.equal(refresh.el('description').value,'Existing full content');
   console.log('Job read fallback: public success, eligible failures, one bound capture, quick disconnected probe, busy isolation, failure/identity/draft protection and refresh safety passed');

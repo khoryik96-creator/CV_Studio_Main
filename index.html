@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.545">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.545"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.546">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.546"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.545 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.546 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -457,7 +457,7 @@
 
           <div class="integration-card wide">
             <div class="integration-title">
-              <div><div class="integration-name">Microsoft Outlook drafts</div><div class="integration-desc">Creates rich HTML invoice drafts only. Requires delegated User.Read + Mail.ReadWrite and public-client/device-code authentication.</div></div>
+              <div><div class="integration-name">Microsoft Outlook</div><div class="integration-desc">Create Outlook drafts or send client emails from Job Leads. Drafts require User.Read + Mail.ReadWrite. Sending also requires Mail.Send consent.</div></div>
               <span class="pill" id="settingsOutlookStatus">Not checked</span>
             </div>
             <div class="integration-field-grid">
@@ -469,10 +469,11 @@
             <div class="integration-actions">
               <button class="kbtn" type="button" onclick="ppcSaveOutlookSettingsFromPanel()">Save Outlook settings</button>
               <button class="kbtn" type="button" id="settingsOutlookConnectBtn" onclick="ppcConnectOutlookDrafts()">Connect</button>
+              <button class="kbtn" type="button" onclick="ppcStartOutlookLogin(true)">Enable sending (Mail.Send)</button>
               <button class="kbtn" type="button" onclick="ppcTestOutlookConnection()">Test connection</button>
               <button class="kbtn" type="button" onclick="ppcCreateOutlookTestDraft(event)">Create test draft</button>
               <button class="kbtn" type="button" onclick="ppcDisconnectOutlook(true)">Disconnect</button>
-              <span class="onenote-help" title="Microsoft setup: register a public client application, enable device-code/public-client flows, add delegated User.Read and Mail.ReadWrite, then grant consent. CV Studio stores tokens in Windows DPAPI or macOS Keychain when available; Linux uses the existing authenticated machine-bound file fallback.">i</span>
+              <span class="onenote-help" title="Microsoft setup: register a public client application, enable device-code/public-client flows, add delegated User.Read and Mail.ReadWrite (plus Mail.Send for sending), then grant consent. CV Studio stores tokens in Windows DPAPI or macOS Keychain when available; Linux uses the existing authenticated machine-bound file fallback.">i</span>
             </div>
             <details class="integration-technical" id="settingsOutlookTechnicalDetails"><summary style="font-size:10.5px;color:var(--text3);cursor:pointer;">Technical details</summary><pre id="settingsOutlookTechnicalText">No Microsoft error recorded.</pre></details>
           </div>
@@ -943,8 +944,20 @@
   </div>
 
   <div class="page-view" id="viewJobLeads">
-    <div class="job-leads-intro"><h2>Job Leads</h2><div class="job-leads-totals"><span><strong id="jobLeadsTotal">0</strong> saved</span><span><strong id="jobLeadsDue">0</strong> follow-ups due</span></div></div>
+    <div class="job-leads-intro"><h2>Job Leads</h2><div class="job-leads-totals"><span><strong id="jobLeadsTotal">0</strong> saved</span><span><strong id="jobLeadsDue">0</strong> favorites</span></div></div>
     <div class="job-leads-actions job-leads-contact-tabs" role="group" aria-label="Job Leads view"><button type="button" class="sec" id="jobLeadsClientsTab" aria-pressed="false">Signed clients</button><button type="button" class="sec" id="jobLeadsClientsFollowedTab" aria-pressed="false">Followed clients<span class="job-leads-tab-count" id="jobLeadsClientsTabCount"></span></button><button type="button" class="sec" id="jobLeadsApolloAdsTab" aria-pressed="true">Job ads<span class="job-leads-tab-count" id="jobLeadsAdsTabCount"></span></button><button type="button" class="sec" id="peopleHRTab" aria-pressed="false">HR people<span class="job-leads-tab-count" id="peopleHRTabCount"></span></button><button type="button" class="sec" id="jobLeadsApolloContactsTab" aria-pressed="false">Unlocked contacts<span class="job-leads-tab-count" id="jobLeadsApolloContactsTabCount"></span></button></div>
+    <section class="card" id="jobLeadsEmailCard" hidden aria-labelledby="jobLeadsEmailHeading">
+      <div class="card-head"><h2 id="jobLeadsEmailHeading">Email client</h2><button type="button" class="sec" id="jobLeadsEmailClose">Close</button></div>
+      <div class="card-body job-leads-form">
+        <p id="jobLeadsEmailAccount" role="status"></p>
+        <div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsEmailConnect">Enable Outlook sending</button><button type="button" class="sec" id="jobLeadsEmailFinish">Finish Outlook login</button></div>
+        <label for="jobLeadsEmailTo">To</label><input id="jobLeadsEmailTo" type="email" required maxlength="320" autocomplete="email">
+        <label for="jobLeadsEmailSubject">Subject</label><input id="jobLeadsEmailSubject" required maxlength="998">
+        <label for="jobLeadsEmailBody">Message</label><textarea id="jobLeadsEmailBody" required rows="10" maxlength="50000"></textarea>
+        <div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsEmailDraft">Create Outlook draft</button><button type="button" class="primary" id="jobLeadsEmailSend">Send email</button><a id="jobLeadsEmailOpen" target="_blank" rel="noopener noreferrer" hidden>Open Outlook draft ↗</a><button type="button" class="sec" id="jobLeadsEmailNew" hidden>New message</button></div>
+        <p id="jobLeadsEmailMessage" role="status" aria-live="polite"></p>
+      </div>
+    </section>
     <section class="card people-dashboard" id="peopleHRPanel" aria-label="HR people dashboard" hidden>
       <div class="card-head"><h2>HR people <span id="peopleHRCount">0</span></h2><div class="job-leads-actions"><button type="button" class="sec" id="peopleHRDateAll">Check missing dates</button><button type="button" class="sec" id="peopleHRDateStop" hidden>Stop checking</button><button type="button" class="sec" id="peopleHRConnect">Connect Apollo</button><button type="button" class="sec" id="peopleHRUnlockAll" disabled>Unlock emails shown</button><button type="button" class="sec" id="peopleHRUnlockStop" hidden>Stop unlocking</button><button type="button" class="sec" id="peopleHRRefresh">Refresh</button><button type="button" class="primary" id="peopleHRExport">Export Excel</button></div></div>
       <div class="card-body"><div class="people-filters"><label>Search HR people<input type="search" id="peopleHRQuery" maxlength="240"></label><label>Company<select id="peopleHRCompany"><option value="">All companies</option></select></label><label>Email<select id="peopleHREmail"><option value="">All</option><option value="none">No email yet</option><option value="found">Has email</option></select></label></div><p id="peopleHRMessage" role="status" aria-live="polite" class="job-leads-muted"></p>
@@ -1081,18 +1094,18 @@
           <label for="jobLeadscontact">Contact person (optional)</label><input id="jobLeadscontact" maxlength="400">
           <label for="jobLeadslocation">Location</label><input id="jobLeadslocation" maxlength="240">
           <label for="jobLeadsdate_posted">Date posted</label><input id="jobLeadsdate_posted" type="date">
-          <div class="job-leads-pair"><div><label for="jobLeadsstatus">Status</label><select id="jobLeadsstatus"><option value="new">New</option><option value="to_contact">To contact</option><option value="contacted">Contacted</option><option value="follow_up">Following up</option><option value="won">Won</option><option value="closed">Closed</option></select></div><div><label for="jobLeadsfollow_up">Follow-up date</label><input id="jobLeadsfollow_up" type="date"></div></div>
+          <label for="jobLeadsfollow_up">Follow-up date</label><input id="jobLeadsfollow_up" type="date">
           <label for="jobLeadsnotes">Your notes</label><textarea id="jobLeadsnotes" maxlength="10000" rows="4"></textarea>
           <details><summary>Job ad content</summary><p id="jobLeadsDescriptionNote" class="job-leads-muted" hidden></p><button type="button" class="sec" id="jobLeadsRefreshContent">Refresh content</button><div id="jobLeadsContent" class="job-lead-ad-content" hidden></div><details><summary>Edit content</summary><label for="jobLeadsdescription">Job description</label><textarea id="jobLeadsdescription" maxlength="20000" rows="12"></textarea></details></details>
           <button type="submit" class="primary" id="jobLeadsSave">Save lead</button>
         </form>
       </div>
-      <div class="card"><div class="card-head"><h2>Saved job ads</h2><div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsAddManual">Add an ad manually</button><button type="button" id="jobLeadsRefresh" class="sec">Refresh</button></div></div>
+      <div class="card"><div class="card-head"><h2>Saved job ads</h2><div class="job-leads-actions"><button type="button" class="sec" id="jobLeadsAddManual">Add an ad manually</button><button type="button" class="sec" id="jobLeadsEmailCompose">Email client</button><button type="button" id="jobLeadsRefresh" class="sec">Refresh</button></div></div>
         <div class="card-body job-leads-board">
           <p id="jobLeadsMessage" role="status" aria-live="polite">Loading saved leads…</p>
           <div class="people-filters job-leads-filters">
             <label>Search<input id="jobLeadsSearch" type="search" aria-label="Search saved leads"></label>
-            <label>Status<select id="jobLeadsFilter" aria-label="Filter leads"><option value="">All statuses</option><option value="due">Follow-ups due</option><option value="new">New</option><option value="to_contact">To contact</option><option value="contacted">Contacted</option><option value="follow_up">Following up</option><option value="won">Won</option><option value="closed">Closed</option></select></label>
+            <label>Show<select id="jobLeadsFilter" aria-label="Filter saved ads"><option value="">All ads</option><option value="favorite">Favorites</option></select></label>
             <label>Folder<select id="jobLeadsFolderFilter"><option value="*">All folders</option><option value="">Unfiled</option><option value="!trash">Trash</option></select></label>
             <label>Client<select id="jobLeadsClientFilter"><option value="">All ads</option><option value="!any">Any client</option></select></label>
             <label>Posted<select id="jobLeadsPostedFilter"><option value="">Any time</option><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option></select></label>
@@ -1131,7 +1144,7 @@
             </div>
           </details>
           <div class="job-leads-actions job-leads-pagination"><span id="jobLeadsCount">0 leads</span><button type="button" id="jobLeadsPrevious" class="sec" disabled>Previous</button><button type="button" id="jobLeadsNext" class="sec" disabled>Next</button></div>
-          <div class="job-leads-contact-table job-leads-ads-table"><table><thead><tr><th><span class="job-leads-sr">Select</span></th><th>Posted</th><th>Job title</th><th>Company</th><th>Client</th><th>Location</th><th>Status</th><th>Folder</th><th>Saved</th><th>HR people</th><th>Actions</th></tr></thead><tbody id="jobLeadsList"></tbody></table></div>
+          <div class="job-leads-contact-table job-leads-ads-table"><table><thead><tr><th><span class="job-leads-sr">Select</span></th><th>Posted</th><th>Job title</th><th>Company</th><th>Client</th><th>Location</th><th>Favorite</th><th>Folder</th><th>Saved</th><th>HR people</th><th>Actions</th></tr></thead><tbody id="jobLeadsList"></tbody></table></div>
         </div>
       </div>
     </div>
@@ -2737,42 +2750,42 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.545"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.546"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2790,10 +2803,10 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/setup-file.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.545"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.545"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/setup-file.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.546"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.546"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

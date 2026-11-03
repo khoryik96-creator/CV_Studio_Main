@@ -309,3 +309,37 @@ def test_folder_routes_preserve_guards_data_and_insert_only_backups(module):
         assert data['folders'] == [] and len(data['records']) == 1 and data['records'][0]['notes'] == row['notes']
         assert not data['records'][0]['deleted'] and data['records'][0]['folder'] == ''
         provider.assert_not_called()
+
+
+def test_favorites_persist_restore_and_survive_ordinary_edits(store, tmp_path):
+    original = store.save(RECORD)['record']
+    assert original['favorite'] is False
+    favorite = store.save({**original, 'favorite': True})['record']
+    assert JobLeadsStore(store.path).list()[0]['favorite'] is True
+    edit = {key: value for key, value in favorite.items() if key != 'favorite'}
+    edited = store.save({**edit, 'notes': 'Edited while favorited'})['record']
+    assert edited['favorite'] is True
+    other = JobLeadsStore(tmp_path/'favorites.sqlite3')
+    other.restore(store.backup())
+    assert other.list()[0]['favorite'] is True
+    assert store.save({**edited, 'favorite': False})['record']['favorite'] is False
+    with pytest.raises(JobLeadsError):
+        store.save({**edited, 'favorite': 'yes'})
+    with pytest.raises(JobLeadsError) as conflict:
+        store.save({**original, 'favorite': True})
+    assert conflict.value.status == 409
+
+
+def test_job_leads_send_reuses_local_request_guards_and_never_caches(module):
+    browser=module.app.test_client();browser.get('/')
+    service=mock.Mock()
+    with module.app.app_context():
+        service.send_job_leads_email.return_value=module.jsonify(ok=True,state='accepted')
+    with mock.patch.object(module,'_OUTLOOK_SERVICE',service):
+        blocked=browser.post('/job-leads',json={'action':'outlook_send'},headers={'Origin':'https://foreign.invalid'})
+        assert blocked.status_code==403
+        service.send_job_leads_email.assert_not_called()
+        response=browser.post('/job-leads',json={'action':'outlook_send'},headers={'X-CV-Studio-Request':'1'})
+        assert response.status_code==200 and response.json['state']=='accepted'
+        assert response.cache_control.no_store
+        service.send_job_leads_email.assert_called_once()

@@ -1515,6 +1515,7 @@
 .job-leads-form input, .job-leads-form select, .job-leads-form textarea, .job-leads-board input, .job-leads-board select { min-width:0; width:100%; box-sizing:border-box; }
 .job-leads-form input, .job-leads-form select, .job-leads-board input, .job-leads-board select { padding:10px 12px; min-height:40px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font-family:inherit; font-size:13px; }
 .job-leads-form input:focus, .job-leads-form select:focus, .job-leads-board input:focus, .job-leads-board select:focus { outline:2px solid var(--accent); outline-offset:1px; }
+#jobLeadsEmailBody { height:200px; min-height:160px; resize:vertical; }
 #jobLeadsnotes, #jobLeadsdescription { height:120px !important; min-height:100px; resize:vertical; }
 .job-leads-form details { border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; }
 .job-leads-form summary { cursor:pointer; font-weight:600; }

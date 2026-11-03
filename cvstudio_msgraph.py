@@ -20,6 +20,7 @@ import json
 import os
 import re
 import secrets as _secrets
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -176,12 +177,13 @@ class OutlookService:
 
     Tokens use the operating-system secret store when available (Windows DPAPI,
     macOS Keychain) and the authenticated machine-bound file only as a fallback.
-    The browser never receives an access or refresh token. Draft messages are
-    created only; no Microsoft Graph send endpoint is ever called. This is a
+    The browser never receives an access or refresh token. PPC creates draft messages only; Job Leads can send explicitly confirmed
+    messages after separate Mail.Send consent. This is a
     verbatim move of the legacy web-shell helpers.
     """
 
     _SCOPE = "offline_access User.Read Mail.ReadWrite"
+    _SEND_SCOPE = _SCOPE + " Mail.Send"
     _STORE_SCHEMA = 2
     _KEYCHAIN_SERVICE = "TheGuoLab.CVStudio.Outlook"
 
@@ -206,6 +208,7 @@ class OutlookService:
         self._refresh_lock = threading.Lock()
         self._device_lock = threading.RLock()
         self._draft_lock = threading.RLock()
+        self._connection_generation = 0
         self._device_store = {}
         self._draft_cache = {}
         self._store = self._load_store()
@@ -356,6 +359,7 @@ class OutlookService:
         account = store.get("account") if isinstance(store.get("account"), dict) else {}
         return {
             "schema": self._STORE_SCHEMA,
+            "scope": str(store.get("scope") or self._SCOPE),
             "access_token": str(store.get("access_token") or ""),
             "refresh_token": str(store.get("refresh_token") or ""),
             "client_id": str(store.get("client_id") or ""),
@@ -430,6 +434,7 @@ class OutlookService:
 
     def _clear_store(self):
         with self._store_lock:
+            self._connection_generation += 1
             self._store.clear()
             self._delete_all_secret_stores()
 
@@ -441,6 +446,8 @@ class OutlookService:
                 expires_at = int(self._store.get("expires_at") or 0)
                 if token and not force and (not expires_at or time.time() < expires_at - 120):
                     return token
+                generation = self._connection_generation
+                scope = self._store.get("scope") or self._SCOPE
                 refresh = str(self._store.get("refresh_token") or "").strip()
                 client_id = str(self._store.get("client_id") or "").strip()
                 tenant = _ms_safe_tenant(self._store.get("tenant") or "common")
@@ -451,10 +458,12 @@ class OutlookService:
                     "client_id": client_id,
                     "grant_type": "refresh_token",
                     "refresh_token": refresh,
-                    "scope": self._SCOPE,
+                    "scope": scope,
                 }, tenant=tenant)
             except Exception as exc:
                 with self._store_lock:
+                    if generation != self._connection_generation:
+                        raise PermissionError("The Outlook connection changed; review the sender again") from exc
                     self._store.pop("access_token", None)
                     self._store["expires_at"] = 0
                     self._save_store()
@@ -463,9 +472,12 @@ class OutlookService:
             if not access_token:
                 raise PermissionError("Microsoft returned no Outlook access token; reconnect Outlook")
             with self._store_lock:
+                if generation != self._connection_generation:
+                    raise PermissionError("The Outlook connection changed; review the sender again")
                 self._store.update({
                     "access_token": access_token,
                     "refresh_token": str(tok.get("refresh_token") or refresh),
+                    "scope": str(tok.get("scope") or scope),
                     "client_id": client_id,
                     "tenant": tenant,
                     "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
@@ -506,9 +518,17 @@ class OutlookService:
         return self.graph_json(path, body=body or {}, method="POST", timeout=timeout)
 
     def refresh_account(self):
-        profile = self.graph_json("me?$select=id,displayName,mail,userPrincipalName", timeout=20)
+        token = self._refresh_access_token()
+        with self._store_lock:
+            generation = self._connection_generation
+            if token != self._store.get('access_token'):
+                raise PermissionError("The Outlook connection changed")
+        profile = self._graph_client.request_json("me?$select=id,displayName,mail,userPrincipalName",
+                                                 timeout=20, access_token=token)
         account = _ms_outlook_account_normalize(profile)
         with self._store_lock:
+            if generation != self._connection_generation or token != self._store.get('access_token'):
+                raise PermissionError("The Outlook connection changed")
             self._store["account"] = account
             self._save_store()
         return account
@@ -520,6 +540,7 @@ class OutlookService:
             account = self._store.get("account") if isinstance(self._store.get("account"), dict) else {}
             return {
                 "connected": bool(has_access or has_refresh),
+                "can_send": "Mail.Send" in str(self._store.get("scope") or "").split(),
                 "client_id": str(self._store.get("client_id") or ""),
                 "tenant": self._store.get("tenant", "common"),
                 "expires_at": self._store.get("expires_at", 0),
@@ -588,13 +609,15 @@ class OutlookService:
                 except Exception:
                     pass
 
-    def _create_draft_payload(self, recipient, subject, html_body):
+    def _create_draft_payload(self, recipient, subject, html_body, *, access_token=None):
         payload = {
             "subject": subject,
             "body": {"contentType": "HTML", "content": html_body},
             "toRecipients": [{"emailAddress": {"address": recipient}}],
         }
-        draft = self._graph_post_json("me/messages", payload, timeout=30)
+        draft = (self._graph_client.request_json("me/messages", body=payload, method="POST", timeout=30,
+                  access_token=access_token, safe_to_retry=False, retries=0) if access_token else
+                 self._graph_post_json("me/messages", payload, timeout=30))
         web_link = str(draft.get("webLink") or "").strip()
         if not draft.get("id") or not web_link:
             raise RuntimeError("Microsoft created no usable Outlook draft link")
@@ -654,9 +677,12 @@ class OutlookService:
         tenant = _ms_safe_tenant(data.get("tenant") or "common")
         if not re.fullmatch(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}", client_id):
             return self._jsonify({"error": "Enter a valid Microsoft Outlook app Client ID", "action": "Copy the Application (client) ID from the Microsoft app registration."}), 400
+        with self._store_lock:
+            generation = self._connection_generation
+        scope = self._SEND_SCOPE if data.get("enable_send") is True else self._SCOPE
         try:
             d = self._graph_client.token_request(
-                {"client_id": client_id, "scope": self._SCOPE},
+                {"client_id": client_id, "scope": scope},
                 tenant=tenant,
                 endpoint="devicecode",
                 timeout=20,
@@ -672,6 +698,8 @@ class OutlookService:
                     "client_id": client_id,
                     "tenant": tenant,
                     "expires_at": time.time() + expires_in,
+                    "scope": scope,
+                    "connection_generation": generation,
                 }
             return self._jsonify({
                 "ok": True,
@@ -714,7 +742,12 @@ class OutlookService:
             access_token = str(tok.get("access_token") or "").strip()
             if not access_token:
                 return self._jsonify({"error": "Microsoft returned no Outlook access token", "action": "Restart the Outlook connection.", "technical_details": json.dumps(tok)[:1200]}), 502
-            with self._store_lock:
+            with self._device_lock, self._store_lock:
+                if (session_id not in self._device_store or
+                        session.get('connection_generation') != self._connection_generation):
+                    return self._jsonify({'error': 'The Outlook connection changed. Start login again.'}), 409
+                self._connection_generation += 1
+                login_generation = self._connection_generation
                 self._store.clear()
                 self._store.update({
                     "access_token": access_token,
@@ -723,6 +756,7 @@ class OutlookService:
                     "tenant": tenant,
                     "expires_at": int(time.time() + int(tok.get("expires_in") or 3300)),
                     "account": {},
+                    "scope": str(tok.get("scope") or session.get("scope") or self._SCOPE),
                 })
                 self._save_store()
             try:
@@ -731,8 +765,11 @@ class OutlookService:
                 account = {}
             with self._device_lock:
                 self._device_store.pop(session_id, None)
-            result = self.public_info()
-            result.update({"ok": True, "connected": True, "account": account or result.get("account")})
+            with self._store_lock:
+                if login_generation != self._connection_generation:
+                    return self._jsonify({'error': 'The Outlook connection changed. Start login again.'}), 409
+                result = self.public_info()
+                result.update({"ok": True, "connected": True, "account": account or result.get("account")})
             return self._jsonify(result)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")
@@ -757,14 +794,25 @@ class OutlookService:
         data = self._request_json()
         request_id = str(data.get("request_id") or "").strip()
         if request_id and not re.fullmatch(r"[A-Za-z0-9_.:-]{8,180}", request_id):
-            return self._jsonify({"error": "Invalid Outlook draft request ID"}), 400
+            return self._jsonify({"retry_safe": True, "error": "Invalid Outlook draft request ID"}), 400
         try:
             recipient, subject, html_body = _ms_outlook_validate_draft_input(data)
         except ValueError as exc:
-            return self._jsonify({"error": str(exc)}), 400
+            return self._jsonify({"retry_safe": True, "error": str(exc)}), 400
         except OverflowError as exc:
-            return self._jsonify({"error": str(exc)}), 413
-        payload_hash = hashlib.sha256((recipient + "\n" + subject + "\n" + html_body).encode("utf-8")).hexdigest()
+            return self._jsonify({"retry_safe": True, "error": str(exc)}), 413
+        sender = str(data.get('sender') or '').strip().lower()
+        access_token = None
+        if sender:
+            try:
+                access_token = self._refresh_access_token()
+            except Exception:
+                return self._jsonify({'retry_safe': True, 'error': 'Connect Outlook before creating a draft.'}), 401
+            with self._store_lock:
+                account = self._store.get('account') or {}
+                if sender != str(account.get('email') or '').strip().lower() or access_token != self._store.get('access_token'):
+                    return self._jsonify({'retry_safe': True, 'error': 'The Outlook account changed. Reopen the composer.'}), 409
+        payload_hash = hashlib.sha256((recipient + "\n" + subject + "\n" + html_body + ("\n"+sender if sender else "")).encode("utf-8")).hexdigest()
         self._cleanup_draft_cache()
 
         # Reserve this idempotency key before Graph is called. A concurrent retry
@@ -809,21 +857,85 @@ class OutlookService:
             }), 409
 
         try:
-            result = self._create_draft_payload(recipient, subject, html_body)
+            result = (self._create_draft_payload(recipient, subject, html_body, access_token=access_token) if access_token else
+                      self._create_draft_payload(recipient, subject, html_body))
             self._draft_request_complete(request_id, payload_hash, result)
             return self._jsonify(result)
         except PermissionError as exc:
             self._draft_request_fail(request_id)
-            return self._jsonify({"error": str(exc), "action": "Reconnect Outlook.", "needs_reconnect": True}), 401
+            return self._jsonify({"retry_safe": True, "error": str(exc), "action": "Reconnect Outlook.", "needs_reconnect": True}), 401
         except urllib.error.HTTPError as exc:
             self._draft_request_fail(request_id)
             body = exc.read().decode(errors="replace")
             payload = _ms_outlook_error_payload(body, exc.code, "Microsoft Outlook draft creation")
             payload["needs_reconnect"] = exc.code in (400, 401, 403)
+            payload["retry_safe"] = exc.code in (400, 401, 403, 404, 413, 429)
             return self._jsonify(payload), exc.code
         except Exception as exc:
             self._draft_request_fail(request_id)
             return self._jsonify({"error": "Could not create the Microsoft Outlook draft", "action": "Use Copy formatted, then review Technical details.", "technical_details": str(exc)[:1200]}), 500
+
+    def send_job_leads_email(self):
+        """One confirmed attempt per durable request ID; never replay a send."""
+        data = self._request_json()
+        if data.get('confirmed') is not True:
+            return self._jsonify({'retry_safe': True, 'error': 'Review and confirm the email before sending.'}), 400
+        request_id = data.get('request_id')
+        if not isinstance(request_id, str) or not re.fullmatch(r'job-email:[a-f0-9]{32}', request_id):
+            return self._jsonify({'retry_safe': True, 'error': 'Invalid email request ID.'}), 400
+        try:
+            recipient, subject, html_body = _ms_outlook_validate_draft_input(data)
+        except (ValueError, OverflowError) as exc:
+            return self._jsonify({'retry_safe': True, 'error': str(exc)}), 400
+        try:
+            token = self._refresh_access_token()
+        except Exception:
+            return self._jsonify({'retry_safe': True, 'error': 'Connect Outlook in Settings before sending.', 'needs_reconnect': True}), 401
+        with self._store_lock:
+            account = self._store.get('account') or {}
+            sender = str(account.get('email') or '').strip().lower()
+            if not sender or sender != str(data.get('sender') or '').strip().lower():
+                return self._jsonify({'retry_safe': True, 'error': 'The Outlook account changed. Reopen the composer to review the sender.'}), 409
+            if 'Mail.Send' not in str(self._store.get('scope') or '').split():
+                return self._jsonify({'retry_safe': True, 'error': 'Enable Outlook sending and approve Mail.Send before sending.', 'needs_send_permission': True}), 403
+            # Pin the exact reviewed account's token across account transitions.
+            if token != self._store.get('access_token'):
+                return self._jsonify({'retry_safe': True, 'error': 'The Outlook connection changed. Reopen the composer.'}), 409
+        fingerprint = hashlib.sha256(json.dumps([sender, recipient, subject, html_body], ensure_ascii=False).encode()).hexdigest()
+        path = os.path.join(os.path.dirname(self._receipt_path()), 'job_leads_email_attempts.sqlite3')
+        try:
+            with sqlite3.connect(path, timeout=10) as db:
+                db.execute('PRAGMA synchronous=FULL')
+                db.execute('CREATE TABLE IF NOT EXISTS attempts (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, state TEXT NOT NULL)')
+                db.execute('BEGIN IMMEDIATE')
+                previous = db.execute('SELECT fingerprint,state FROM attempts WHERE id=?', (request_id,)).fetchone()
+                if previous:
+                    if previous[0] != fingerprint:
+                        return self._jsonify({'error': 'This email request ID was used for another message.'}), 409
+                    if previous[1] == 'accepted':
+                        return self._jsonify({'ok': True, 'state': 'accepted', 'reused': True})
+                    return self._jsonify({'error': 'This send was already attempted. Check Outlook Sent Items before composing another email.', 'state': 'unconfirmed'}), 409
+                db.execute('INSERT INTO attempts VALUES (?,?,?)', (request_id, fingerprint, 'attempted'))
+        except sqlite3.Error:
+            return self._jsonify({'retry_safe': True, 'error': 'Could not save the email attempt. Nothing was sent.'}), 503
+        try:
+            self._graph_client.request_json('me/sendMail', method='POST', body={
+                'message': {'subject': subject, 'body': {'contentType': 'HTML', 'content': html_body},
+                            'toRecipients': [{'emailAddress': {'address': recipient}}]},
+                'saveToSentItems': True,
+            }, access_token=token, safe_to_retry=False, retries=0, timeout=30)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (400, 401, 403, 404, 413, 429):
+                return self._jsonify({'error': 'Outlook rejected the email. Check the address and Microsoft permissions before composing again.', 'state': 'rejected', 'needs_reconnect': exc.code in (401,403)}), exc.code
+            return self._jsonify({'error': 'The send result is unconfirmed. Check Outlook Sent Items before composing another email.', 'state': 'unconfirmed'}), 502
+        except Exception:
+            return self._jsonify({'error': 'The send result is unconfirmed. Check Outlook Sent Items before composing another email.', 'state': 'unconfirmed'}), 502
+        try:
+            with sqlite3.connect(path, timeout=10) as db:
+                db.execute('UPDATE attempts SET state=? WHERE id=?', ('accepted', request_id))
+        except sqlite3.Error:
+            return self._jsonify({'error': 'Outlook accepted the email, but the local receipt could not be saved. Check Sent Items; do not resend.', 'state': 'unconfirmed'}), 503
+        return self._jsonify({'ok': True, 'state': 'accepted'})
 
     def create_test_draft(self):
         try:

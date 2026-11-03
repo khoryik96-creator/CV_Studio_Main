@@ -3,7 +3,7 @@
   'use strict';
   const el = id => document.getElementById('jobLeads' + id);
   const labels = {new:'New', to_contact:'To contact', contacted:'Contacted', follow_up:'Following up', won:'Won', closed:'Closed'};
-  const fields = ['url', 'company', 'role', 'contact', 'location', 'date_posted', 'folder', 'status', 'follow_up', 'notes', 'description'];
+  const fields = ['url', 'company', 'role', 'contact', 'location', 'date_posted', 'folder', 'follow_up', 'notes', 'description'];
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
   const picked = new Set();
@@ -84,7 +84,7 @@
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
-  function draft() { return {...Object.fromEntries(fields.map(key => [key, el(key).value])), description_truncated:descriptionTruncated, description_rich:descriptionRich}; }
+  function draft() { return {...Object.fromEntries(fields.map(key => [key, el(key).value])), status:editing?.status || 'new', description_truncated:descriptionTruncated, description_rich:descriptionRich}; }
   const richTags = new Set(['p','h3','h4','ul','ol','li','strong','em','br','blockquote']);
   const markupViews=new Map(),contentViews=new WeakMap();
   function content(target, plain, rich, normalized=false) {
@@ -218,7 +218,7 @@
     // Each ad's client is looked up once per call, not per comparison.
     const owners = new Map(), ownerOf = row => { if (!owners.has(row)) owners.set(row, clientOf(row)); return owners.get(row); };
     const list = rows.filter(row => (folder === '!trash' ? row.deleted : !row.deleted && (folder === '*' || (row.folder || '') === folder)) &&
-      (!filter || row.status === filter || filter === 'due' && due(row)) &&
+      (!filter || filter === 'favorite' && row.favorite) &&
       (!client || (client === '!any' ? !!ownerOf(row) : String(ownerOf(row)?.company_id ?? '') === client)) &&
       (!since || postedOf(row) >= since) &&
       (!term || [row.company, row.role, row.contact, row.notes, row.location, ownerOf(row)?.name].some(value => String(value || '').toLocaleLowerCase().includes(term))));
@@ -356,7 +356,7 @@
     const people = new Set(rows.filter(row => !row.deleted && row.hr).flatMap(row => (row.hr.people || []).map(person =>
       (row.hr.company_id || '') + '|' + String(person.url || '').replace(/\/+$/, '').toLowerCase())));
     const hrCount = document.getElementById('peopleHRTabCount'); if (hrCount) hrCount.textContent = String(people.size);
-    el('Due').textContent = String(rows.filter(row => !row.deleted && due(row)).length);
+    el('Due').textContent = String(rows.filter(row => !row.deleted && row.favorite).length);
     updateClear();
     page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
     el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
@@ -382,8 +382,22 @@
       open.setAttribute('aria-label', 'Preview ' + row.role + ' at ' + row.company); title.appendChild(open);
       if (row.notes) title.appendChild(node('div', row.notes.slice(0, 120) + (row.notes.length > 120 ? '…' : ''), 'job-leads-muted'));
       const company = node('td', row.company); if (row.contact) company.appendChild(node('div', 'Contact: ' + row.contact, 'job-leads-muted'));
-      const state = node('td', labels[row.status] || row.status);
-      if (row.follow_up) state.appendChild(node('div', (due(row) ? 'Due · ' : 'Follow up · ') + row.follow_up, due(row) ? 'job-lead-due' : 'job-leads-muted'));
+      const state = node('td');
+      if (!row.deleted) {
+        const favorite = button(row.favorite ? '★' : '☆', async () => {
+          if (busy) return;
+          lock(true);
+          try {
+            const saved=await api({action:'save',record:{...row,favorite:!row.favorite}});
+            if (editing?.id===row.id && editing.revision===row.revision) {
+              editing={...editing,revision:saved.record.revision,favorite:saved.record.favorite};
+            }
+            await load(); status(row.favorite ? 'Removed from favorites.' : 'Added to favorites.');
+          } catch (error) { status(error.message); } finally { lock(false); }
+        });
+        favorite.setAttribute('aria-label', (row.favorite ? 'Unfavorite ' : 'Favorite ') + row.role + ' at ' + row.company);
+        favorite.setAttribute('aria-pressed', String(!!row.favorite)); state.append(favorite);
+      }
       const hr = node('td');
       if (!row.deleted) hr.appendChild(button(row.hr ? `HR people (${row.hr.people.length})` : 'Find HR', () => { if (!busy) { selectPreview(row.url); chooseGuide('HR'); el('HR').scrollIntoView({block:'nearest',behavior:'smooth'}); } }));
       // The HR people tab, filtered to this company, is where emails are unlocked.
@@ -397,12 +411,81 @@
         if (row.deleted) return moveToTrash([row], false);
         if (!busy && discard()) { fill(row); showForm(true); chooseGuide('Form'); status('Editing saved lead.'); el('Form').scrollIntoView({block:'start', behavior:'smooth'}); }
       }));
+      if (!row.deleted) actions.appendChild(button('Email client', () => composeEmail(row)));
       if (!row.deleted) actions.appendChild(button('Delete', () => moveToTrash([row], true), 'sec job-lead-delete'));
       const cells = node('td'); cells.appendChild(actions);
       tr.append(pick, node('td', posted), title, company, node('td', clientOf(row)?.name || '—'), node('td', row.location || '—'),
         state, node('td', row.folder || 'Unfiled'), node('td', savedLabel(row.created_at)), hr, cells);
       list.appendChild(tr);
     });
+  }
+  let emailBusy=false, emailDone=false, emailAccount=null, emailRequest='', emailGeneration=0;
+  const emailDirty=()=>!emailDone && ['To','Subject','Body'].some(name=>el('Email'+name).value.trim());
+  const emailMessage=value=>{el('EmailMessage').textContent=value;};
+  function emailLock(value) {
+    emailBusy=value;
+    for (const name of ['To','Subject','Body']) el('Email'+name).disabled=value || emailDone;
+    for (const name of ['Connect','Finish','Close','New']) el('Email'+name).disabled=value;
+    el('EmailDraft').disabled=value || emailDone || !emailAccount?.connected;
+    el('EmailSend').disabled=value || emailDone || !emailAccount?.can_send;
+  }
+  async function emailInfo() {
+    const generation=++emailGeneration;
+    try {
+      const response=await fetch('/ppc/outlook/api_info',{cache:'no-store'}), data=await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not read Outlook account.');
+      if (generation!==emailGeneration) return;
+      emailAccount=data;
+      el('EmailConnect').hidden=!!data.can_send;el('EmailFinish').hidden=!!data.can_send;
+      el('EmailAccount').textContent=data.connected ? 'From: '+(data.account?.email || 'Unknown account')+(data.can_send ? '' : ' · Drafts only. Enable Outlook sending to send here.') : 'Connect Outlook in Settings → Integrations & Data, or enable sending below.';
+    } catch (error) { if (generation===emailGeneration) {emailAccount=null;el('EmailAccount').textContent=error.message;} }
+    emailLock(emailBusy);
+  }
+  function composeEmail(contact={}) {
+    if (emailBusy) return;
+    if (!emailDone && (el('EmailTo').value || el('EmailSubject').value || el('EmailBody').value) &&
+        !window.confirm('Replace the email currently in the composer?')) return;
+    emailDone=false; emailRequest='job-email:'+hex(); emailAccount=null;
+    el('EmailTo').value=contact.email || '';
+    el('EmailSubject').value=contact.role ? 'Hiring for '+contact.role+(contact.company ? ' at '+contact.company : '') : '';
+    el('EmailBody').value=''; el('EmailOpen').hidden=true;el('EmailOpen').removeAttribute?.('href');el('EmailNew').hidden=true;
+    emailMessage('Review the recipient and message. Choose a draft to send in Outlook, or send here.');
+    el('EmailCard').hidden=false;emailLock(false);emailInfo();el('EmailCard').scrollIntoView({block:'start',behavior:'smooth'});
+  }
+  const emailEscape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  async function emailSubmit(send) {
+    if (emailBusy || emailDone) return;
+    const to=el('EmailTo').value.trim(), subject=el('EmailSubject').value.trim(), body=el('EmailBody').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || !subject || !body) {emailMessage('Enter a valid recipient, subject and message.');return;}
+    emailLock(true);
+    let attempted=false;
+    try {
+      // Re-read the connection before showing the sender in the confirmation.
+      const previousSender=emailAccount?.account?.email;
+      await emailInfo();
+      if (!emailAccount?.connected || !emailAccount.account?.email) throw Error('Connect Outlook before creating or sending this email.');
+      if (previousSender && previousSender!==emailAccount.account.email) throw Error('The Outlook account changed. Review the sender and try again.');
+      if (send && !emailAccount.can_send) throw Error('Enable Outlook sending and approve Mail.Send first.');
+      if (!window.confirm((send?'Send this email now?':'Create this draft in Outlook?')+'\n\nFrom: '+emailAccount.account.email+'\nTo: '+to+'\nSubject: '+subject)) return;
+      attempted=true;emailDone=true;
+      const payload={to,subject,html:'<div style="white-space:pre-wrap">'+emailEscape(body)+'</div>',request_id:emailRequest,sender:emailAccount.account.email};
+      if (send) Object.assign(payload,{action:'outlook_send',confirmed:true});
+      const response=await fetch(send?'/job-leads':'/ppc/outlook/create_draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const result=await response.json();
+      if (!response.ok || !result.ok) {
+        if (result.retry_safe===true || result.state==='rejected') {
+          emailDone=false;emailRequest='job-email:'+hex();attempted=false;
+        }
+        throw Error(result.error || 'The Outlook result could not be confirmed. Check Outlook before composing again.');
+      }
+      if (send) emailMessage('Accepted by Outlook for sending. Check Sent Items for the email.');
+      else {
+        const url=new URL(result.webLink);
+        if (url.protocol!=='https:' || !/^(outlook\.office\.com|outlook\.office365\.com|outlook\.live\.com)$/.test(url.hostname)) throw Error('Draft created. Open Outlook Drafts to review and send it.');
+        el('EmailOpen').href=url.href;el('EmailOpen').hidden=false;emailMessage('Draft created. Open it in Outlook to review and send.');
+      }
+    } catch (error) { emailMessage(attempted ? error.message+' Check Outlook before composing another email.' : error.message); }
+    finally {el('EmailNew').hidden=!emailDone;emailLock(false);}
   }
   const searchStatus = value => { el('SearchStatus').textContent = value; };
   const savedJob = url => rows.find(row => jobLink(row.url) === url);
@@ -1129,7 +1212,7 @@
     if (!url) { status('Paste a LinkedIn job ad link to fill in its details.'); guide('url',true,true); return; }
     if (editing && jobLink(editing.url) !== url) { status('Click New lead before filling a different job ad. Your current lead has been kept.'); return; }
     const previousSource = lastReadUrl, changedSource = previousSource && previousSource !== url;
-    if (changedSource && !window.confirm('Use this different job ad? Its details will replace this draft, including contact, notes, status and dates. The folder will be kept.')) {
+    if (changedSource && !window.confirm('Use this different job ad? Its details will replace this draft, including contact, notes and dates. The folder will be kept.')) {
       el('url').value = previousSource; status('The current job draft has been kept.'); return;
     }
     const before = draft(); lock(true); status(useBrowser ? 'Reading this job ad in Chrome…' : 'Reading public LinkedIn job details…');
@@ -1293,6 +1376,13 @@
       for (const id of ['Filter', 'ClientFilter', 'PostedFilter']) el(id).value = '';
       el('FolderFilter').value = '*'; applySavedFilters();
     });
+    el('EmailCompose').addEventListener('click',()=>composeEmail());
+    el('EmailClose').addEventListener('click',()=>{if(!emailBusy)el('EmailCard').hidden=true;});
+    el('EmailDraft').addEventListener('click',()=>emailSubmit(false));
+    el('EmailSend').addEventListener('click',()=>emailSubmit(true));
+    el('EmailNew').addEventListener('click',()=>composeEmail());
+    el('EmailConnect').addEventListener('click',async()=>{if(emailBusy)return;emailLock(true);try{await window.ppcStartOutlookLogin?.(true);}catch(error){emailMessage(error.message);}finally{await emailInfo();emailLock(false);}});
+    el('EmailFinish').addEventListener('click',async()=>{if(emailBusy)return;emailLock(true);try{await window.ppcFinishOutlookLogin?.();}catch(error){emailMessage(error.message);}finally{await emailInfo();emailLock(false);}});
     el('AddManual').addEventListener('click', () => { if (!busy && discard()) { fill(null); showForm(true); chooseGuide('Form'); el('url').focus(); } });
     el('FormClose').addEventListener('click', () => { if (!busy && discard()) { fill(null); showForm(false); chooseGuide('Search'); } });
     el('FolderNew').addEventListener('click', () => { if (!busy) { el('FolderEditor').hidden = false; el('FolderName').focus(); } });
@@ -1333,7 +1423,7 @@
     });
     el('Export').addEventListener('click', () => {
       const safe = value => { const text = String(value ?? ''); return '"' + (/^[\s]*[=+@-]/.test(text) ? "'" : '') + text.replaceAll('"', '""') + '"'; };
-      const keys = ['company','role','folder','created_at','date_posted','contact','status','follow_up','url','location','notes','description'];
+      const keys = ['company','role','folder','created_at','date_posted','contact','favorite','follow_up','url','location','notes','description'];
       download(new Blob(['\uFEFF' + [keys, ...filtered().map(row => keys.map(key => row[key]))].map(row => row.map(safe).join(',')).join('\r\n')], {type:'text/csv;charset=utf-8'}), 'CV-Studio-Job-Leads.csv');
     });
     el('Backup').addEventListener('click', () => { window.location.href = '/job-leads?action=backup'; });
@@ -1349,7 +1439,7 @@
       } catch (error) { status(error instanceof SyntaxError ? 'Choose a valid Job Leads backup file.' : error.message); }
       finally { el('File').value = ''; lock(false); }
     });
-    window.addEventListener('beforeunload', event => { if (dirty || busy) { event.preventDefault(); event.returnValue = ''; } });
+    window.addEventListener('beforeunload', event => { if (dirty || busy || emailBusy || emailDirty()) { event.preventDefault(); event.returnValue = ''; } });
     fill(null); lock(true);
     try {
       await load();
@@ -1388,6 +1478,6 @@
     if (live.length > chosen.length) status(`${live.length - chosen.length} more new ads can be scanned afterwards: select them in ${folder} and click Scan selected ads.`);
     return chosen.length ? startBulkHR(chosen) : false;
   }
-  window.cvStudioJobLeads={refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,scanSavedAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  window.cvStudioJobLeads={composeEmail,refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,scanSavedAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();
