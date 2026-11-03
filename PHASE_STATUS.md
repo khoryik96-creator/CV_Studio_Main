@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.554 is on `codex/job-public-rate-limit-recovery`, from merged553/PR297.
+  Its pull request records current CI, review and merge status. Public 429s pause public HTTP traffic while companion reads
+  continue, with a shared backend cooldown and frontend status/retry handling.
+  All 95 frontend fixtures and 204 focused backend/version checks pass, plus
+  fictional Chromium rate-limit and existing card/background workflows.
+
 - v24.6.553 is on `codex/job-card-click-preview`, from merged552. Its pull
   request records current CI, review and merge status.
   Cards open previews on click; the separate Preview button is removed. Native

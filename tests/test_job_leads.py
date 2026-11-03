@@ -274,6 +274,20 @@ def test_public_lookup_uses_no_ai_credentials_or_durable_write(module):
     assert not module._JOB_LEADS.path.exists()
 
 
+def test_public_lookup_rate_limit_exposes_cooldown_without_durable_changes(module):
+    from cvstudio_job_leads import JobLeadsError
+    failure = JobLeadsError('Public reads are paused.', 429, 'JOB_AD_RATE_LIMITED')
+    failure.retry_after_seconds = 120
+    with mock.patch.object(module._PUBLIC_JOB_ADS, 'read', side_effect=failure), mock.patch.object(module._AI_PROVIDER_CLIENT, 'request') as provider:
+        reply = module.app.test_client().post('/job-leads', json={'action': 'lookup', 'url': RECORD['url']}, headers={'X-CV-Studio-Request': '1'})
+    assert reply.status_code == 429 and reply.json['code'] == 'JOB_AD_RATE_LIMITED'
+    assert reply.json['retry_after_seconds'] == 120 and reply.headers['Retry-After'] == '120'
+    assert reply.json['request_id'] and reply.json['retryable'] is False
+    assert 'no-store' in reply.headers['Cache-Control']
+    provider.assert_not_called()
+    assert not module._JOB_LEADS.path.exists()
+
+
 def test_rich_format_and_trash_routes_preserve_guards_and_use_no_ai(module):
     client = module.app.test_client()
     headers = {'X-CV-Studio-Request':'1'}

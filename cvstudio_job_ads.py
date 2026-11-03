@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import math
+from email.utils import parsedate_to_datetime
 from datetime import datetime
 import re
 import threading
@@ -14,6 +16,8 @@ import requests
 from cvstudio_job_leads import JobLeadsError, job_url, format_description
 
 MAX_HTML_BYTES = 4 * 1024 * 1024
+PUBLIC_RATE_LIMIT_PAUSE = 300
+PUBLIC_RATE_LIMIT_MAX = 2_147_483_647
 
 
 def _posted_date(value):
@@ -166,22 +170,61 @@ def parse_public_job(html, expected_url):
     raise _unavailable()
 
 
+def _public_retry_after(value):
+    """Honor bounded Retry-After seconds/dates; unknown responses wait 5 minutes."""
+    try:
+        value = str(value or '').strip()
+        if len(value) > 128:
+            return PUBLIC_RATE_LIMIT_PAUSE
+        seconds = int(value) if value.isascii() and value.isdigit() else math.ceil(parsedate_to_datetime(value).timestamp() - time.time())
+        return min(seconds, PUBLIC_RATE_LIMIT_MAX) if seconds > 0 else PUBLIC_RATE_LIMIT_PAUSE
+    except (ValueError, TypeError, OverflowError, OSError):
+        return PUBLIC_RATE_LIMIT_PAUSE
+
+
+def _public_rate_error(remaining):
+    error = JobLeadsError(
+        f'LinkedIn is temporarily limiting public job reads. Public reads are paused for {remaining} seconds. Saved ads and the connected Chrome companion remain available.',
+        429, 'JOB_AD_RATE_LIMITED')
+    error.retry_after_seconds = remaining
+    return error
+
+
 class PublicLinkedInJobs:
     def __init__(self, get=None, clock=None):
         self.get = get or requests.get
         self.clock = clock or time.monotonic
         self.slots = threading.BoundedSemaphore(2)
+        self._rate_lock = threading.Lock()
+        self._public_paused_until = 0
+
+    def _rate_pause(self):
+        with self._rate_lock:
+            if not self._public_paused_until:
+                return 0
+            remaining = math.ceil(self._public_paused_until - self.clock())
+            if remaining <= 0:
+                self._public_paused_until = 0
+                return 0
+            return remaining
+
+    def _check_rate_pause(self):
+        remaining = self._rate_pause()
+        if remaining:
+            raise _public_rate_error(remaining)
 
     def read(self, value):
         expected = job_url(value)
         if not expected:
             raise JobLeadsError('Paste a valid LinkedIn job ad link.')
+        self._check_rate_pause()
         if not self.slots.acquire(blocking=False):
             raise JobLeadsError('Job details are being read in another window. Wait a moment, then try again.', 409, 'JOB_AD_BUSY')
         try:
             current = expected
             deadline = self.clock() + 20
             for _ in range(4):
+                self._check_rate_pause()
                 if self.clock() >= deadline:
                     raise _unavailable()
                 # Each hop is a fresh unauthenticated request: cookies, tokens
@@ -190,7 +233,10 @@ class PublicLinkedInJobs:
                               headers={'Accept':'text/html'}, auth=_without_credentials,
                               timeout=(5, 8)) as response:
                     if response.status_code == 429:
-                        raise JobLeadsError('LinkedIn is temporarily limiting public job reads. Try again later, or open this CV Studio address in Chrome and connect the companion to read an ad you can view there. Saved ads can still be opened below.', 429, 'JOB_AD_RATE_LIMITED')
+                        pause = _public_retry_after(response.headers.get('Retry-After'))
+                        with self._rate_lock:
+                            self._public_paused_until = max(self._public_paused_until, self.clock() + pause)
+                        raise _public_rate_error(max(1, self._rate_pause()))
                     if response.status_code in {301,302,303,307,308}:
                         target = urljoin(current, response.headers.get('Location', ''))
                         if job_url(target) != expected or not urlsplit(target).path.startswith('/jobs/view/'):
