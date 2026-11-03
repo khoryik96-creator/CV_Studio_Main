@@ -829,10 +829,22 @@
     for (const row of discovered.slice(discoveryPage*20, (discoveryPage+1)*20)) {
       const card = node('article','','job-leads-discovery-card' + (row.url === previewUrl ? ' is-previewing' : '') + (discoveryPicked.has(row.url) && !savedJob(row.url) ? ' is-selected' : ''));
       card.dataset.url = row.url;
+      const openPreview=()=>{if(!busy)selectPreview(row.url,true,'search');};
+      card.addEventListener('click',event=>{
+        if(busy || event?.defaultPrevented)return;
+        const control=event?.target?.closest?.('a, button, input, label, select, textarea, details, [role="button"]');
+        if(control && card.contains(control))return;
+        const selection=window.getSelection?.();
+        if(selection?.toString() && (card.contains(selection.anchorNode) || card.contains(selection.focusNode)))return;
+        openPreview();
+      });
       const heading = node('div','','job-ad-card-heading'), identity = node('div','','job-ad-card-identity');
       const initials = String(row.company || '').trim().split(/\s+/).slice(0,2).map(word => Array.from(word)[0] || '').join('').toLocaleUpperCase() || 'AD';
       const mark = node('span',initials,'job-ad-company-mark'); mark.setAttribute('aria-hidden','true');
-      identity.append(node('h3',row.role),node('p',row.company,'job-ad-company'));
+      const titleHeading=node('h3',''),title=node('button',row.role,'job-ad-card-title');
+      title.type='button';title.setAttribute('aria-label','Preview '+row.role+' at '+row.company);
+      title.addEventListener('click',openPreview);titleHeading.append(title);
+      identity.append(titleHeading,node('p',row.company,'job-ad-company'));
       heading.append(mark,identity);
       const saved = savedJob(row.url), actions = node('div','','job-leads-actions job-ad-card-actions');
       if (saved) { discoveryPicked.delete(row.url); heading.append(node('span',saved.deleted ? 'Already in Trash' : 'Already saved','job-ad-saved')); }
@@ -851,7 +863,6 @@
       card.append(meta);
       if (row.fullError && !row.full) card.append(node('p',row.fullError,'job-ad-card-error'));
       const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'job-ad-source';
-      const preview = node('button','Preview','sec job-ad-preview'); preview.type = 'button'; preview.addEventListener('click',() => { if (!busy) selectPreview(row.url, true, 'search'); }); actions.append(preview);
       const read = node('button',row.full ? 'View full ad' : row.fullError ? 'Retry full ad' : 'Read full ad','sec'); read.type = 'button'; read.addEventListener('click', () => previewDiscovered(row)); actions.append(read);
       actions.append(link); card.append(actions);
       const details = node('details'), summary = node('summary',row.full ? 'View job ad content' : 'View search summary');
