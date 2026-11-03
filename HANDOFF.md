@@ -7,7 +7,32 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source: v24.6.549 company-header resolution and pull summary**
+**Local work: v24.6.550 job-search scrolling and background full ads (unmerged)**
+on `codex/job-search-results-scroll`, from merged v24.6.549 / PR294.
+- Search lists keyword-matched summaries first, then loads full descriptions
+  sequentially after the search run closes. Results, selection and saving stay
+  usable. Ready descriptions use the cache; loading/failures are visible per ad.
+- Stop and resume/retry controls cancel the exact companion operation. A new
+  search, Clear, pagehide or foreground companion action drains/cancels the queue;
+  late cancelled results are ignored. Access/connection failures pause the queue,
+  individual ad layout/timeouts retain their summaries and let other ads proceed.
+- Full reads now wait up to 48 passive DOM polls (previously 16), and no longer
+  return an empty description after six polls. Full-read RPC allows 55 seconds.
+  `full_ad_background_revision:1` gates automatic background reads; apply the
+  companion update as well as updating the app. No live LinkedIn layout fix is
+  claimed. Existing tab ownership, access and exact-ad identity checks remain.
+- Job search results scroll independently within 70vh / 720px, with a visible
+  scrollbar gutter and keyboard-focusable labeled region. Same-page redraws
+  preserve scroll, keyboard focus and expanded summaries; pagination starts at
+  the top. Saved ad records and editing drafts are never overwritten by prefetch.
+- Validation: all 94 frontend fixtures, 234 focused backend/version tests,
+  syntax, whitespace and repository consistency passed. Chromium checked a
+  fictional 25-ad list-first workflow, rich capture, selection, stable scroll,
+  focus/expanded content, Stop/Clear, desktop/mobile bounded scrolling and no
+  horizontal overflow. See `cv_studio_v24_6_550_background_ads_qa_report.md`.
+  No live LinkedIn/provider action, publication, merge or installed-app update.
+
+**Previous checkpoint: v24.6.549 company-header resolution and pull summary (merged PR294)**
 on `codex/client-company-resolution-summary`, from merged v24.6.548 / PR293.
 - The reported Lear Corporation company URL is a valid named company-page link.
   Its authenticated live DOM has not been reproduced in this environment.

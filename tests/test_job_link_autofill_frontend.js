@@ -20,7 +20,7 @@ function fixture() {
       state.readCount=(state.readCount||0)+1;
       if(state.delayedReads){state.delayedReads--;return [{result:{loading:true}}]}
       if(state.readFails)throw Error('Synthetic unrecognized job layout');
-      return [{result:state.readerError?{jobError:state.readerError}:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur'}}];
+      return [{result:state.readerError?{jobError:state.readerError}:{url:args.args[0],company:'Sample Company',role:'Finance Manager',location:'Kuala Lumpur',description:'Full sample job description'}}];
     }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
   const context=vm.createContext({chrome,URL,Map,Set,Error,Number,setTimeout:fn=>fn(),crypto:identity.crypto,TextEncoder});
@@ -40,15 +40,15 @@ function fixture() {
   assert((await f.rpc('jobStatus')).error,'status cannot bypass the app binding');
   assert((await f.rpc('jobFromLink',{url})).error);assert.equal(f.state.created.length,0);
   await f.arm();
-  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,concurrent_scans_revision:1,profile_browsing_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,companion_update_revision:1,version:'24.6.461',busy:false,other_busy:false});
+  assert.deepEqual({...((await f.rpc('jobStatus')).result)},{connected:true,job_read:true,full_ad_background_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,concurrent_scans_revision:1,profile_browsing_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,companion_update_revision:1,version:'24.6.461',busy:false,other_busy:false});
   assert.equal((await f.rpc('jobFromLink',{url})).result.location,'Kuala Lumpur');
   assert.equal(f.state.created.length,0);assert.equal(f.state.removed.length,0,'existing tabs remain open');
   f.state.delayedReads=3;let reads=f.state.readCount;
   assert.equal((await f.rpc('jobRead',{tab_id:2,expected_url:url})).result.company,'Sample Company');
-  assert.equal(f.state.readCount-reads,6,'waits on delayed DOM fields and description without navigating');
+  assert.equal(f.state.readCount-reads,4,'waits on delayed DOM fields and description without navigating');
   f.state.delayedReads=100;reads=f.state.readCount;
   assert((await f.rpc('jobRead',{tab_id:2,expected_url:url})).error);
-  assert.equal(f.state.readCount-reads,16,'readiness wait has a fixed bound');f.state.delayedReads=0;
+  assert.equal(f.state.readCount-reads,48,'readiness wait has a fixed bound');f.state.delayedReads=0;
   assert.equal(f.state.created.length,0,'readiness never retries by creating another tab');
   for(const invalid of ['javascript:alert(1)','https://attacker.invalid/jobs/view/123','https://www.linkedin.com/in/person','https://user@www.linkedin.com/jobs/view/123',url+'?trk=x','https://www.linkedin.com/jobs/search/?currentJobId=1234567890']) {
     assert((await f.rpc('jobFromLink',{url:invalid})).error,invalid);

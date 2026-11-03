@@ -22,7 +22,7 @@ function fixture(options={}){
     if(message.type==='CVSTUDIO_LINKEDIN_CAPTURE_RESULT'){state.captureReply?.(message.result);state.captureReply=null;return}
     calls.push(message);const reply=(value,error)=>events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',id:message.id,channel:message.channel,...(error?typeof error==='object'?{error:error.message,error_code:error.code,...(error.companyURL?{company_url:error.companyURL}:{})}:{error}:{result:value})}});
     if(state.onRPC?.(message,reply))return;
-    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,concurrent_scans_revision:state.oldConcurrent?0:1,version:'24.6.461',busy:state.busy});
+    if(message.action==='jobStatus')return reply({connected:state.connected,job_search:state.searchCapable,job_search_revision:state.searchRevision,full_ad_background_revision:state.backgroundCapable?1:0,concurrent_scans_revision:state.oldConcurrent?0:1,version:'24.6.461',busy:state.busy});
     if(message.action==='jobSearchTabs')return reply([{id:20,title:'Open filtered jobs',url:'https://www.linkedin.com/jobs/search/?keywords=finance&f_WT=2'}]);
     if(message.action==='jobSearchBegin'){state.page=0;state.scroll=0;return reply({tab_id:20})}
     if(message.action==='end')return reply(true);
@@ -154,7 +154,15 @@ if(require.main===module)(async()=>{
   const paging=fixture();paging.state.many=true;paging.state.totalPages=1;paging.state.pageSize=23;
   await paging.init();await paging.el('SearchStart').click();assert.match(paging.el('PreviewPosition').textContent,/Search results.*1 of 23/);
   assert(!paging.el('SearchPagination').hidden);assert(paging.el('PreviewRemove').hidden,'unsaved search ads cannot be trashed as saved records');
+  const scrollResults=paging.el('SearchResults'),replaceResults=scrollResults.replaceChildren.bind(scrollResults);
+  scrollResults.replaceChildren=(...children)=>{replaceResults(...children);scrollResults.scrollTop=0;};
+  scrollResults.scrollTop=240;
+  await scrollResults.children[5].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  assert.equal(scrollResults.scrollTop,240,'opening a preview preserves the list scroll position');
+  paging.el('SearchSelectPage').checked=true;paging.el('SearchSelectPage').handlers.change();
+  assert.equal(scrollResults.scrollTop,240,'selection redraws preserve the list scroll position');
   await paging.el('SearchNext').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 20');
+  assert.equal(scrollResults.scrollTop,0,'a new results page starts at the top');
   await paging.el('PreviewPrevious').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 19');
   assert(!paging.el('SearchNext').disabled,'ad navigation follows its result across results pages');
   await paging.el('PreviewNext').click();assert.equal(paging.el('PreviewTitle').textContent,'Found role 20');

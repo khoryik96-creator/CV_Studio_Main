@@ -18,7 +18,8 @@
     try { if (value === null) localStorage.removeItem(folderPreferenceKey); else localStorage.setItem(folderPreferenceKey,value); } catch {}
   }
   let folderNames = [];
-  let discovered = [], discoveryPage = 0, discovering = false, discoveryStopped = false, discoveryRun = '';
+  let discovered = [], discoveryPage = 0, discoveryRenderedPage = -1, discovering = false, discoveryStopped = false, discoveryRun = '';
+  let backgroundAds = null;
   const discoveryPicked = new Set();
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
   let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
@@ -789,6 +790,10 @@
     for (const name of ['HRCountryMode','HRCountry','HRKeywords','HRPages','HRCompanyURL']) el(name).disabled = busy;
     el('HRStop').disabled = !hrRunning || hrStopped;
     bulkHRControls();
+    el('BackgroundStart').hidden = !discovered.some(row => !row.full);
+    el('BackgroundStart').disabled = busy || discovering || !!backgroundAds;
+    el('BackgroundStop').hidden = !backgroundAds;
+    el('BackgroundStop').disabled = !backgroundAds || backgroundAds.stopped;
     el('SearchPagination').hidden = discovered.length <= 20;
     nextGuide();
   }
@@ -805,7 +810,15 @@
     drawHR(row ? savedJob(row.url) : null);
   }
   function drawDiscovery() {
-    const target = el('SearchResults'); target.replaceChildren();
+    const target = el('SearchResults'), scroll = discoveryRenderedPage === discoveryPage ? target.scrollTop || 0 : 0;
+    const expanded = new Set(), focus = {};
+    for (const card of target.children) {
+      if ([...card.querySelectorAll('details')].some(item => item.open)) expanded.add(card.dataset.url);
+      const controls = [...card.querySelectorAll('button, input')];
+      const index = controls.indexOf(document.activeElement);
+      if (index >= 0) { focus.url = card.dataset.url; focus.index = index; }
+    }
+    target.replaceChildren();
     discoveryPage = Math.min(discoveryPage, Math.max(0,Math.ceil(discovered.length/20)-1));
     if (!previewRow() && !previewDismissed) previewUrl = previewSequence()[0]?.url || '';
     el('Curation').hidden=!discovered.length && !previewRow();
@@ -815,8 +828,9 @@
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     for (const row of discovered.slice(discoveryPage*20, (discoveryPage+1)*20)) {
       const card = node('article','','job-leads-discovery-card' + (row.url === previewUrl ? ' is-previewing' : ''));
+      card.dataset.url = row.url;
       card.append(node('h3',row.role),node('p',row.company),node('p',row.location || '', 'job-leads-muted'));
-      card.append(node('p',row.full ? 'Full ad captured' : 'Search summary only', 'job-leads-muted'));
+      card.append(node('p',row.full ? 'Full ad captured' : row.fullState === 'reading' ? 'Loading full ad…' : row.fullError ? 'Full ad could not be loaded · ' + row.fullError : 'Search summary only', 'job-leads-muted'));
       const saved = savedJob(row.url), actions = node('div','','job-leads-actions');
       if (saved) { discoveryPicked.delete(row.url); actions.append(node('span',saved.deleted ? 'Already in Trash' : 'Already saved', 'job-leads-muted')); }
       else {
@@ -828,14 +842,18 @@
       }
       const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; actions.append(link);
       const preview = node('button','Preview','sec'); preview.type = 'button'; preview.addEventListener('click',() => { if (!busy) selectPreview(row.url, true, 'search'); }); actions.append(preview);
-      const read = node('button','Read full ad','sec'); read.type = 'button'; read.addEventListener('click', () => previewDiscovered(row)); actions.append(read);
+      const read = node('button',row.full ? 'View full ad' : row.fullError ? 'Retry full ad' : 'Read full ad','sec'); read.type = 'button'; read.addEventListener('click', () => previewDiscovered(row)); actions.append(read);
       card.append(actions);
       const details = node('details'), summary = node('summary',row.full ? 'View job ad content' : 'View search summary');
+      details.open = expanded.has(row.url);
       details.append(summary); const body = node('div'); content(body,row.description,row.description_rich); details.append(body); card.append(details);
       target.append(card);
+      if (focus.url === row.url) [...card.querySelectorAll('button, input')][focus.index]?.focus({preventScroll:true});
     }
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     drawPreview(); discoveryControls();
+    target.scrollTop = discoveryRenderedPage === discoveryPage ? scroll : 0;
+    discoveryRenderedPage = discoveryPage;
   }
   const hrDefaultKeywords = 'HR, human resources, CHRO, chief people officer, talent acquisition, TA, recruitment, hiring, recruiter, HRBP, end to end recruitment';
   const hrPreferenceKey = 'cvstudio_job_leads_hr_preferences';
@@ -1261,9 +1279,10 @@
     if (!useOpen && (!query || query.length > 240 || where.length > 160 || /[\x00-\x1f]/.test(query + where))) { searchStatus('Enter job keywords and an optional location.'); guide(!query || query.length > 240 || /[\x00-\x1f]/.test(query) ? 'SearchQuery' : 'SearchLocation',true,true); return; }
     if (useOpen && !el('SearchSource').value) { searchStatus('Refresh search tabs and choose an open LinkedIn job search.'); guide('SearchRefresh',false,true); return; }
     discovering = true; discoveryStopped = false; discoveryRun = '';
-    const activity=beginScanActivity();let failed=false;
+    const activity=beginScanActivity();let failed=false, prefetch=false;
     lock(true); searchStatus('Checking the browser companion…');
     try {
+      await stopBackgroundAds('Paused for a new search.');
       const companion = await rpc('jobStatus',{},1000).catch(() => null);
       checkDiscovery();
       if (!companion?.connected || companion.concurrent_scans_revision !== 1 || companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) { guideIssue='SearchSetupGuide';el('SearchPanel').open=true; }
@@ -1271,9 +1290,10 @@
       if (companion.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) throw Error('Update and reload the latest companion, refresh CV Studio and LinkedIn, then reconnect this tab to enable the current job search. Updating CV Studio alone does not update the companion.');
       if (companion.busy) throw Error('Finish the current companion search or ad read before starting another search.');
+      prefetch = companion.full_ad_background_revision === 1;
       discoveryRun = hex(); discovered = []; discoveryPicked.clear(); discoveryPage = 0; previewUrl = ''; previewCapture = null;
       previewSource = 'search'; previewDismissed = false;
-      drawDiscovery(); searchStatus('Opening the LinkedIn job search in Chrome…');
+      drawDiscovery(); backgroundAdStatus(''); searchStatus('Opening the LinkedIn job search in Chrome…');
       const source = await rpc('jobSearchBegin',{run_id:discoveryRun,query,location:where,max_pages:pages,use_open:useOpen,source_tab_id:Number(el('SearchSource').value)});
       checkDiscovery();
       await window.cvStudioJobSearch.walk({rpc,run:discoveryRun,tab:source.tab_id,pages,check:checkDiscovery,keep:rememberJobs,
@@ -1281,23 +1301,91 @@
       checkDiscovery(); searchStatus(`Found ${discovered.length} ads.`);
     } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
-      if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch {} }
+      if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch { prefetch=false; } }
       discoveryRun = ''; discovering = false; lock(false); drawDiscovery();finishScanActivity(activity,failed);
+      if (prefetch && !failed && !discoveryStopped) startBackgroundAds();
     }
+  }
+  function fullAd(row, data) {
+    if (jobLink(data?.url || '') !== row.url || !data.company || !data.role) throw Error('This ad changed while it was being read.');
+    if (!data.description?.trim()) {
+      const error = Error('The full content was not available. Its search summary is kept.');
+      error.companionCode = 'HR_AD_EMPTY'; throw error;
+    }
+    return {...row,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+      date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
+      description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
+      full:true,fullState:'ready',fullError:''};
+  }
+  function backgroundAdStatus(message) {
+    const ready = discovered.filter(row => row.full).length, failed = discovered.filter(row => row.fullError && !row.full).length;
+    el('BackgroundStatus').textContent = discovered.length ? `${ready} of ${discovered.length} full ads ready` +
+      (failed ? ` · ${failed} could not load` : '') + (message ? ' · ' + message : '') : '';
+  }
+  async function stopBackgroundAds(message = 'Stopped. Resume loading whenever you are ready.') {
+    const queue = backgroundAds;
+    if (!queue) return;
+    queue.stopped = true; queue.message = message; discoveryControls();
+    if (queue.operation) await rpc('jobReadCancel',{operation_id:queue.operation}).catch(() => {});
+    await queue.done;
+  }
+  function startBackgroundAds() {
+    if (busy || discovering || backgroundAds || !discovered.some(row => !row.full)) return;
+    const queue = {stopped:false,operation:'',message:''}; backgroundAds = queue;
+    queue.done = Promise.resolve().then(async () => {
+      try {
+        const status = await sendRPC('jobStatus',{},1500);
+        if (queue.stopped) return;
+        if (!status?.connected || status.full_ad_background_revision !== 1) throw Error('Apply the companion update to load full ads in the background.');
+        if (status.busy) throw Error('The companion is busy. Resume full ads after its current action finishes.');
+        for (const row of [...discovered]) {
+          while (busy && !queue.stopped) await pauseDiscovery();
+          if (queue.stopped || !discovered.includes(row)) break;
+          if (row.full) continue;
+          queue.operation = hex(); row.fullState = 'reading'; row.fullError = '';
+          backgroundAdStatus('Loading descriptions in the background…'); drawDiscovery();
+          try {
+            const data = await prepareSource(await sendRPC('jobFromLink',{url:row.url,operation_id:queue.operation}));
+            if (!queue.stopped && discovered.includes(row)) {
+              Object.assign(row,fullAd(row,data));
+              if (previewCapture?.url === row.url) previewCapture = {...row};
+            }
+          } catch (error) {
+            if (!queue.stopped && discovered.includes(row)) {
+              row.fullError = error.message.slice(0,500);
+              if (!['HR_AD_TIMEOUT','HR_AD_LAYOUT','HR_AD_UNAVAILABLE','HR_AD_EMPTY'].includes(error.companionCode)) {
+                queue.stopped = true; queue.message = error.message;
+              }
+            }
+          } finally {
+            queue.operation = ''; if (row.fullState === 'reading') row.fullState = '';
+            drawDiscovery();
+          }
+          // Pace sequential reads; never open a pool of LinkedIn tabs.
+          if (!queue.stopped) await pauseDiscovery();
+        }
+      } catch (error) { queue.message = error.message; }
+      finally {
+        if (backgroundAds === queue) backgroundAds = null;
+        backgroundAdStatus(queue.message || 'Finished. You can retry ads that could not load.'); discoveryControls();
+      }
+    });
+    discoveryControls(); return queue.done;
   }
   async function previewDiscovered(row, source = 'search') {
     if (busy) return;
     selectPreview(row.url, false, source);
+    const cached = discovered.find(value => value.url === row.url && value.full);
+    if (row.full || cached) {
+      previewCapture = {...(cached || row)}; drawDiscovery(); return;
+    }
     lock(true); searchStatus('Reading the selected ad in Chrome…');
     try {
-      const data = await prepareSource(await rpc('jobFromLink',{url:row.url}));
-      if (jobLink(data?.url || '') !== row.url || !data.company || !data.role) throw Error('This ad changed while it was being read.');
-      if (!data.description?.trim()) throw Error('The full content was not available. Its search summary is kept.');
+      const data = await prepareSource(await rpc('jobFromLink',{url:row.url,operation_id:hex()}));
       // Reading a saved ad is a temporary preview; never overwrite its durable content or editing draft.
-      previewCapture = {...row,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
-        date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
-        description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,full:true};
+      previewCapture = fullAd(row,data);
       const found = discovered.find(value => value.url === row.url); if (found) Object.assign(found,previewCapture);
+      backgroundAdStatus('');
       searchStatus(savedJob(row.url) ? 'Full ad captured for preview. To update the saved content, use Edit → Refresh content, then save.' : 'Full ad captured for review. Select it and Add selected to list when ready.');
     } catch (error) { searchStatus(error.message + ' The previous content or search summary is still available.'); }
     finally { lock(false); drawDiscovery(); }
@@ -1328,9 +1416,15 @@
       searchStatus(`Added ${added} ads to ${folder || 'Unfiled'}.` + (skipped ? ` ${skipped} already saved; existing details were kept.` : '') + (failure ? ` ${failure} Refresh the saved list before trying remaining ads again.` : ''));
     }
   }
-  function rpc(action, args = {}, waitMs) {
+  async function rpc(action, args = {}, waitMs) {
+    if (backgroundAds && action !== 'jobReadCancel') {
+      await stopBackgroundAds('Paused for your browser action. Resume loading when ready.');
+    }
+    return sendRPC(action,args,waitMs);
+  }
+  function sendRPC(action,args = {},waitMs) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? args.company_only ? 55000 : 35000 : 12000));
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? 55000 : 12000));
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, scope:'leads', action, args}, location.origin);
     });
@@ -1507,6 +1601,8 @@
     el('PreviewClose').addEventListener('click',closePreview);
     el('PreviewRemove').addEventListener('click',managePreview);
     el('SearchStart').addEventListener('click',startDiscovery);
+    el('BackgroundStart').addEventListener('click',startBackgroundAds);
+    el('BackgroundStop').addEventListener('click',() => stopBackgroundAds());
     el('SearchStop').addEventListener('click',async () => {
       if (!discovering) return;
       discoveryStopped = true; discoveryControls(); searchStatus('Stopping after the current browser read. Found ads will be kept.');
@@ -1525,7 +1621,15 @@
       finally { lock(false); }
     });
     el('SearchAdd').addEventListener('click',addDiscovered);
-    el('SearchClear').addEventListener('click',() => { if (!busy) { discovered = []; discoveryPicked.clear(); discoveryPage = 0; closePreview(); searchStatus('Search results cleared. Your saved ads are kept.'); } });
+    el('SearchClear').addEventListener('click',async () => {
+      if (busy) return;
+      lock(true);
+      try {
+        await stopBackgroundAds(); discovered = []; discoveryPicked.clear(); discoveryPage = 0;
+        previewUrl = ''; previewCapture = null; previewDismissed = true;
+        backgroundAdStatus(''); searchStatus('Search results cleared. Your saved ads are kept.');
+      } finally { lock(false); drawDiscovery(); }
+    });
     el('SearchPrevious').addEventListener('click',() => navigateResults(-1));
     el('SearchNext').addEventListener('click',() => navigateResults(1));
     el('SearchSelectPage').addEventListener('change',() => {
@@ -1537,6 +1641,7 @@
     });
     window.addEventListener('pagehide',() => {
       discoveryStopped = true; hrStopped = true;
+      stopBackgroundAds().catch(() => {});
       if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
       if (discoveryRun) rpc('end',{run_id:discoveryRun}).catch(() => {});
       if (hrRun) rpc('end',{run_id:hrRun}).catch(() => {});
