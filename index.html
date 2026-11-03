@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.543">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.543"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.544">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.544"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.543 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.544 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -426,20 +426,29 @@
         <div class="integration-grid">
           <div class="integration-card wide" id="settingsSetupFileCard">
             <div class="integration-title">
-              <div><div class="integration-name">Team setup file</div><div class="integration-desc">New to CV Studio? Import the setup file from your team owner to fill in JobAdder, Outlook, OneNote and AI settings in one step.</div></div>
+              <div><div class="integration-name">Team setup file</div><div class="integration-desc">New to CV Studio? Import the setup file from your team owner to fill in the JobAdder, Outlook and OneNote app IDs, tenants and secrets, plus AI and search keys, in one step.</div></div>
             </div>
             <div class="integration-actions">
               <button class="kbtn" type="button" id="settingsSetupFileImport">Import setup file</button>
               <input id="settingsSetupFileInput" type="file" accept="application/json,.json" hidden>
             </div>
-            <details class="integration-technical"><summary style="font-size:10.5px;color:var(--text3);cursor:pointer;">Create a setup file for your team</summary>
-              <div class="integration-desc">Includes the saved JobAdder, Outlook and OneNote app IDs and tenants. Saved secrets are never added automatically. To include one, type it below; it goes into this file only.</div>
-              <div class="integration-field-grid">
-                <div><label for="settingsSetupJobAdderSecret" style="font-size:9.5px;font-weight:850;color:var(--text3);">JobAdder Client Secret (optional)</label><input id="settingsSetupJobAdderSecret" type="password" autocomplete="new-password"></div>
-                <div><label for="settingsSetupMainKey" style="font-size:9.5px;font-weight:850;color:var(--text3);">Main AI key (optional)</label><input id="settingsSetupMainKey" type="password" autocomplete="new-password"></div>
-                <div><label for="settingsSetupLeadKey" style="font-size:9.5px;font-weight:850;color:var(--text3);">Lead Finder key (optional)</label><input id="settingsSetupLeadKey" type="password" autocomplete="new-password"></div>
-                <div><label for="settingsSetupSearchKey" style="font-size:9.5px;font-weight:850;color:var(--text3);">Search provider key (optional)</label><input id="settingsSetupSearchKey" type="password" autocomplete="new-password"></div>
-                <div><label for="settingsSetupEnrichmentKey" style="font-size:9.5px;font-weight:850;color:var(--text3);">Enrichment key (optional)</label><input id="settingsSetupEnrichmentKey" type="password" autocomplete="new-password"></div>
+            <details class="integration-technical" id="settingsSetupCreate"><summary style="font-size:10.5px;color:var(--text3);cursor:pointer;">Create a setup file for your team</summary>
+              <div class="integration-desc">Check each column, then click Create setup file. IDs and tenants saved on this computer are filled in for you. Saved secrets and keys can't be read back, so type any you want in the file; it goes into this file only. Blank boxes are left out.</div>
+              <div class="setup-file-table" role="group" aria-label="Apps: IDs, tenants and secrets">
+                <div class="setup-file-row setup-file-head" aria-hidden="true"><span>App</span><span>Application (client) ID</span><span>Tenant</span><span>Client Secret</span></div>
+                <div class="setup-file-row"><span class="setup-file-name">JobAdder</span><label class="setup-file-cell"><span class="setup-file-col">Application / Client ID</span><input id="settingsSetupJobAdderId" type="text" autocomplete="off" placeholder="JobAdder Client ID" aria-label="JobAdder Application / Client ID"></label><span class="setup-file-cell setup-file-none"><span class="setup-file-col">Tenant</span>Not used</span><label class="setup-file-cell"><span class="setup-file-col">Client Secret</span><input id="settingsSetupJobAdderSecret" type="password" autocomplete="new-password" aria-label="JobAdder Client Secret"></label></div>
+                <div class="setup-file-row"><span class="setup-file-name">Outlook drafts</span><label class="setup-file-cell"><span class="setup-file-col">Application (client) ID</span><input id="settingsSetupOutlookId" type="text" autocomplete="off" placeholder="00000000-0000-0000-0000-000000000000" aria-label="Outlook Application (client) ID"></label><label class="setup-file-cell"><span class="setup-file-col">Tenant</span><input id="settingsSetupOutlookTenant" type="text" autocomplete="off" placeholder="common" aria-label="Outlook tenant"></label><span class="setup-file-cell setup-file-none"><span class="setup-file-col">Client Secret</span>Not needed: each person signs in</span></div>
+                <div class="setup-file-row"><span class="setup-file-name">OneNote</span><label class="setup-file-cell"><span class="setup-file-col">Application (client) ID</span><input id="settingsSetupOneNoteId" type="text" autocomplete="off" placeholder="00000000-0000-0000-0000-000000000000" aria-label="OneNote Application (client) ID"></label><label class="setup-file-cell"><span class="setup-file-col">Tenant</span><input id="settingsSetupOneNoteTenant" type="text" autocomplete="off" placeholder="common" aria-label="OneNote tenant"></label><span class="setup-file-cell setup-file-none"><span class="setup-file-col">Client Secret</span>Not needed: each person signs in</span></div>
+              </div>
+              <div class="setup-file-table keys" role="group" aria-label="AI and search keys">
+                <div class="setup-file-row setup-file-head" aria-hidden="true"><span>Used for</span><span>Provider</span><span>API key</span></div>
+                <div class="setup-file-row"><span class="setup-file-name">Main AI</span><label class="setup-file-cell"><span class="setup-file-col">Provider</span><select id="settingsSetupMainProvider" aria-label="Main AI provider"><option value="anthropic">Claude (Anthropic)</option><option value="openai">GPT (OpenAI)</option><option value="deepseek">DeepSeek</option></select></label><span class="setup-file-cell setup-file-none"><span class="setup-file-col">API key</span>Uses that provider's key below</span></div>
+                <div class="setup-file-row"><span class="setup-file-name">Claude key</span><span class="setup-file-cell setup-file-none"><span class="setup-file-col">Provider</span>Claude (Anthropic)</span><label class="setup-file-cell"><span class="setup-file-col">API key</span><input id="settingsSetupKeyAnthropic" type="password" autocomplete="new-password" aria-label="Claude (Anthropic) API key"></label></div>
+                <div class="setup-file-row"><span class="setup-file-name">GPT key</span><span class="setup-file-cell setup-file-none"><span class="setup-file-col">Provider</span>GPT (OpenAI)</span><label class="setup-file-cell"><span class="setup-file-col">API key</span><input id="settingsSetupKeyOpenai" type="password" autocomplete="new-password" aria-label="GPT (OpenAI) API key"></label></div>
+                <div class="setup-file-row"><span class="setup-file-name">DeepSeek key</span><span class="setup-file-cell setup-file-none"><span class="setup-file-col">Provider</span>DeepSeek</span><label class="setup-file-cell"><span class="setup-file-col">API key</span><input id="settingsSetupKeyDeepseek" type="password" autocomplete="new-password" aria-label="DeepSeek API key"></label></div>
+                <div class="setup-file-row"><span class="setup-file-name">Lead Finder</span><label class="setup-file-cell"><span class="setup-file-col">Provider</span><select id="settingsSetupLeadProvider" aria-label="Lead Finder provider"><option value="anthropic">Claude (Anthropic)</option><option value="openai">GPT (OpenAI)</option><option value="deepseek">DeepSeek</option></select></label><label class="setup-file-cell"><span class="setup-file-col">API key</span><input id="settingsSetupLeadKey" type="password" autocomplete="new-password" aria-label="Lead Finder API key"></label></div>
+                <div class="setup-file-row"><span class="setup-file-name">Job search</span><label class="setup-file-cell"><span class="setup-file-col">Provider</span><select id="settingsSetupSearchProvider" aria-label="Job search provider"><option value="tavily">Tavily Search API</option><option value="serpapi">SerpAPI Google Search</option></select></label><label class="setup-file-cell"><span class="setup-file-col">API key</span><input id="settingsSetupSearchKey" type="password" autocomplete="new-password" aria-label="Job search API key"></label></div>
+                <div class="setup-file-row"><span class="setup-file-name">Contact enrichment</span><label class="setup-file-cell"><span class="setup-file-col">Provider</span><select id="settingsSetupEnrichmentProvider" aria-label="Contact enrichment provider"><option value="apollo">Apollo People Match API</option></select></label><label class="setup-file-cell"><span class="setup-file-col">API key</span><input id="settingsSetupEnrichmentKey" type="password" autocomplete="new-password" aria-label="Contact enrichment API key"></label></div>
               </div>
               <div class="integration-actions"><button class="kbtn" type="button" id="settingsSetupFileCreate">Create setup file</button></div>
             </details>
@@ -943,8 +952,8 @@
     <div class="job-leads-intro"><h2>Job Leads</h2><div class="job-leads-totals"><span><strong id="jobLeadsTotal">0</strong> saved</span><span><strong id="jobLeadsDue">0</strong> follow-ups due</span></div></div>
     <div class="job-leads-actions job-leads-contact-tabs" role="group" aria-label="Job Leads view"><button type="button" class="sec" id="jobLeadsClientsTab" aria-pressed="false">Signed clients</button><button type="button" class="sec" id="jobLeadsClientsFollowedTab" aria-pressed="false">Followed clients<span class="job-leads-tab-count" id="jobLeadsClientsTabCount"></span></button><button type="button" class="sec" id="jobLeadsApolloAdsTab" aria-pressed="true">Job ads<span class="job-leads-tab-count" id="jobLeadsAdsTabCount"></span></button><button type="button" class="sec" id="peopleHRTab" aria-pressed="false">HR people<span class="job-leads-tab-count" id="peopleHRTabCount"></span></button><button type="button" class="sec" id="jobLeadsApolloContactsTab" aria-pressed="false">Unlocked contacts<span class="job-leads-tab-count" id="jobLeadsApolloContactsTabCount"></span></button></div>
     <section class="card people-dashboard" id="peopleHRPanel" aria-label="HR people dashboard" hidden>
-      <div class="card-head"><h2>HR people <span id="peopleHRCount">0</span></h2><div class="job-leads-actions"><button type="button" class="sec" id="peopleHRDateAll">Check missing dates</button><button type="button" class="sec" id="peopleHRDateStop" hidden>Stop checking</button><button type="button" class="sec" id="peopleHRConnect">Connect Apollo</button><button type="button" class="sec" id="peopleHRRefresh">Refresh</button><button type="button" class="primary" id="peopleHRExport">Export Excel</button></div></div>
-      <div class="card-body"><div class="people-filters"><label>Search HR people<input type="search" id="peopleHRQuery" maxlength="240"></label><label>Company<select id="peopleHRCompany"><option value="">All companies</option></select></label></div><p id="peopleHRMessage" role="status" aria-live="polite" class="job-leads-muted"></p>
+      <div class="card-head"><h2>HR people <span id="peopleHRCount">0</span></h2><div class="job-leads-actions"><button type="button" class="sec" id="peopleHRDateAll">Check missing dates</button><button type="button" class="sec" id="peopleHRDateStop" hidden>Stop checking</button><button type="button" class="sec" id="peopleHRConnect">Connect Apollo</button><button type="button" class="sec" id="peopleHRUnlockAll" disabled>Unlock emails shown</button><button type="button" class="sec" id="peopleHRUnlockStop" hidden>Stop unlocking</button><button type="button" class="sec" id="peopleHRRefresh">Refresh</button><button type="button" class="primary" id="peopleHRExport">Export Excel</button></div></div>
+      <div class="card-body"><div class="people-filters"><label>Search HR people<input type="search" id="peopleHRQuery" maxlength="240"></label><label>Company<select id="peopleHRCompany"><option value="">All companies</option></select></label><label>Email<select id="peopleHREmail"><option value="">All</option><option value="none">No email yet</option><option value="found">Has email</option></select></label></div><p id="peopleHRMessage" role="status" aria-live="polite" class="job-leads-muted"></p>
         <p id="peopleHRDateProgress" class="job-leads-muted" role="status" aria-live="polite"></p>
         <div class="job-leads-actions" id="peopleHRNextStep" hidden><button type="button" class="primary" id="peopleHRGoContacts">Go to Unlocked contacts</button></div>
         <div class="people-table"><table><thead><tr><th>Name</th><th>Position</th><th>Company</th><th>Location</th><th>Employment</th><th>Email</th><th>Source ads</th></tr></thead><tbody id="peopleHRRows"></tbody></table></div>
@@ -988,7 +997,7 @@
         <div id="jobLeadsClientsFollowedSetup" class="job-leads-clients-box" hidden><p id="jobLeadsClientsFollowedSetupText"></p><button type="button" class="primary" id="jobLeadsClientsGoSigned">Go to Signed clients</button></div>
         <div id="jobLeadsClientsFollowedBody">
         <div class="people-table"><table><thead><tr><th>Pull</th><th>Client</th><th>LinkedIn company</th><th>Ads in Job ads</th><th>Last pulled</th><th>Actions</th></tr></thead><tbody id="jobLeadsClientsFollowed"></tbody></table></div>
-        <div class="job-leads-actions job-leads-clients-pull"><label for="jobLeadsClientsPages">Pages per client</label><select id="jobLeadsClientsPages"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option></select><button type="button" class="primary" id="jobLeadsClientsPull" disabled title="List the ticked clients' LinkedIn ads here to review and save">Pull into CV Studio</button><button type="button" class="sec" id="jobLeadsClientsOpenLinkedIn" disabled title="Open one LinkedIn search for the ticked clients and add ads there">Open on LinkedIn</button><button type="button" class="sec" id="jobLeadsClientsStop" disabled>Stop</button><button type="button" class="sec" id="jobLeadsClientsUntick" disabled>Untick all</button><span id="jobLeadsClientsTicked" class="job-leads-muted"></span></div>
+        <div class="job-leads-actions job-leads-clients-pull"><label for="jobLeadsClientsPages">Pages per client</label><select id="jobLeadsClientsPages"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option></select><button type="button" class="primary" id="jobLeadsClientsUpdate" disabled title="Pull every followed client, save new ads to today's folder and find their HR people">Update my clients</button><button type="button" class="sec" id="jobLeadsClientsPull" disabled title="List the ticked clients' LinkedIn ads here to review and save">Pull into CV Studio</button><button type="button" class="sec" id="jobLeadsClientsOpenLinkedIn" disabled title="Open one LinkedIn search for the ticked clients and add ads there">Open on LinkedIn</button><button type="button" class="sec" id="jobLeadsClientsStop" disabled>Stop</button><button type="button" class="sec" id="jobLeadsClientsUntick" disabled>Untick all</button><span id="jobLeadsClientsTicked" class="job-leads-muted"></span></div>
         <p id="jobLeadsClientsProgress" role="status" aria-live="polite" class="job-leads-muted"></p>
         <p id="jobLeadsClientsLinkedInReady" class="job-leads-muted" hidden><a id="jobLeadsClientsLinkedInLink" target="_blank" rel="noopener noreferrer">Open LinkedIn search</a></p>
         <section id="jobLeadsClientsReview" class="job-leads-clients-box" aria-label="Pulled client job ads" hidden>
@@ -2733,42 +2742,42 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.543"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.544"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2786,10 +2795,10 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/setup-file.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.543"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.543"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/setup-file.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.544"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.544"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

@@ -29,7 +29,12 @@ function bulkFixture(options={}){
   };
   f.state.onRequest=async data=>{
     if(data.action!=='save_hr')return;
-    const row=f.state.records.find(r=>r.id===data.id);assert.equal(data.search.company,row.company);assert.equal(data.revision,row.revision);
+    const row=f.state.records.find(r=>r.id===data.id);assert.equal(data.revision,row.revision);
+    if(data.reuse_from){ // the server copies the source scan as it is, original date included
+      const source=f.state.records.find(r=>r.id===data.reuse_from);assert.equal(data.search,undefined);assert.equal(data.company_url,source.hr.company_url);
+      row.hr={...structuredClone(source.hr),company:row.company};row.revision++;return {ok:true,json:async()=>({record:structuredClone(row)})};
+    }
+    assert.equal(data.search.company,row.company);
     if(row.id===f.state.staleId)return {ok:false,json:async()=>({error:'Ad changed during scan',code:'JOB_LEADS_CONFLICT'})};
     row.hr={...data.search,scanned_at:'2026-10-27T00:00:00Z'};row.revision++;
     if(row.id===f.state.disconnectAfter)f.state.disconnected=true;
@@ -107,6 +112,37 @@ if(require.main===module)(async()=>{
   assert.equal(lost.state.starts.length,1,'no further ad is scanned after an unconfirmed copy');
   assert.match(lost.el('BulkHRResults').children[1].textContent,/could not be confirmed/);assert.doesNotMatch(lost.el('BulkHRResults').children[1].textContent,/were kept/);
   assert.match(lost.el('BulkHRMessage').textContent,/Queue stopped/);
+  // A company scanned in the last 30 days with the same settings is not scanned again.
+  const daysAgo=n=>new Date(Date.now()-n*86400000).toISOString();
+  const reuse=async(age,keywords)=>{
+    const r=bulkFixture();await r.init();const settings={country:'',keywords:keywords ?? r.el('BulkHRKeywords').value};
+    r.state.records[0].hr={company:'Example Company 1',company_url:'https://www.linkedin.com/company/example-1/',company_id:'1',...settings,source_url:'https://www.linkedin.com/search/results/people/?currentCompany=%5B%221%22%5D',
+      complete:true,scanned_at:daysAgo(age),people:[{url:'https://www.linkedin.com/in/example-1',name:'Example Person 1',title:'HR',location:'Malaysia',matched:'HR'}]};
+    r.state.records[1].company='Example Company 1';r.state.slugs={2:'example-1'};await r.el('Refresh').click();
+    // Select ads 2 and 3 only; ad 1 (scanned earlier) is the possible source.
+    for (const tr of r.el('List').children) { const box=tr.children[0].children[0]; box.checked=tr.children[2].children[0].textContent!=='Example role 1'; await box.handlers.change(); }
+    await r.start();return r;
+  };
+  const fresh=await reuse(5);
+  assert.deepEqual(fresh.state.starts.map(a=>a.company_url),['https://www.linkedin.com/company/example-3/'],'only the company without a recent scan is scanned');
+  const reused=fresh.requests.filter(r=>r.action==='save_hr');assert.equal(reused.length,2);
+  assert.deepEqual({...reused[0],revision:undefined},{action:'save_hr',id:'2'.repeat(32),revision:undefined,reuse_from:'1'.repeat(32),company_url:'https://www.linkedin.com/company/example-1/'});
+  assert.equal(fresh.state.records[1].hr.scanned_at,fresh.state.records[0].hr.scanned_at,'the copy keeps the original scan date');
+  assert.match(fresh.el('BulkHRResults').children[0].textContent,/copied from Example Company 1 — Example role 1 \(same company, scanned .*, no extra scan\)/);
+  // Selecting an ad (even one scanned recently) always scans it afresh.
+  const again=bulkFixture();await again.init();again.state.records[0].hr={...structuredClone(fresh.state.records[0].hr)};await again.el('Refresh').click();again.select();await again.start();
+  assert.equal(again.state.starts.length,3,'selected ads are never their own reuse source');
+  const aged=await reuse(31);assert.equal(aged.state.starts.length,2,'a scan older than 30 days is not reused');
+  assert(!aged.requests.some(r=>r.reuse_from),'and the fresh scan, not the old one, is copied');
+  const other=await reuse(5,'Talent acquisition');assert.equal(other.state.starts.length,2,'different HR keywords never reuse a scan');
+  // Update my clients hands its new ads to Job ads, which scans just those.
+  const update=bulkFixture();await update.init();update.el('Search').value='old search';
+  assert.equal(await update.jobLeads().scanSavedAds(['1'.repeat(32),'3'.repeat(32),'f'.repeat(32)],'Client ads 2026-11-02'),true);
+  assert.deepEqual(update.state.starts.map(a=>a.company_url),['https://www.linkedin.com/company/example-1/','https://www.linkedin.com/company/example-3/'],'only the given saved ads are scanned');
+  assert.equal(update.el('Search').value,'','the list shows the new ads, not an old search');
+  const held2=bulkFixture();held2.state.holdId='1'.repeat(32);await held2.init();held2.select();const run2=held2.start();await held(held2);
+  assert.equal(await held2.jobLeads().scanSavedAds(['2'.repeat(32)],'Client ads 2026-11-02'),false,'a running scan is never interrupted');
+  assert.match(held2.el('Message').textContent,/Job Leads is busy/);held2.state.release();await run2;
   const synced=bulkFixture({preferences:new Map()});await synced.init();
   synced.el('BulkHRPages').value='10';await synced.el('BulkHRPages').handlers.change();assert.equal(synced.el('HRPages').value,'10','bulk and single-ad HR settings stay in sync');
   console.log('Bulk HR: shared saved settings, same-company copies, next step, serial ownership/cleanup, progress, independent saves, Stop, pagehide, per-ad errors, stale writes, disconnects and drafts passed');

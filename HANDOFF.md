@@ -7,8 +7,63 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current checkpoint: v24.6.543 Job Leads layout (local, unmerged)**
-on `claude/job-leads-signed-clients`, from merged542 PR287 / `c282b18`.
+**Current checkpoint: v24.6.544 Update my clients, HR scan reuse, auto email check, bulk unlock, full setup-file columns (local, unmerged)**
+on `claude/job-leads-signed-clients`, from merged543 PR288 / `3f9b87d`.
+- Followed clients "Update my clients" (`updateClients`):
+  - Pulls every followed client with a link, in groups of `MAX_PER_PULL`.
+    `pull(targets)` and `addSelected(folder)` now take arguments and return
+    outcomes.
+  - Saves new ads to "Client ads YYYY-MM-DD" (created once).
+  - Then calls `cvStudioJobLeads.scanSavedAds(ids, folder)`, which opens Job
+    ads on that folder and starts Find HR people for up to 40 of them.
+- 30-day HR reuse in Job ads' bulk scan:
+  - The queue is seeded with other saved ads' scans from the last
+    `HR_REUSE_DAYS` (30) with the same country and keywords. Selected ads
+    are never sources, so selecting an ad always rescans it.
+  - A same-named ad has its own employer link read. On an exact company-page
+    match it is saved with `save_hr` + `reuse_from` (source id) and
+    `company_url`. The server copies the source HR as it is, so the original
+    scan and employment dates are kept and the reuse window cannot be
+    extended by copies. A different company page means 409.
+- Automatic email check after an unlock:
+  - `cvStudioEmailVerifier.autoCheck(email)` runs a serial, session-cached
+    deep check (no email is sent).
+  - Every email-check box for that address shows "Checked automatically
+    after unlock".
+  - Manual checks are never overwritten. Displaying Apollo results never
+    probes.
+- HR people:
+  - New Email filter: No email yet / Has email. The Excel export applies it
+    too (`filter_people(..., email)`).
+  - "Unlock emails shown" unlocks everyone shown without an email or with a
+    finished lookup, up to 25 per run. One confirmation states the people and
+    the most credits (earlier lookups are checked free).
+  - It calls `unlockSaved(..., {confirmed:true, batch:true})` one at a time.
+    A lost response or any returned state other than found/not_found/
+    mismatch (pending, unconfirmed, auth_required, limited) stops the run,
+    which is never replayed. Stop works between lookups, and contacts refresh
+    once at the end.
+- Update my clients re-queues clients a full review list cut off:
+  `pull()` returns `unfinished`, and those clients lead the next group.
+  Already-saved ads take places in the 600-ad list too. One client (at most
+  5 pages) always fits an empty list, so every group makes progress.
+- Team setup file (`setup-file.js`, Settings → Integrations & Data):
+  - Create is now a form with every column: JobAdder Client ID and Client
+    Secret, Outlook and OneNote application ID and tenant, the Main AI
+    provider, a key per AI provider (Claude, OpenAI, DeepSeek), and
+    provider + key for Lead Finder, Job search and Contact enrichment.
+  - Opening the form (`fillFromSaved`) fills saved IDs, tenants and
+    providers, but never a box the owner edited. Secret boxes only say
+    "Saved on this computer · type it to include": saved secrets are never
+    returned to the page.
+  - Files are now schema 2 (`ai.main_provider` + `ai.keys`). Schema 1 files
+    (`ai.main`) still import. Import saves each provider key through the
+    normal Save, with the main provider last so it stays selected.
+  - Both the import confirmation and the result list what the file does not
+    contain (`missing`).
+
+**Previous checkpoint: v24.6.543 Job Leads layout (merged PR288)**
+from merged542 PR287 / `c282b18`.
 - Job ads:
   - The saved ads are a compact table (`#jobLeadsList` is a `tbody`). The
     title opens the existing preview, and the row has Open ↗, Edit and Delete.

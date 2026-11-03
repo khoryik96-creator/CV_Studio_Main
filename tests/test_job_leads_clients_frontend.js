@@ -93,6 +93,7 @@ function fixture(options={}){
     statusLabels:{new:'New',to_contact:'To contact',contacted:'Contacted',follow_up:'Following up',won:'Won',closed:'Closed'},
     lock:value=>{state.locks.push(value);state.busy=value;},isBusy:()=>state.busy,
     showClientAds:id=>{state.shown=id===undefined?'!any':id;},redraw:()=>{state.redraws=(state.redraws||0)+1;},
+    scanSavedAds:async(ids,folder)=>{state.scans=[...(state.scans||[]),{ids:[...ids],folder}];},
     stopHR:()=>{state.stoppedHR=(state.stoppedHR||0)+1;},hrRunning:()=>false,refresh:async()=>{state.refreshes++;},activityStart:()=>'activity',activityEnd:()=>{},
     rpc:async(action,args={})=>{
       rpcCalls.push({action,args:structuredClone(args)});
@@ -642,6 +643,38 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
    const only=fixture({signed:[2],followed:[page(14,'Fictional Fingers','fictional-fingers')],companyErrors,records:[]});await only.el('FollowedTab').click();await settle();
    await only.el('OpenLinkedIn').click();await settle(80);
    assert.match(only.el('Progress').textContent,/None of the ticked clients has open jobs on LinkedIn right now\. No open jobs on LinkedIn: Fictional Fingers\./);}
+
+  // Update my clients: every followed client with a link, in groups of 15; the
+  // new ads go to today's folder; then Job ads finds their HR people.
+  {const d=new Date(),folder='Client ads '+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+   const many=Array.from({length:17},(_,i)=>client(20+i,String(7000+i),'Fictional Client '+i));
+   const pages=Object.fromEntries(many.map((c,i)=>[String(7000+i),[[job(String(8000+i),'Fictional Client '+i)]]]));
+   const u=fixture({signed:[2],followed:[...many,client(99,'')],pages});
+   await u.el('FollowedTab').click();await settle();
+   assert(!u.el('Update').disabled,'Update my clients is ready once a followed client has a link');
+   await u.el('Update').click();await settle(800);
+   const saves=u.leadsCalls.filter(c=>c.action==='save');
+   assert.equal(saves.length,17,'all 17 clients are pulled, beyond the 15 ticked per pull');
+   assert(saves.every(c=>c.record.folder===folder),'new ads go to today\'s folder');
+   assert.deepEqual(u.leadsCalls.filter(c=>c.action==='create_folder').map(c=>c.folder),[folder],'the folder is created once');
+   assert.equal(u.state.scans.length,1);assert.equal(u.state.scans[0].folder,folder);assert.equal(u.state.scans[0].ids.length,17,'Job ads finds HR people for the new ads');
+   assert.match(u.el('FollowedMessage').textContent,new RegExp('Updated 17 of 17 clients: 17 new ads saved to '+folder+'\\. Finding HR people in Job ads'));
+   // A second run finds nothing new, saves nothing and starts no scan.
+   await u.el('Update').click();await settle(800);
+   assert.equal(u.leadsCalls.filter(c=>c.action==='save').length,17);assert.equal(u.state.scans.length,1);
+   assert.match(u.el('FollowedMessage').textContent,/0 new ads saved .* No HR scan was needed/);
+   // A group that fills the 600-ad review list: the clients it cut off lead the
+   // next group, so every client is pulled (5 x 175 ads = 875).
+   const big=[41,42,43,44,45].map(id=>client(id,String(id),'Fictional Big '+id));
+   const deep=id=>Array.from({length:5},(_,p)=>bulk(id*10000+p*35,35));
+   const g=fixture({signed:[2],followed:big,pages:Object.fromEntries(big.map(c=>[c.linkedin_id,deep(c.company_id)]))});
+   await g.el('FollowedTab').click();await settle();g.el('Pages').value='5';
+   await g.el('Update').click();await settle(6000);
+   assert.deepEqual(g.rpcCalls.filter(c=>c.action==='jobSearchBegin').map(c=>c.args.company_id),['41','42','43','44','44','45'],'the cut-off client is pulled again from an empty list, then the rest');
+   assert.equal(g.leadsCalls.filter(c=>c.action==='save').length,875,'no client is skipped');
+   assert.deepEqual(g.calls.filter(c=>c.action==='pulled').map(c=>c.company_id),[41,42,43,44,45]);
+   assert.match(g.el('FollowedMessage').textContent,/Updated 5 of 5 clients: 875 new ads saved/);
+   assert.equal(g.state.scans[0].ids.length,875);}
 
   // Before any status is chosen or client followed, each view shows one next step.
   {const none=fixture({signed:[],followed:[]});await none.el('FollowedTab').click();await settle();

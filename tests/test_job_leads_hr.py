@@ -190,3 +190,26 @@ def test_manual_date_confirmation_is_explicit_retained_and_replaced_by_automatic
     assert restored.list()[0]['hr']==row['hr']
     row=store.save_hr(row['id'],row['revision'],None,person_url=url,dates=dates)['record']
     assert 'employment_confirmed_by_user' not in row['hr']['people'][0]
+
+
+def test_reused_scan_keeps_its_original_dates_and_needs_the_same_company(tmp_path, monkeypatch):
+    import cvstudio_job_leads
+    store = JobLeadsStore(tmp_path/'leads.sqlite3')
+    joined = {**SEARCH, 'people':[{**SEARCH['people'][0], 'joined':'2022-07', 'left':'', 'current':True, 'employment_status':'observed'}]}
+    monkeypatch.setattr(cvstudio_job_leads, '_now', lambda: '2026-10-01T00:00:00Z')
+    source = store.save(AD)['record']
+    source = store.save_hr(source['id'], source['revision'], joined)['record']
+    target = store.save({**AD, 'url':'https://www.linkedin.com/jobs/view/456', 'company':'Example Company Sdn Bhd', 'notes':''})['record']
+    monkeypatch.setattr(cvstudio_job_leads, '_now', lambda: '2026-10-20T00:00:00Z')
+    for reuse_from, company_url in [('0'*32, SEARCH['company_url']), (source['id'], 'https://www.linkedin.com/company/other/')]:
+        with pytest.raises(JobLeadsError) as error:
+            store.save_hr(target['id'], target['revision'], None, reuse_from=reuse_from, company_url=company_url)
+        assert error.value.status == 409
+    for reuse_from, company_url in [(target['id'], SEARCH['company_url']), ('not-an-id', SEARCH['company_url']), (source['id'], None)]:
+        with pytest.raises(JobLeadsError):
+            store.save_hr(target['id'], target['revision'], None, reuse_from=reuse_from, company_url=company_url)
+    copied = store.save_hr(target['id'], target['revision'], None, reuse_from=source['id'], company_url=SEARCH['company_url'])['record']
+    assert copied['hr']['scanned_at'] == source['hr']['scanned_at'] == '2026-10-01T00:00:00Z', 'a reused scan keeps its real age'
+    assert copied['hr']['company'] == 'Example Company Sdn Bhd' and copied['hr']['company_url'] == SEARCH['company_url']
+    assert copied['hr']['people'] == source['hr']['people'], 'people and their employment check dates are copied as they are'
+    assert copied['revision'] == target['revision'] + 1 and copied['notes'] == ''
