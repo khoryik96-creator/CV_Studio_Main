@@ -1515,7 +1515,11 @@
 .job-leads-form input, .job-leads-form select, .job-leads-form textarea, .job-leads-board input, .job-leads-board select { min-width:0; width:100%; box-sizing:border-box; }
 .job-leads-form input, .job-leads-form select, .job-leads-board input, .job-leads-board select { padding:10px 12px; min-height:40px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font-family:inherit; font-size:13px; }
 .job-leads-form input:focus, .job-leads-form select:focus, .job-leads-board input:focus, .job-leads-board select:focus { outline:2px solid var(--accent); outline-offset:1px; }
-#jobLeadsEmailBody { height:200px; min-height:160px; resize:vertical; }
+.job-leads-email-editor { min-height:200px;max-height:550px;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);line-height:1.6;overflow-wrap:anywhere; }
+.job-leads-email-editor[contenteditable="false"] { opacity:.75; }
+.job-leads-email-editor:focus { outline:2px solid var(--accent);outline-offset:1px; }
+.email-format-toolbar { gap:5px; }.email-format-toolbar button { min-width:34px; }.email-format-toolbar select,.email-format-toolbar input { flex:0 1 auto;min-width:0;width:auto; }.email-format-toolbar input[type="color"] { width:45px; }.email-format-toolbar input[type="file"] { max-width:240px; }
+.job-leads-email-files { margin:0;padding-left:20px; }.job-leads-email-files li { margin:6px 0;overflow-wrap:anywhere; }
 #jobLeadsnotes, #jobLeadsdescription { height:120px !important; min-height:100px; resize:vertical; }
 .job-leads-form details { border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; }
 .job-leads-form summary { cursor:pointer; font-weight:600; }

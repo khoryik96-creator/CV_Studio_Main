@@ -7,7 +7,38 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Local work: v24.6.546 Job ads favorites and Outlook client email (unmerged)**
+**Local work: v24.6.547 Job Leads rich email composer (unmerged)**
+on `codex/job-leads-email-composer`, from merged v24.6.546 / PR291 / `ea046fa`.
+- Email client prefills explicit contact emails and addresses in the ad's contact
+  field. Ads with a confirmed HR company id also offer saved contacts; a uniquely
+  matched contact is filled without guessing between multiple people. HR rows with
+  unlocked emails now have their own Email action.
+- Multiple To/CC/BCC addresses (comma, semicolon or newline separated), with 100
+  recipients total. Every send still requires explicit confirmation showing the
+  sender, To/CC/BCC, subject, attachment names and embedded-image count.
+- Rich editing/pasting supports emphasis, lists, alignment, links, font, size and
+  color. The server sanitizes the HTML; scripts, remote/local images and active
+  content are discarded. PNG/JPEG/GIF banners are uploaded or pasted and embedded
+  as Graph inline attachments with content ids, so recipients need no local file.
+- Up to 10 files/inline images and 2.5 MiB combined, with a conservative serialized
+  Graph-message limit. The same composed payload serves drafts and direct sending;
+  send/draft identities include every recipient, inline image and attachment byte.
+- Templates persist subject and sanitized rich body/signature/banner in a separate
+  local SQLite database next to the Outlook store. Create, update, apply, refresh
+  and confirmed delete use revision checks; refreshing metadata never advances the
+  revision of an old editor. Use selected template reloads its latest version.
+  Recipient addresses and ordinary attachments are not stored in templates.
+- Independent review found mixed rich HTML plus file-image clipboard data dropped
+  signature text. The paste handler now retains formatted text and embeds missing
+  file images atomically, with size bounds and selection restoration. Actual
+  Chromium regression and follow-up review confirmed the fix; no findings remain.
+- Validation: 234 relevant backend/contract/version tests, all 92 frontend fixtures,
+  Chromium desktop workflows (including template conflict recovery), syntax,
+  whitespace and repository consistency passed with fictional Outlook transport.
+  Browser fixtures live in `tests/browser/job_leads_email_composer*.py`.
+  No live emails, Microsoft consent, push, merge or installed-app update performed.
+
+**Previous checkpoint: v24.6.546 Job ads favorites and Outlook client email (merged PR291)**
 on `codex/job-ads-favorites-outlook`, based on merged v24.6.545 / `19ee040`.
 - Job ads removes the status field/filter/column; existing stored statuses remain
   compatible. The star button persists `favorite` in the ad payload (defaults

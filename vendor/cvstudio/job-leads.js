@@ -419,15 +419,22 @@
       list.appendChild(tr);
     });
   }
-  let emailBusy=false, emailDone=false, emailAccount=null, emailRequest='', emailGeneration=0;
-  const emailDirty=()=>!emailDone && ['To','Subject','Body'].some(name=>el('Email'+name).value.trim());
+  let emailBusy=false, emailDone=false, emailAccount=null, emailRequest='', emailGeneration=0, emailComposeGeneration=0;
+  let emailFiles=[],emailTemplates=[],emailTemplate='',emailTemplateRevision=null,emailTemplateBusy=false;
+  const emailLimit=2560*1024;
+  const emailDirty=()=>!emailDone && (['To','Cc','Bcc','Subject','Body'].some(name=>el('Email'+name).value.trim()) || emailFiles.length>0 || !!el('EmailEditor').querySelector?.('img'));
   const emailMessage=value=>{el('EmailMessage').textContent=value;};
   function emailLock(value) {
-    emailBusy=value;
-    for (const name of ['To','Subject','Body']) el('Email'+name).disabled=value || emailDone;
-    for (const name of ['Connect','Finish','Close','New']) el('Email'+name).disabled=value;
-    el('EmailDraft').disabled=value || emailDone || !emailAccount?.connected;
-    el('EmailSend').disabled=value || emailDone || !emailAccount?.can_send;
+    emailBusy=value;const locked=value || emailTemplateBusy;
+    for (const name of ['To','Cc','Bcc','Subject','Body','Files','Image','Font','Size','Color']) el('Email'+name).disabled=locked || emailDone;
+    for (const name of ['Connect','Finish','Close','New']) el('Email'+name).disabled=locked;
+    el('EmailEditor').contentEditable=String(!locked && !emailDone);
+    for(const button of document.querySelectorAll?.('[data-email-format]') || [])button.disabled=locked || emailDone;
+    for(const button of el('EmailAttachments').querySelectorAll('button'))button.disabled=locked || emailDone;
+    for(const name of ['Template','TemplateName','TemplateUse','TemplateSave','TemplateCopy','TemplateRefresh'])el('Email'+name).disabled=locked || emailDone || emailTemplateBusy;
+    el('EmailTemplateDelete').disabled=locked || emailDone || emailTemplateBusy || !emailTemplate;
+    el('EmailDraft').disabled=locked || emailDone || !emailAccount?.connected;
+    el('EmailSend').disabled=locked || emailDone || !emailAccount?.can_send;
   }
   async function emailInfo() {
     const generation=++emailGeneration;
@@ -442,21 +449,214 @@
     emailLock(emailBusy);
   }
   function composeEmail(contact={}) {
-    if (emailBusy) return;
-    if (!emailDone && (el('EmailTo').value || el('EmailSubject').value || el('EmailBody').value) &&
+    if (emailBusy || emailTemplateBusy) return;
+    if (emailDirty() &&
         !window.confirm('Replace the email currently in the composer?')) return;
-    emailDone=false; emailRequest='job-email:'+hex(); emailAccount=null;
-    el('EmailTo').value=contact.email || '';
+    const generation=++emailComposeGeneration;
+    emailFiles=[];emailTemplate='';emailTemplateRevision=null;el('EmailAttachments').replaceChildren();el('EmailTemplate').value='';el('EmailTemplateName').value='';
+    emailSelection=null;emailDone=false; emailRequest='job-email:'+hex(); emailAccount=null;
+    el('EmailTo').value=contact.email || contact.email_result?.email || emailAddressesFromContact(contact.contact).join('; ');
+    el('EmailCc').value='';el('EmailBcc').value='';el('EmailRecipients').replaceChildren();
     el('EmailSubject').value=contact.role ? 'Hiring for '+contact.role+(contact.company ? ' at '+contact.company : '') : '';
-    el('EmailBody').value=''; el('EmailOpen').hidden=true;el('EmailOpen').removeAttribute?.('href');el('EmailNew').hidden=true;
+    el('EmailBody').value='';el('EmailEditor').innerHTML=''; el('EmailOpen').hidden=true;el('EmailOpen').removeAttribute?.('href');el('EmailNew').hidden=true;
     emailMessage('Review the recipient and message. Choose a draft to send in Outlook, or send here.');
-    el('EmailCard').hidden=false;emailLock(false);emailInfo();el('EmailCard').scrollIntoView({block:'start',behavior:'smooth'});
+    el('EmailCard').hidden=false;emailLock(false);emailInfo();emailLoadTemplates();emailSuggestRecipients(contact,generation);el('EmailCard').scrollIntoView({block:'start',behavior:'smooth'});
+  }
+  let emailSelection=null;
+  function emailFormat(command,value=null) {
+    if(emailBusy || emailDone || emailTemplateBusy)return;
+    const editor=el('EmailEditor'),selection=window.getSelection();editor.focus();
+    if(emailSelection && editor.contains(emailSelection.commonAncestorContainer)){selection.removeAllRanges();selection.addRange(emailSelection);}
+    if(!selection?.rangeCount || !editor.contains(selection.anchorNode) || !editor.contains(selection.focusNode))return;
+    document.execCommand(command,false,value);el('EmailBody').value=editor.innerText || editor.textContent;
   }
   const emailEscape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  function emailAddresses(value,required=false) {
+    const list=[...new Set(String(value || '').split(/[,;\n]+/).map(value=>value.trim()).filter(Boolean))];
+    if(list.length>100 || required && !list.length)throw Error('Add 1 to 100 To recipients. Separate addresses with commas or semicolons.');
+    for(const address of list)if(address.length>254 || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,63}$/.test(address))throw Error('Invalid email address: '+address);
+    return list;
+  }
+  function emailAddressesFromContact(value) {
+    const matches=String(value || '').match(/[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}/g) || [];
+    return [...new Set(matches)];
+  }
+  function emailSanitizeHTML(source) {
+    if(source.length>3500000)throw Error('The formatted message is too large.');
+    const template=document.createElement('template');template.innerHTML=source;
+    const allowed=new Set(['P','DIV','BR','STRONG','B','EM','I','U','S','STRIKE','UL','OL','LI','BLOCKQUOTE','A','SPAN','H1','H2','H3','H4','TABLE','TBODY','TR','TD','TH','IMG','FONT']);
+    const blocked=new Set(['SCRIPT','STYLE','IFRAME','OBJECT','TEMPLATE','SVG','MATH']);let count=0;
+    const visit=(node,depth=0)=>{
+      if(++count>10000 || depth>100)throw Error('The formatted message is too complex.');
+      if(node.nodeType===3)return emailEscape(node.nodeValue);
+      if(node.nodeType!==1 || blocked.has(node.tagName))return '';
+      const inner=Array.from(node.childNodes).map(child=>visit(child,depth+1)).join('');
+      if(!allowed.has(node.tagName))return inner;
+      const tag=node.tagName==='FONT'?'span':node.tagName.toLowerCase();let attrs='';
+      if(tag==='img') {
+        const source=node.getAttribute('src') || '';
+        if(!/^data:image\/(png|jpeg|gif);base64,[A-Za-z0-9+/=]+$/.test(source))return '';
+        let dimensions='';
+        for(const name of ['width','height']){const value=node.getAttribute(name) || '';if(/^[1-9][0-9]{0,3}$/.test(value) && Number(value)<=2000)dimensions+=' '+name+'="'+value+'"';}
+        return '<img src="'+emailEscape(source)+'" alt="'+emailEscape(node.getAttribute('alt') || 'Signature banner')+'"'+dimensions+' style="max-width:100%;height:auto">';
+      }
+      if(tag==='a') {const href=node.getAttribute('href') || '';if(/^(https?:\/\/|mailto:)/i.test(href) && !/[\x00-\x1f]/.test(href))attrs+=' href="'+emailEscape(href)+'"';}
+      const align=node.style.textAlign;
+      const styles=[];
+      if(['left','center','right','justify'].includes(align))styles.push('text-align:'+align);
+      if(['bold','normal','400','700'].includes(node.style.fontWeight))styles.push('font-weight:'+node.style.fontWeight);
+      if(['italic','normal'].includes(node.style.fontStyle))styles.push('font-style:'+node.style.fontStyle);
+      if(['underline','line-through','none'].includes(node.style.textDecoration))styles.push('text-decoration:'+node.style.textDecoration);
+      const color=node.style.color || node.getAttribute('color') || '';
+      if(/^(#[a-f0-9]{3}([a-f0-9]{3})?|black|red|blue|green|gray|rgb\([0-9 ,]+\))$/i.test(color))styles.push('color:'+color);
+      const fontSize=node.style.fontSize || ({1:'8pt',2:'10pt',3:'12pt',4:'14pt',5:'18pt',6:'24pt',7:'36pt'})[node.getAttribute('size')];
+      if(fontSize && /^(?:[8-9]|[12][0-9]|3[0-6])(?:px|pt)$/.test(fontSize))styles.push('font-size:'+fontSize);
+      const family=node.style.fontFamily || node.getAttribute('face') || '';
+      if(family && /^[a-z ,"'-]{1,100}$/i.test(family))styles.push('font-family:'+family.replace(/"/g,"'"));
+      if(styles.length)attrs+=' style="'+emailEscape(styles.join(';'))+'"';
+      return '<'+tag+attrs+'>'+inner+(tag==='br'?'':'</'+tag+'>');
+    };
+    return Array.from(template.content.childNodes).map(node=>visit(node)).join('');
+  }
+  function emailBodyHTML() {
+    if(el('EmailEditor').innerHTML) return emailSanitizeHTML(el('EmailEditor').innerHTML);
+    return '<div>'+emailEscape(el('EmailBody').value).replace(/\n/g,'<br>')+'</div>';
+  }
+  async function emailSuggestRecipients(contact,generation) {
+    const company=contact.hr?.company_id;
+    if(!company || el('EmailTo').value)return;
+    try {
+      const response=await fetch('/apollo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'contacts',filters:{company:String(company)}})});
+      const data=await response.json();if(!response.ok || !data.ok)throw Error(data.error || 'Could not read saved contacts.');
+      if(generation!==emailComposeGeneration || emailDone || emailBusy)return;
+      const contacts=(data.contacts || []).filter(row=>String(row.company_id)===String(company) && emailAddressesFromContact(row.email).length);
+      const named=contacts.filter(row=>row.name?.toLowerCase()===String(contact.contact || '').trim().toLowerCase());
+      const single=named.length===1?named[0]:contacts.length===1?contacts[0]:null;
+      if(single && !el('EmailTo').value)el('EmailTo').value=single.email;
+      for(const row of contacts) {
+        const button=node('button','Add '+row.name+' · '+row.email,'sec');button.type='button';
+        button.addEventListener('click',()=>{if(emailBusy || emailDone)return;try{el('EmailTo').value=[...new Set([...emailAddresses(el('EmailTo').value),row.email])].join('; ');}catch(error){emailMessage(error.message);}});
+        el('EmailRecipients').append(button);
+      }
+    }catch(error){if(generation===emailComposeGeneration)emailMessage(error.message+' Enter the recipient manually.');}
+  }
+  async function emailPaste(event) {
+    if(emailBusy || emailDone || emailTemplateBusy)return;
+    event.preventDefault();
+    const clipboard=event.clipboardData;
+    const html=clipboard.getData('text/html'),plain=clipboard.getData('text/plain');
+    const images=Array.from(clipboard.files || []).filter(file=>file.type.startsWith('image/'));
+    const editor=el('EmailEditor'),selection=window.getSelection();
+    const range=selection?.rangeCount && editor.contains(selection.anchorNode) && editor.contains(selection.focusNode)?selection.getRangeAt(0).cloneRange():null;
+    emailLock(true);
+    try {
+      let clean=html?emailSanitizeHTML(html):emailEscape(plain).replace(/\n/g,'<br>');
+      // Outlook can supply rich text and a file image in the same clipboard.
+      // Keep the text, and include file images not already embedded in the HTML.
+      if(images.length>10 || images.reduce((sum,file)=>sum+file.size,0)>emailLimit)throw Error('Use at most 10 clipboard images, totaling 2.5 MB or less.');
+      for(const file of images) {
+        if(!['image/png','image/jpeg','image/gif'].includes(file.type) || file.size>emailLimit)throw Error('Use PNG, JPEG or GIF clipboard images of up to 2.5 MB.');
+        const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('Could not read the pasted image.'));reader.readAsDataURL(file);});
+        if(!clean.includes(source))clean+=emailSanitizeHTML('<img src="'+emailEscape(source)+'" alt="Signature banner">');
+      }
+      const stats=emailImageStats((editor.innerHTML || '')+clean);
+      if(stats.count+emailFiles.length>10 || stats.size+emailFiles.reduce((sum,file)=>sum+file.size,0)>emailLimit)throw Error('Use at most 10 files/images, totaling 2.5 MB or less.');
+      editor.contentEditable='true';editor.focus();
+      if(range && editor.contains(range.commonAncestorContainer)){selection.removeAllRanges();selection.addRange(range);}
+      else {const end=document.createRange();end.selectNodeContents(editor);end.collapse(false);selection.removeAllRanges();selection.addRange(end);}
+      document.execCommand('insertHTML',false,clean);
+      el('EmailBody').value=editor.innerText || editor.textContent;
+    }catch(error){emailMessage(error.message);}finally{emailLock(false);}
+  }
+  function emailImageStats(html) {
+    const images=[...new Set(html.match(/data:image\/(?:png|jpeg|gif);base64,[A-Za-z0-9+/=]+/g) || [])];
+    return {count:images.length,size:images.reduce((sum,source)=>{const bytes=source.split(',')[1];return sum+bytes.length*3/4-(bytes.endsWith('==')?2:bytes.endsWith('=')?1:0);},0)};
+  }
+  async function emailInsertImage(file) {
+    if(!file || emailBusy || emailDone || emailTemplateBusy)return;
+    const images=emailImageStats(el('EmailEditor').innerHTML || '');
+    if(images.count+emailFiles.length>=10 || images.size+emailFiles.reduce((sum,value)=>sum+value.size,0)+file.size>emailLimit){emailMessage('Use at most 10 files/images, totaling 2.5 MB or less.');return;}
+    if(!['image/png','image/jpeg','image/gif'].includes(file.type) || file.size>emailLimit){emailMessage('Choose a PNG, JPEG or GIF of up to 2.5 MB.');return;}
+    const generation=emailComposeGeneration;emailLock(true);
+    try {
+      const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('Could not read the image.'));reader.readAsDataURL(file);});
+      if(generation!==emailComposeGeneration)return;
+      const clean=emailSanitizeHTML('<img src="'+emailEscape(source)+'" alt="Signature banner">');
+      el('EmailEditor').contentEditable='true';el('EmailEditor').focus();
+      const selection=window.getSelection();
+      if(!selection?.rangeCount || !el('EmailEditor').contains(selection.anchorNode)){
+        const range=document.createRange();range.selectNodeContents(el('EmailEditor'));range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+      }
+      document.execCommand('insertHTML',false,clean);el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;
+      emailMessage('Banner embedded. Save the template to keep it with your signature.');
+    }catch(error){emailMessage(error.message);}finally{emailLock(false);}
+  }
+  function emailRenderFiles() {
+    el('EmailAttachments').replaceChildren();
+    emailFiles.forEach((file,index)=>{const item=node('li',file.name+' · '+Math.ceil(file.size/1024)+' KB '),remove=node('button','Remove','sec');remove.type='button';remove.disabled=emailBusy || emailDone;remove.addEventListener('click',()=>{if(emailBusy || emailDone)return;emailFiles.splice(index,1);emailRenderFiles();});item.append(remove);el('EmailAttachments').append(item);});
+  }
+  async function emailAttach() {
+    if(emailBusy || emailDone)return;
+    const files=Array.from(el('EmailFiles').files || []);el('EmailFiles').value='';
+    const images=emailImageStats(el('EmailEditor').innerHTML || '');
+    if(images.count+emailFiles.length+files.length>10 || images.size+[...emailFiles,...files].reduce((sum,file)=>sum+file.size,0)>emailLimit){emailMessage('Attach at most 10 files, totaling 2.5 MB or less.');return;}
+    emailLock(true);
+    try {
+      const added=[];
+      for(const file of files) {
+        if(file.name.length>200 || /[\x00-\x1f\x7f/\\]/.test(file.name))throw Error('The attachment filename is invalid.');
+        const contentBytes=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1] || '');reader.onerror=()=>reject(Error('Could not read '+file.name));reader.readAsDataURL(file);});
+        added.push({name:file.name,size:file.size,contentBytes});
+      }
+      emailFiles.push(...added);emailRenderFiles();emailMessage('Attachments added. Review them before sending.');
+    }catch(error){emailMessage(error.message);}finally{emailLock(false);}
+  }
+  function emailTemplateChoices(selected=emailTemplate) {
+    el('EmailTemplate').replaceChildren(new Option('No template',''),...emailTemplates.map(value=>new Option(value.name,value.id)));
+    emailTemplate=emailTemplates.some(value=>value.id===selected)?selected:'';if(!emailTemplate)emailTemplateRevision=null;el('EmailTemplate').value=emailTemplate;emailLock(emailBusy);
+  }
+  async function emailLoadTemplates() {
+    if(emailTemplateBusy)return;
+    emailTemplateBusy=true;emailLock(emailBusy);
+    try {const response=await fetch('/job-leads?action=email_templates',{cache:'no-store'}),data=await response.json();if(!response.ok || !data.ok)throw Error(data.error || 'Could not read templates.');emailTemplates=data.templates;emailTemplateChoices();el('EmailTemplateMessage').textContent='Templates save the subject, formatted message, signature and embedded banner.';}
+    catch(error){el('EmailTemplateMessage').textContent=error.message;}
+    finally{emailTemplateBusy=false;emailLock(emailBusy);}
+  }
+  function emailApplyTemplate() {
+    if(emailBusy || emailDone || emailTemplateBusy)return;
+    const selected=el('EmailTemplate').value,template=emailTemplates.find(value=>value.id===selected);
+    if(!template){emailTemplate='';emailTemplateRevision=null;el('EmailTemplateName').value='';emailLock(false);return;}
+    if((el('EmailSubject').value || el('EmailBody').value || el('EmailEditor').querySelector('img')) && !window.confirm('Replace this subject and message with the selected template?')){el('EmailTemplate').value=emailTemplate;return;}
+    try {
+      const html=emailSanitizeHTML(template.html);
+      el('EmailEditor').innerHTML=html;el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;
+      el('EmailSubject').value=template.subject;el('EmailTemplateName').value=template.name;emailTemplate=selected;emailTemplateRevision=template.revision;emailLock(false);
+    }catch(error){emailMessage(error.message);el('EmailTemplate').value=emailTemplate;}
+  }
+  async function emailSaveTemplate(copy=false,remove=false) {
+    if(emailBusy || emailDone || emailTemplateBusy)return;
+    const template=emailTemplates.find(value=>value.id===emailTemplate);
+    if(remove && (!template || !window.confirm('Delete template "'+template.name+'"?')))return;
+    let payload;
+    try {payload=remove?{action:'email_template_delete',id:template.id,revision:emailTemplateRevision}:{action:'email_template_save',name:el('EmailTemplateName').value.trim(),subject:el('EmailSubject').value,html:emailBodyHTML(),...(!copy && template?{id:template.id,revision:emailTemplateRevision}:{})};if(!remove && !payload.name)throw Error('Enter a template name first.');}
+    catch(error){el('EmailTemplateMessage').textContent=error.message;return;}
+    emailTemplateBusy=true;emailLock(emailBusy);
+    try {const response=await fetch('/job-leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),data=await response.json();if(!response.ok || !data.ok)throw Error(data.error || 'Could not update the template.');emailTemplates=data.templates;emailTemplateChoices(remove?'':data.id);emailTemplateRevision=emailTemplates.find(value=>value.id===emailTemplate)?.revision ?? null;if(remove)el('EmailTemplateName').value='';el('EmailTemplateMessage').textContent=remove?'Template deleted. Your message has been kept.':'Template saved.';}
+    catch(error){el('EmailTemplateMessage').textContent=error.message;}
+    finally{emailTemplateBusy=false;emailLock(emailBusy);}
+  }
   async function emailSubmit(send) {
-    if (emailBusy || emailDone) return;
-    const to=el('EmailTo').value.trim(), subject=el('EmailSubject').value.trim(), body=el('EmailBody').value.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || !subject || !body) {emailMessage('Enter a valid recipient, subject and message.');return;}
+    if (emailBusy || emailDone || emailTemplateBusy) return;
+    let to,cc,bcc,html;
+    const subject=el('EmailSubject').value.trim();
+    try {
+      to=emailAddresses(el('EmailTo').value,true);cc=emailAddresses(el('EmailCc').value);bcc=emailAddresses(el('EmailBcc').value);
+      if(to.length+cc.length+bcc.length>100)throw Error('Use at most 100 recipients in total.');
+      html=emailBodyHTML();
+      const images=emailImageStats(html);
+      if(images.count+emailFiles.length>10 || images.size+emailFiles.reduce((sum,file)=>sum+file.size,0)>emailLimit)throw Error('Use at most 10 files/images, totaling 2.5 MB or less.');
+      if(!subject || !el('EmailBody').value.trim() && !/<img\b/.test(html))throw Error('Enter a subject and message.');
+    }catch(error){emailMessage(error.message);return;}
     emailLock(true);
     let attempted=false;
     try {
@@ -466,9 +666,9 @@
       if (!emailAccount?.connected || !emailAccount.account?.email) throw Error('Connect Outlook before creating or sending this email.');
       if (previousSender && previousSender!==emailAccount.account.email) throw Error('The Outlook account changed. Review the sender and try again.');
       if (send && !emailAccount.can_send) throw Error('Enable Outlook sending and approve Mail.Send first.');
-      if (!window.confirm((send?'Send this email now?':'Create this draft in Outlook?')+'\n\nFrom: '+emailAccount.account.email+'\nTo: '+to+'\nSubject: '+subject)) return;
+      if (!window.confirm((send?'Send this email now?':'Create this draft in Outlook?')+'\n\nFrom: '+emailAccount.account.email+'\nTo: '+to.join('; ')+'\nCC: '+(cc.join('; ') || 'None')+'\nBCC: '+(bcc.join('; ') || 'None')+'\nSubject: '+subject+'\nAttachments: '+(emailFiles.map(file=>file.name).join(', ') || 'None')+'\nEmbedded images: '+(html.match(/<img\b/g) || []).length)) return;
       attempted=true;emailDone=true;
-      const payload={to,subject,html:'<div style="white-space:pre-wrap">'+emailEscape(body)+'</div>',request_id:emailRequest,sender:emailAccount.account.email};
+      const payload={composer_version:2,to,cc,bcc,subject,html,attachments:emailFiles.map(({name,contentBytes})=>({name,contentBytes})),request_id:emailRequest,sender:emailAccount.account.email};
       if (send) Object.assign(payload,{action:'outlook_send',confirmed:true});
       const response=await fetch(send?'/job-leads':'/ppc/outlook/create_draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const result=await response.json();
@@ -1376,6 +1576,25 @@
       for (const id of ['Filter', 'ClientFilter', 'PostedFilter']) el(id).value = '';
       el('FolderFilter').value = '*'; applySavedFilters();
     });
+    el('EmailEditor').addEventListener('input',()=>{el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;});
+    el('EmailEditor').addEventListener('paste',emailPaste);
+    el('EmailEditor').addEventListener('drop',event=>event.preventDefault());
+    for(const button of document.querySelectorAll?.('[data-email-format]') || []) {
+      button.addEventListener('mousedown',event=>event.preventDefault());
+      button.addEventListener('click',()=>{const command=button.dataset.emailFormat;let value=null;if(command==='createLink'){value=window.prompt('Enter an https:// link or mailto: email link');if(!value || !/^(https?:\/\/|mailto:)/i.test(value))return;}emailFormat(command,value);});
+    }
+    document.addEventListener('selectionchange',()=>{const selection=window.getSelection?.();if(selection?.rangeCount && el('EmailEditor').contains(selection.anchorNode) && el('EmailEditor').contains(selection.focusNode))emailSelection=selection.getRangeAt(0).cloneRange();});
+    el('EmailFont').addEventListener('change',()=>emailFormat('fontName',el('EmailFont').value));
+    el('EmailSize').addEventListener('change',()=>emailFormat('fontSize',el('EmailSize').value));
+    el('EmailColor').addEventListener('change',()=>emailFormat('foreColor',el('EmailColor').value));
+    el('EmailImage').addEventListener('change',()=>{const file=el('EmailImage').files?.[0];el('EmailImage').value='';emailInsertImage(file);});
+    el('EmailFiles').addEventListener('change',emailAttach);
+    el('EmailTemplate').addEventListener('change',emailApplyTemplate);
+    el('EmailTemplateUse').addEventListener('click',emailApplyTemplate);
+    el('EmailTemplateRefresh').addEventListener('click',emailLoadTemplates);
+    el('EmailTemplateSave').addEventListener('click',()=>emailSaveTemplate());
+    el('EmailTemplateCopy').addEventListener('click',()=>emailSaveTemplate(true));
+    el('EmailTemplateDelete').addEventListener('click',()=>emailSaveTemplate(false,true));
     el('EmailCompose').addEventListener('click',()=>composeEmail());
     el('EmailClose').addEventListener('click',()=>{if(!emailBusy)el('EmailCard').hidden=true;});
     el('EmailDraft').addEventListener('click',()=>emailSubmit(false));
@@ -1439,7 +1658,7 @@
       } catch (error) { status(error instanceof SyntaxError ? 'Choose a valid Job Leads backup file.' : error.message); }
       finally { el('File').value = ''; lock(false); }
     });
-    window.addEventListener('beforeunload', event => { if (dirty || busy || emailBusy || emailDirty()) { event.preventDefault(); event.returnValue = ''; } });
+    window.addEventListener('beforeunload', event => { if (dirty || busy || emailBusy || emailTemplateBusy || emailDirty()) { event.preventDefault(); event.returnValue = ''; } });
     fill(null); lock(true);
     try {
       await load();

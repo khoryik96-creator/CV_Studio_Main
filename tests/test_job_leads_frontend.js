@@ -66,7 +66,8 @@ const root = path.resolve(__dirname, '..');
   let records=[], folders=[], sequence=0, allowDiscard=true, lookupError=false, lookups=0, missingDescription=false, moveError=false;
   class TestURL extends URL {static createObjectURL(blob){blobs.push(blob);return 'blob:synthetic'} static revokeObjectURL(){}}
   const location={origin:'http://127.0.0.1:5000',search:'',href:''};
-  const window={addEventListener:(type,fn)=>events[type]=fn,confirm:()=>allowDiscard,postMessage:message=>{
+  const confirmationMessages=[];
+  const window={addEventListener:(type,fn)=>events[type]=fn,confirm:message=>{confirmationMessages.push(message);return allowDiscard;},postMessage:message=>{
     events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_RESPONSE',channel:message.channel,id:message.id,result:message.action==='jobTabs'?[{id:2,title:'Sample job',url}]:{url,company:'Read company',role:'Read role',contact:'Do not copy from ad',status:'won',follow_up:'2030-01-01',notes:'Do not replace notes'}}});
   }};
   let emailCalls=[],emailFailure=false,emailSender='owner@example.com', emailResponseError=null, emailHold=null, releaseEmail=null;
@@ -382,5 +383,16 @@ const root = path.resolve(__dirname, '..');
   releaseEmail({ok:true,json:async()=>({ok:true,state:'accepted'})});await sending;
   const attempts=emailCalls.slice(-7).map(call=>call.data.request_id);
   assert.equal(new Set(attempts).size,7,'each explicit safe retry gets a new durable request id');
+  window.cvStudioJobLeads.composeEmail({contact:'Known Contact <known@example.com>'});await settled();
+  assert.equal(el('EmailTo').value,'known@example.com','ad contact email is prefilled');
+  el('EmailTo').value='known@example.com; second@example.com';el('EmailCc').value='cc@example.com';el('EmailBcc').value='private@example.com';
+  el('EmailSubject').value='Group introduction';el('EmailBody').value='Hello team';
+  emailHold=false;allowDiscard=false;const beforeGroup=emailCalls.length;
+  await el('EmailSend').click();assert.equal(emailCalls.length,beforeGroup,'group send still requires confirmation');
+  for(const address of ['known@example.com','second@example.com','cc@example.com','private@example.com'])assert(confirmationMessages.at(-1).includes(address),'confirmation includes '+address);
+  allowDiscard=true;await el('EmailSend').click();
+  assert.deepEqual(emailCalls.at(-1).data.to,['known@example.com','second@example.com']);
+  assert.deepEqual(emailCalls.at(-1).data.cc,['cc@example.com']);assert.deepEqual(emailCalls.at(-1).data.bcc,['private@example.com']);
+  assert.equal(emailCalls.at(-1).data.composer_version,2);assert.equal(emailCalls.at(-1).data.confirmed,true);
   console.log('Job Leads: capture binding/isolation, save/edit/search, duplicate/draft protection, paste-link autofill, optional manual contact/date preservation, failure, CSV and HTML safety passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

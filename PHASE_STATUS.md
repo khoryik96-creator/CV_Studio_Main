@@ -4,7 +4,13 @@
 
 ## Release state
 
-- v24.6.545 is local/unmerged on `claude/job-leads-signed-clients` from
+- v24.6.547 is local/unmerged on `codex/job-leads-email-composer`, from merged546
+  PR291/ea046fa. Adds multiple To/CC/BCC, attachments, recipient autofill and saved
+  rich email templates with signature/banner embedding. Sending always confirms.
+  Same routes, Microsoft consent scopes and durable send non-replay boundary.
+- v24.6.546 merged in PR291: Job ads favorites and confirmed Outlook client email.
+
+- v24.6.545 (merged PR290) was local/unmerged on `claude/job-leads-signed-clients` from
   merged544/PR289/e431752. It removes static explanation and filler text from
   LinkedIn Sourcer and Email Verifier; consent, setup and export warnings stay.
   Create JobAdder contact now links every existing contact a Review finds

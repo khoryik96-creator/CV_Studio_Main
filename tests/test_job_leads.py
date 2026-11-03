@@ -343,3 +343,21 @@ def test_job_leads_send_reuses_local_request_guards_and_never_caches(module):
         assert response.status_code==200 and response.json['state']=='accepted'
         assert response.cache_control.no_store
         service.send_job_leads_email.assert_called_once()
+
+
+def test_email_template_routes_preserve_request_guards(module):
+    browser=module.app.test_client();browser.get('/')
+    service=mock.Mock()
+    with module.app.app_context():service.email_templates.return_value=module.jsonify(ok=True,templates=[])
+    with mock.patch.object(module,'_OUTLOOK_SERVICE',service):
+        blocked=browser.post('/job-leads',json={'action':'email_template_save'},headers={'Origin':'https://foreign.invalid'})
+        assert blocked.status_code==403
+        service.email_templates.assert_not_called()
+        result=browser.get('/job-leads?action=email_templates')
+        assert result.status_code==200 and result.cache_control.no_store
+        service.email_templates.assert_called_once_with()
+        result=browser.post('/job-leads',json={'action':'email_template_save'},headers={'X-CV-Studio-Request':'1'})
+        assert result.status_code==200 and result.cache_control.no_store
+        assert service.email_templates.call_args.args==('save',)
+        browser.post('/job-leads',json={'action':'email_template_delete'},headers={'X-CV-Studio-Request':'1'})
+        assert service.email_templates.call_args.args==('delete',)
