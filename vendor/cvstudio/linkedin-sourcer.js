@@ -219,7 +219,7 @@
       if (row.unknowns.length) { const missing = document.createElement('p'); missing.className = 'li-sourcer-muted'; missing.textContent = 'Still unknown: ' + row.unknowns.join(' · '); card.append(missing); }
       target.append(card);
     }
-    if (!results.length) target.textContent = 'Your candidate list will appear here.';
+    if (!results.length) target.textContent = 'No people yet.';
     el('Usage').textContent = run ? `${run.calls} / ${run.max_calls} request attempts · ${run.tokens.toLocaleString()} reported tokens` + (run.usage_complete ? '' : ' · usage incomplete') : '';
     controls();
     try { sessionStorage.setItem('cvstudio_linkedin_sourcer', JSON.stringify({run, results})); } catch { tell('Session storage is unavailable. Export the current list before closing.'); }

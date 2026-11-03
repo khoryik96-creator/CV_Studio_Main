@@ -307,6 +307,20 @@ def test_contact_links_use_the_connected_jobadder_region_and_confirmed_id(state,
     if expected:assert response.json['contact_url']=='https://au3.jobadder.com/contacts/45'
 
 
+@pytest.mark.parametrize('state',['exists','unconfirmed'])
+def test_existing_contact_matches_each_get_a_link(state):
+    import app
+    browser=app.app.test_client();browser.get('/')
+    service=mock.Mock()
+    service.perform.return_value={'state':state,'matches':[{'contact_id':77,'company':'Other Company','company_id':90},
+        {'contact_id':True,'company':'Bad','company_id':1},{'contact_id':0,'company':'Zero','company_id':2}]}
+    with mock.patch.object(app,'_JOB_LEADS_JA',service),mock.patch.object(app,'_ja_refresh_access_token',return_value='fictional-token'),mock.patch.object(app,'_jobadder_web_base',return_value='https://au3.jobadder.com'):
+        response=browser.post('/jobadder/contact_actions',json={'action':'review'},headers={'X-CV-Studio-Request':'1'})
+    assert response.status_code==200
+    assert [row.get('url') for row in response.json['matches']]==['https://au3.jobadder.com/contacts/77',None,None]
+    assert 'contact_url' not in response.json
+
+
 def test_previous_result_check_ignores_new_review_fields_but_keeps_original_identity():
     service,client,vault,account=setup();proof=review(service);client.fail=TimeoutError()
     assert call(service,'create',review_token=proof,confirmed=True)['state']=='unconfirmed'

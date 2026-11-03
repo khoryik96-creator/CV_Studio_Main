@@ -4,12 +4,23 @@
   const el=name=>document.getElementById('jobLeadsJA'+name);
   let ready=false,current=null,account='',review='',working=false,generation=0,priorUnconfirmed=false,recoveryAccount='',recoveryToken='';
   let users=[],recruiters=null,assignmentAccount='',assignmentsReady=false;
-  const msg=value=>{el('Message').textContent=value;el('Open').hidden=true;el('Open').href='';};
+  const hideLinks=()=>{el('Open').hidden=true;el('Open').href='';el('Matches').replaceChildren();el('Matches').hidden=true;};
+  const msg=value=>{el('Message').textContent=value;hideLinks();};
+  // A link is shown only for a JobAdder contact page whose id is the contact's own.
+  const linkable=(id,url)=>Number.isSafeInteger(id) && id>0 && typeof url==='string' &&
+    /^https:\/\/[a-z0-9]+\.jobadder\.com\/contacts\/[1-9]\d*$/.test(url) && url.split('/').pop()===String(id);
+  // Opens the created or existing contact. A review that finds the email
+  // already in JobAdder links every matching contact, one per company.
   function contactLink(data){
-    if(!['created','exists'].includes(data.state) || !Number.isSafeInteger(data.contact_id) || data.contact_id<=0 ||
-        typeof data.contact_url!=='string' || !/^https:\/\/[a-z0-9]+\.jobadder\.com\/contacts\/[1-9]\d*$/.test(data.contact_url) ||
-        data.contact_url.split('/').pop()!==String(data.contact_id))return;
-    el('Open').href=data.contact_url;el('Open').hidden=false;
+    const own=['created','exists'].includes(data.state) && linkable(data.contact_id,data.contact_url)?data.contact_id:0;
+    if(own){el('Open').href=data.contact_url;el('Open').hidden=false;}
+    const others=(Array.isArray(data.matches)?data.matches:[]).filter(row=>linkable(row?.contact_id,row?.url) && row.contact_id!==own);
+    if(!own && others.length===1){el('Open').href=others[0].url;el('Open').hidden=false;return;}
+    for(const row of others){
+      const link=document.createElement('a');link.href=row.url;link.target='_blank';link.rel='noopener noreferrer';
+      link.textContent='Open '+(row.company || 'existing contact')+' · #'+row.contact_id;el('Matches').append(link);
+    }
+    el('Matches').hidden=!others.length;
   }
   async function api(body){
     const response=await fetch('/jobadder/contact_actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -19,7 +30,7 @@
     for(const name of ['Owner','RecruiterFilter','SelectAll','ClearRecruiters','Remember'])el(name).disabled=value || !assignmentsReady;
     for(const checkbox of el('RecruiterList').querySelectorAll('input'))checkbox.disabled=value || !assignmentsReady;
   }
-  function invalidate(){el('Review').hidden=priorUnconfirmed;el('RecoveryPanel').hidden=!priorUnconfirmed || !recoveryToken;review='';el('Create').hidden=true;el('Check').hidden=!priorUnconfirmed;el('Open').hidden=true;el('Open').href='';}
+  function invalidate(){el('Review').hidden=priorUnconfirmed;el('RecoveryPanel').hidden=!priorUnconfirmed || !recoveryToken;review='';el('Create').hidden=true;el('Check').hidden=!priorUnconfirmed;hideLinks();}
   function guide(names=[],invalid=false){
     for(const name of ['First','Last','Position','CompanyQuery','Search','Company','Review','Create','Check','Recovery','RecoveryConfirm']){
       el(name).setAttribute('data-guide',String(names.includes(name)));
