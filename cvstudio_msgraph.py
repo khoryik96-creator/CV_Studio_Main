@@ -16,6 +16,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html as _email_html
+import mimetypes
+import io
+from PIL import Image
+from html.parser import HTMLParser
+from contextlib import closing
 import json
 import os
 import re
@@ -163,6 +169,162 @@ def _ms_outlook_validate_draft_input(data):
     if len(subject) > 998 or len(html_body) > 250000:
         raise OverflowError("Outlook draft content is too large")
     return recipient, subject, html_body
+
+
+_EMAIL_ATTACHMENT_LIMIT = 2560 * 1024
+_EMAIL_TAGS = {'p','div','br','strong','b','em','i','u','s','strike','ul','ol','li','blockquote','a','span','h1','h2','h3','h4','table','tbody','tr','td','th','img','font'}
+
+
+class _EmailHTML(HTMLParser):
+    """Small email formatting allowlist; no active content or remote images."""
+    def __init__(self,inline=False):
+        super().__init__(convert_charrefs=True)
+        self.parts=[];self.stack=[];self.blocked=[];self.text=[]
+        self.inline=inline;self.images={};self.has_image=False
+
+    def handle_starttag(self,tag,attrs):
+        if tag in {'script','style','iframe','object','template','svg','math'}:
+            self.blocked.append(tag);return
+        if self.blocked or tag not in _EMAIL_TAGS:return
+        attributes=dict(attrs);safe=[]
+        if tag=='img':
+            source=attributes.get('src') or ''
+            if not source.startswith('data:'):return
+            image=_email_inline_image(source)
+            self.has_image=True
+            cid=hashlib.sha256(image['raw']).hexdigest()+'@cvstudio'
+            if self.inline:
+                self.images[cid]={'@odata.type':'#microsoft.graph.fileAttachment','name':'signature-'+cid[:12]+image['extension'],
+                    'contentType':image['type'],'contentBytes':image['encoded'],'isInline':True,'contentId':cid}
+            safe=[('src','cid:'+cid if self.inline else 'data:'+image['type']+';base64,'+image['encoded']),('alt',str(attributes.get('alt') or 'Email image')[:200])]
+            for key in ('width','height'):
+                value=attributes.get(key) or ''
+                if re.fullmatch(r'[1-9][0-9]{0,3}',value) and int(value)<=2000:safe.append((key,value))
+            safe.append(('style','max-width:100%;height:auto'))
+            self.parts.append('<img'+''.join(' '+key+'="'+_email_html.escape(value,quote=True)+'"' for key,value in safe)+'>')
+            return
+        if tag=='font':
+            styles=[]
+            if attributes.get('color'):styles.append('color:'+attributes['color'])
+            if attributes.get('size') in {'1','2','3','4','5','6','7'}:styles.append('font-size:'+{'1':'8pt','2':'10pt','3':'12pt','4':'14pt','5':'18pt','6':'24pt','7':'36pt'}[attributes['size']])
+            attributes['style']=';'.join(styles+[attributes.get('style','')])
+            tag='span'
+        if tag=='a':
+            url=attributes.get('href') or ''
+            parsed=urllib.parse.urlsplit(url.strip())
+            if parsed.scheme.lower() in {'https','http','mailto'} and not any(ord(c)<32 for c in url):
+                safe.append(('href',url.strip()))
+        styles=[]
+        for declaration in (attributes.get('style') or '').split(';'):
+            key,sep,value=declaration.partition(':');key=key.strip().lower();value=value.strip().lower()
+            if sep and ((key=='text-align' and value in {'left','center','right','justify'}) or
+                        (key=='font-weight' and value in {'bold','normal','400','700'}) or
+                        (key=='font-style' and value in {'italic','normal'}) or
+                        (key=='text-decoration' and value in {'underline','line-through','none'}) or
+                        (key=='color' and re.fullmatch(r'#[a-f0-9]{3}(?:[a-f0-9]{3})?|black|red|blue|green|gray|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)',value)) or
+                        (key=='font-size' and re.fullmatch(r'(?:[8-9]|[12][0-9]|3[0-6])(?:px|pt)',value)) or
+                        (key=='font-family' and re.fullmatch(r'[a-z ,\"\'-]{1,100}',value))):
+                styles.append(key+':'+value)
+        if styles:safe.append(('style',';'.join(styles)))
+        self.parts.append('<'+tag+''.join(' '+k+'="'+_email_html.escape(v,quote=True)+'"' for k,v in safe)+'>')
+        if tag not in {'br','img'}:self.stack.append(tag)
+
+    def handle_endtag(self,tag):
+        if tag=='font':tag='span'
+        if self.blocked:
+            if tag in self.blocked:
+                del self.blocked[len(self.blocked)-1-self.blocked[::-1].index(tag):]
+            return
+        if tag in self.stack:
+            while self.stack:
+                current=self.stack.pop();self.parts.append('</'+current+'>')
+                if current==tag:break
+
+    def handle_startendtag(self,tag,attrs):
+        self.handle_starttag(tag,attrs)
+        if tag!='br':self.handle_endtag(tag)
+
+    def handle_data(self,data):
+        if not self.blocked:self.parts.append(_email_html.escape(data));self.text.append(data)
+
+
+def _email_inline_image(source):
+    if not isinstance(source,str) or len(source)>3500000:raise ValueError('The signature image is too large.')
+    match=re.fullmatch(r'data:(image/(?:png|jpeg|gif));base64,([A-Za-z0-9+/=]+)',source)
+    if not match:raise ValueError('Use a PNG, JPEG or GIF image for the signature banner.')
+    try:
+        raw=base64.b64decode(match[2],validate=True)
+        if len(raw)>_EMAIL_ATTACHMENT_LIMIT:raise ValueError()
+        with Image.open(io.BytesIO(raw)) as image:
+            if image.format not in {'PNG','JPEG','GIF'} or image.width*image.height>10000000:raise ValueError()
+            mime={'PNG':'image/png','JPEG':'image/jpeg','GIF':'image/gif'}[image.format]
+            extension={'PNG':'.png','JPEG':'.jpg','GIF':'.gif'}[image.format]
+            if mime!=match[1]:raise ValueError()
+            image.verify()
+    except Exception:raise ValueError('The signature image is invalid or too large. Use a PNG, JPEG or GIF.') from None
+    return {'raw':raw,'type':mime,'extension':extension,'encoded':base64.b64encode(raw).decode('ascii')}
+
+
+def _email_rich_html(value,inline=False):
+    if not isinstance(value,str) or len(value)>3500000:raise ValueError('The formatted message is too large.')
+    parser=_EmailHTML(inline)
+    try:parser.feed(value);parser.close()
+    except (ValueError,RecursionError):raise ValueError('The formatted message or embedded image is invalid.') from None
+    if not ''.join(parser.text).strip() and not parser.has_image:raise ValueError('Enter a message before saving or sending.')
+    result=''.join(parser.parts)+''.join('</'+tag+'>' for tag in reversed(parser.stack))
+    return (result,list(parser.images.values())) if inline else result
+
+
+def _email_recipients(value,required=False):
+    if isinstance(value,str):value=re.split(r'[,;\n]+',value)
+    if not isinstance(value,list) or len(value)>100:raise ValueError('Use at most 100 email addresses in each recipient field.')
+    result=[];seen=set()
+    for address in value:
+        if not isinstance(address,str):raise ValueError('Enter email addresses separated by commas or semicolons.')
+        address=address.strip()
+        if not address:continue
+        if len(address)>254 or not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,63}",address):
+            raise ValueError('Invalid email address: '+address[:254])
+        if address.lower() not in seen:result.append(address);seen.add(address.lower())
+    if required and not result:raise ValueError('Add at least one To recipient.')
+    return result
+
+
+def _email_message(data):
+    recipients={key:_email_recipients(data.get(key,[]),key=='to') for key in ('to','cc','bcc')}
+    if sum(map(len,recipients.values()))>100:raise ValueError('Use at most 100 recipients in total.')
+    subject=data.get('subject')
+    if not isinstance(subject,str) or not subject.strip() or len(subject)>998 or re.search(r'[\x00-\x1f\x7f]',subject):
+        raise ValueError('Enter a valid subject of up to 998 characters.')
+    body,inline_images=_email_rich_html(data.get('html'),inline=True)
+    message={'subject':subject.strip(),'body':{'contentType':'HTML','content':body}}
+    seen=set()
+    for key,field in [('to','toRecipients'),('cc','ccRecipients'),('bcc','bccRecipients')]:
+        # An address in more than one field is delivered once; To takes priority.
+        addresses=[address for address in recipients[key] if address.lower() not in seen]
+        seen.update(address.lower() for address in addresses)
+        if addresses:message[field]=[{'emailAddress':{'address':address}} for address in addresses]
+    attachments=data.get('attachments',[])
+    if not isinstance(attachments,list) or len(attachments)>10:raise ValueError('Attach at most 10 files.')
+    files=list(inline_images);total=sum(len(base64.b64decode(image['contentBytes'])) for image in inline_images)
+    if len(files)+len(attachments)>10 or total>_EMAIL_ATTACHMENT_LIMIT:raise ValueError('Use at most 10 attachments and inline images, totaling 2.5 MB or less.')
+    for item in attachments:
+        if not isinstance(item,dict):raise ValueError('Invalid attachment.')
+        name=item.get('name');encoded=item.get('contentBytes')
+        if (not isinstance(name,str) or not name.strip() or len(name)>200 or re.search(r'[\x00-\x1f\x7f/\\]',name) or
+                not isinstance(encoded,str) or len(encoded)>4*((_EMAIL_ATTACHMENT_LIMIT+2)//3)):
+            raise ValueError('Invalid attachment name or size.')
+        try:raw=base64.b64decode(encoded,validate=True)
+        except (ValueError,TypeError):raise ValueError('Invalid attachment content.') from None
+        total+=len(raw)
+        if total>_EMAIL_ATTACHMENT_LIMIT:raise ValueError('Attachments must total 2.5 MB or less.')
+        files.append({'@odata.type':'#microsoft.graph.fileAttachment','name':name,
+                      'contentType':mimetypes.guess_type(name)[0] or 'application/octet-stream',
+                      'contentBytes':base64.b64encode(raw).decode('ascii')})
+    if files:message['attachments']=files
+    if len(json.dumps(message).encode('utf-8'))>3800000:
+        raise ValueError('Message and attachments are too large. Remove an attachment or shorten the message.')
+    return message
 
 
 class OutlookService:
@@ -609,12 +771,13 @@ class OutlookService:
                 except Exception:
                     pass
 
-    def _create_draft_payload(self, recipient, subject, html_body, *, access_token=None):
+    def _create_draft_payload(self, recipient, subject, html_body, *, access_token=None, message=None):
         payload = {
             "subject": subject,
             "body": {"contentType": "HTML", "content": html_body},
             "toRecipients": [{"emailAddress": {"address": recipient}}],
         }
+        if message is not None:payload=message
         draft = (self._graph_client.request_json("me/messages", body=payload, method="POST", timeout=30,
                   access_token=access_token, safe_to_retry=False, retries=0) if access_token else
                  self._graph_post_json("me/messages", payload, timeout=30))
@@ -796,7 +959,9 @@ class OutlookService:
         if request_id and not re.fullmatch(r"[A-Za-z0-9_.:-]{8,180}", request_id):
             return self._jsonify({"retry_safe": True, "error": "Invalid Outlook draft request ID"}), 400
         try:
-            recipient, subject, html_body = _ms_outlook_validate_draft_input(data)
+            message = _email_message(data) if data.get('composer_version')==2 else None
+            recipient, subject, html_body = (_ms_outlook_validate_draft_input(data) if message is None else
+                ('',message['subject'],message['body']['content']))
         except ValueError as exc:
             return self._jsonify({"retry_safe": True, "error": str(exc)}), 400
         except OverflowError as exc:
@@ -813,6 +978,8 @@ class OutlookService:
                 if sender != str(account.get('email') or '').strip().lower() or access_token != self._store.get('access_token'):
                     return self._jsonify({'retry_safe': True, 'error': 'The Outlook account changed. Reopen the composer.'}), 409
         payload_hash = hashlib.sha256((recipient + "\n" + subject + "\n" + html_body + ("\n"+sender if sender else "")).encode("utf-8")).hexdigest()
+        if message is not None:
+            payload_hash=hashlib.sha256(json.dumps([sender,message],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         self._cleanup_draft_cache()
 
         # Reserve this idempotency key before Graph is called. A concurrent retry
@@ -857,8 +1024,11 @@ class OutlookService:
             }), 409
 
         try:
-            result = (self._create_draft_payload(recipient, subject, html_body, access_token=access_token) if access_token else
-                      self._create_draft_payload(recipient, subject, html_body))
+            if message is not None:
+                result=self._create_draft_payload(recipient,subject,html_body,access_token=access_token,message=message)
+            else:
+                result = (self._create_draft_payload(recipient, subject, html_body, access_token=access_token) if access_token else
+                          self._create_draft_payload(recipient, subject, html_body))
             self._draft_request_complete(request_id, payload_hash, result)
             return self._jsonify(result)
         except PermissionError as exc:
@@ -875,6 +1045,46 @@ class OutlookService:
             self._draft_request_fail(request_id)
             return self._jsonify({"error": "Could not create the Microsoft Outlook draft", "action": "Use Copy formatted, then review Technical details.", "technical_details": str(exc)[:1200]}), 500
 
+    def email_templates(self, action='list'):
+        """Local subject/body templates; no recipient addresses or attachments."""
+        path=os.path.join(os.path.dirname(self._receipt_path()),'job_leads_email_templates.sqlite3')
+        data=self._request_json() if action!='list' else {}
+        try:
+            if action not in {'list','save','delete'}:raise ValueError('Choose a template action.')
+            identity=data.get('id','');revision=data.get('revision')
+            if identity and (not isinstance(identity,str) or not re.fullmatch('[a-f0-9]{32}',identity)):
+                raise ValueError('Choose a saved template.')
+            if action=='delete' and not identity:raise ValueError('Choose a saved template.')
+            if identity and (type(revision) is not int or revision<1):raise ValueError('Refresh the template before editing.')
+            if action=='save':
+                name=data.get('name');subject=data.get('subject','')
+                if not isinstance(name,str) or not name.strip() or len(name)>100 or re.search(r'[\x00-\x1f\x7f]',name):raise ValueError('Enter a template name of up to 100 characters.')
+                if not isinstance(subject,str) or len(subject)>998 or re.search(r'[\x00-\x1f\x7f]',subject):raise ValueError('Enter a valid template subject.')
+                body=_email_rich_html(data.get('html'))
+            os.makedirs(os.path.dirname(path),exist_ok=True)
+            with closing(sqlite3.connect(path,timeout=10)) as db,db:
+                db.execute('CREATE TABLE IF NOT EXISTS templates (id TEXT PRIMARY KEY,name TEXT NOT NULL COLLATE NOCASE UNIQUE,subject TEXT NOT NULL,html TEXT NOT NULL,revision INTEGER NOT NULL)')
+                if action!='list':
+                    db.execute('BEGIN IMMEDIATE')
+                    if identity:
+                        current=db.execute('SELECT revision FROM templates WHERE id=?',(identity,)).fetchone()
+                        if not current or current[0]!=revision:
+                            return self._jsonify({'error':'This template changed in another window. Refresh templates and use the selected template again before editing or deleting.'}),409
+                    if action=='delete':db.execute('DELETE FROM templates WHERE id=?',(identity,))
+                    elif identity:db.execute('UPDATE templates SET name=?,subject=?,html=?,revision=revision+1 WHERE id=?',(name.strip(),subject,body,identity))
+                    else:
+                        if db.execute('SELECT count(*) FROM templates').fetchone()[0]>=100:raise ValueError('You can save up to 100 templates.')
+                        identity=_secrets.token_hex(16)
+                        db.execute('INSERT INTO templates VALUES (?,?,?,?,1)',(identity,name.strip(),subject,body))
+                if db.execute('SELECT coalesce(sum(length(CAST(html AS BLOB))),0) FROM templates').fetchone()[0]>30*1024*1024:
+                    raise ValueError('Saved templates total more than 30 MB. Use a smaller banner or delete a template.')
+                db.row_factory=sqlite3.Row
+                templates=[dict(row) for row in db.execute('SELECT * FROM templates ORDER BY name COLLATE NOCASE')]
+            return self._jsonify({'ok':True,'templates':templates,'id':identity})
+        except ValueError as exc:return self._jsonify({'error':str(exc)}),400
+        except sqlite3.IntegrityError:return self._jsonify({'error':'A template with this name already exists. Choose another name.'}),409
+        except (sqlite3.Error,OSError):return self._jsonify({'error':'Could not save or read email templates. Your message has been kept.'}),503
+
     def send_job_leads_email(self):
         """One confirmed attempt per durable request ID; never replay a send."""
         data = self._request_json()
@@ -884,7 +1094,7 @@ class OutlookService:
         if not isinstance(request_id, str) or not re.fullmatch(r'job-email:[a-f0-9]{32}', request_id):
             return self._jsonify({'retry_safe': True, 'error': 'Invalid email request ID.'}), 400
         try:
-            recipient, subject, html_body = _ms_outlook_validate_draft_input(data)
+            message = _email_message(data)
         except (ValueError, OverflowError) as exc:
             return self._jsonify({'retry_safe': True, 'error': str(exc)}), 400
         try:
@@ -901,7 +1111,7 @@ class OutlookService:
             # Pin the exact reviewed account's token across account transitions.
             if token != self._store.get('access_token'):
                 return self._jsonify({'retry_safe': True, 'error': 'The Outlook connection changed. Reopen the composer.'}), 409
-        fingerprint = hashlib.sha256(json.dumps([sender, recipient, subject, html_body], ensure_ascii=False).encode()).hexdigest()
+        fingerprint = hashlib.sha256(json.dumps([sender, message], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         path = os.path.join(os.path.dirname(self._receipt_path()), 'job_leads_email_attempts.sqlite3')
         try:
             with sqlite3.connect(path, timeout=10) as db:
@@ -920,8 +1130,7 @@ class OutlookService:
             return self._jsonify({'retry_safe': True, 'error': 'Could not save the email attempt. Nothing was sent.'}), 503
         try:
             self._graph_client.request_json('me/sendMail', method='POST', body={
-                'message': {'subject': subject, 'body': {'contentType': 'HTML', 'content': html_body},
-                            'toRecipients': [{'emailAddress': {'address': recipient}}]},
+                'message': message,
                 'saveToSentItems': True,
             }, access_token=token, safe_to_retry=False, retries=0, timeout=30)
         except urllib.error.HTTPError as exc:

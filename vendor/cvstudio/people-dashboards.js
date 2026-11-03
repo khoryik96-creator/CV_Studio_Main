@@ -270,7 +270,10 @@
         tr.append(text('td',row.title || '—'),text('td',row.company),text('td',row.location || '—'));
         const dates=text('td',row.employment);decorateDate(dates,personSource(row,true),row);tr.append(dates);
         const email=document.createElement('td'),result=row.email_result;
-        if(result?.state==='found')email.append(text('span',result.email,'people-email'));
+        if(result?.state==='found'){
+          email.append(text('span',result.email,'people-email'));
+          const compose=text('button','Email','sec');compose.type='button';compose.addEventListener('click',()=>window.cvStudioJobLeads?.composeEmail({...row,email:result.email}));email.append(compose);
+        }
         else {
           if(result?.message)email.append(text('small',result.message));
           const button=text('button',result?'Check lookup':'Unlock email','sec');button.type='button';button.dataset.unlock='';

@@ -217,3 +217,105 @@ def test_disconnect_during_login_profile_lookup_is_not_reported_as_connected(ema
     graph.request_json.side_effect=profile
     assert service.device_poll()[1]==409
     assert service._store=={}
+
+
+def test_multiple_recipients_cc_bcc_and_attachments_reach_send_and_draft(email):
+    data,graph,create=email;service=create()
+    data.update(composer_version=2,to='first@example.com; second@example.com',cc=['cc@example.com'],
+        bcc='private@example.com',html='<p>Hello <strong>team</strong></p>',
+        attachments=[{'name':'brief.txt','contentBytes':'SGVsbG8='}])
+    graph.request_json.return_value={'id':'draft-id','webLink':'https://outlook.office.com/mail/draft/test'}
+    assert service.create_draft()['isDraft'] is True
+    message=graph.request_json.call_args.kwargs['body']
+    assert len(message['toRecipients'])==2
+    assert message['ccRecipients'][0]['emailAddress']['address']=='cc@example.com'
+    assert message['bccRecipients'][0]['emailAddress']['address']=='private@example.com'
+    assert message['attachments'][0]['contentBytes']=='SGVsbG8='
+    assert '<strong>team</strong>' in message['body']['content']
+    assert service.send_job_leads_email()['state']=='accepted'
+    assert graph.request_json.call_args.kwargs['body']['message']==message
+    data['cc']=['changed@example.com']
+    assert service.send_job_leads_email()[1]==409,'CC is part of send identity'
+    data['cc']=['cc@example.com'];data['attachments'][0]['contentBytes']='V29ybGQ='
+    assert service.send_job_leads_email()[1]==409,'attachment bytes are part of send identity'
+
+
+@pytest.mark.parametrize('patch',[
+    {'to':'bad address'},{'cc':'a@example.com,broken'},{'bcc':['hidden@example.com\r\nBcc: bad@example.com']},
+    {'to':[]},{'cc':['x@example.com']*101},{'attachments':[{'name':'../secret','contentBytes':'AA=='}]},
+    {'attachments':[{'name':'ok','contentBytes':'not base64'}]},
+    {'attachments':[{'name':'ok','contentBytes':'AA=='}]*11},
+    {'attachments':[{'name':'big','contentBytes':'A'*3500000}]},
+    {'html':'<script>only script</script>'}])
+def test_composer_rejects_invalid_recipients_content_and_files_without_network(email,patch):
+    data,graph,create=email;service=create();data.update(composer_version=2,**patch)
+    assert service.create_draft()[1] in {400,413}
+    assert service.send_job_leads_email()[1] in {400,413}
+    graph.request_json.assert_not_called()
+
+
+def test_rich_html_is_sanitized_and_cross_field_duplicates_deliver_once():
+    from cvstudio_msgraph import _email_message
+    result=_email_message(dict(to=['one@example.com','ONE@example.com'],cc='one@example.com;two@example.com',bcc='two@example.com;three@example.com',subject='Hello',
+        html='<p onclick="bad()">Hello <b>bold</b><script>bad()</script><img src="https://tracker.invalid"><a href="javascript:bad()">text</a><a href="https://example.com">link</a></p>'))
+    html=result['body']['content']
+    assert 'onclick' not in html and 'script' not in html and '<img' not in html and 'javascript:' not in html
+    assert '<b>bold</b>' in html and 'href="https://example.com"' in html
+    assert [len(result[k]) for k in ['toRecipients','ccRecipients','bccRecipients']]==[1,1,1]
+
+
+def test_templates_persist_update_delete_and_reject_stale_writes(email):
+    data,graph,create=email;service=create()
+    data.clear();data.update(name='Introduction',subject='Hiring',html='<p>Hello <b>team</b><script>bad()</script></p>',to='never-saved@example.com',attachments=[{'name':'not-saved'}])
+    result=service.email_templates('save');assert result['ok'] is True
+    identity=result['id'];template=result['templates'][0]
+    assert '<b>team</b>' in template['html'] and 'script' not in template['html']
+    assert 'to' not in template and 'attachments' not in template
+    assert create().email_templates()['templates']==[template]
+    data.update(id=identity,revision=1,subject='Updated')
+    assert service.email_templates('save')['templates'][0]['revision']==2
+    assert service.email_templates('delete')[1]==409
+    data['revision']=2
+    assert service.email_templates('delete')['templates']==[]
+    assert create().email_templates()['templates']==[]
+    graph.request_json.assert_not_called()
+
+
+def test_draft_fingerprint_covers_cc_bcc_and_attachment_content(email):
+    data,graph,create=email;service=create()
+    data.update(composer_version=2,cc='cc@example.com')
+    graph.request_json.return_value={'id':'draft-id','webLink':'https://outlook.office.com/mail/draft/test'}
+    assert service.create_draft()['ok'] is True
+    data['bcc']='private@example.com'
+    assert service.create_draft()[1]==409
+    assert graph.request_json.call_count==1
+
+
+def test_signature_banner_persists_in_template_and_is_embedded_for_outlook(email):
+    import base64,io
+    from PIL import Image
+    from cvstudio_msgraph import _email_message
+    buffer=io.BytesIO();Image.new('RGB',(688,171),'#e6b54f').save(buffer,format='PNG')
+    encoded=base64.b64encode(buffer.getvalue()).decode()
+    signature='<p>Best regards,</p><p><b><i>Guok</i></b><br><a href="mailto:guok@example.com" style="color:rgb(0, 91, 180);font-size:10pt">guok@example.com</a></p><img width="688" src="data:image/png;base64,'+encoded+'">'
+    data,graph,create=email;service=create()
+    data.clear();data.update(name='Client introduction',subject='Hiring',html=signature)
+    template=service.email_templates('save')['templates'][0]
+    assert 'data:image/png;base64,'+encoded in template['html']
+    assert 'rgb(0, 91, 180)' in template['html'] and '<i>Guok</i>' in template['html']
+    reopened=create().email_templates()['templates'][0]
+    message=_email_message(dict(to='client@example.com',subject=reopened['subject'],html=reopened['html']))
+    attachment=message['attachments'][0]
+    assert attachment['isInline'] is True
+    assert attachment['contentBytes']==encoded
+    assert 'src="cid:'+attachment['contentId']+'"' in message['body']['content']
+    assert 'data:image' not in message['body']['content']
+    graph.request_json.assert_not_called()
+
+
+@pytest.mark.parametrize('source',['data:image/svg+xml;base64,PHN2Zz4=','data:image/png;base64,SGVsbG8='])
+def test_invalid_or_active_inline_images_never_reach_outlook(email,source):
+    data,graph,create=email;service=create();data.update(composer_version=2,html='<p>Hello</p><img src="'+source+'">')
+    assert service.send_job_leads_email()[1]==400
+    assert service.create_draft()[1]==400
+    graph.request_json.assert_not_called()
