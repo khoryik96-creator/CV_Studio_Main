@@ -4,7 +4,8 @@
 
 ## Release state
 
-- v24.6.553 is local/unmerged on `codex/job-card-click-preview`, from merged552.
+- v24.6.553 is on `codex/job-card-click-preview`, from merged552. Its pull
+  request records current CI, review and merge status.
   Cards open previews on click; the separate Preview button is removed. Native
   title buttons preserve keyboard access; controls and selected text stay
   independent. All 95 frontend fixtures, five version tests and Chromium desktop /

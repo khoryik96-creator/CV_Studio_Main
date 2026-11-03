@@ -1,7 +1,8 @@
 # CV Studio v24.6.553 — click-card previews
 
-Local work on `codex/job-card-click-preview`, from merged v24.6.552 / PR296.
-Not pushed, merged or installed on the owner's machine.
+Source work on `codex/job-card-click-preview`, from merged v24.6.552 / PR296.
+The associated PR records current CI, review and merge status. The source
+validation below preceded publication; no installed-app update was performed.
 
 Clicking a job-search card opens the existing preview. The redundant Preview
 button is removed; the role title is a visually plain native button supporting
