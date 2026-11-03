@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.547">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.547"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.548">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.548"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.547 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.548 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -961,8 +961,8 @@
         <div class="job-leads-actions email-format-toolbar" role="toolbar" aria-label="Email formatting">
           <button type="button" class="sec" data-email-format="bold" aria-label="Bold"><strong>B</strong></button><button type="button" class="sec" data-email-format="italic" aria-label="Italic"><em>I</em></button><button type="button" class="sec" data-email-format="underline" aria-label="Underline"><u>U</u></button><button type="button" class="sec" data-email-format="strikeThrough">Strike</button>
           <button type="button" class="sec" data-email-format="insertUnorderedList">Bullets</button><button type="button" class="sec" data-email-format="insertOrderedList">Numbered list</button><button type="button" class="sec" data-email-format="justifyLeft">Left</button><button type="button" class="sec" data-email-format="justifyCenter">Center</button><button type="button" class="sec" data-email-format="justifyRight">Right</button><button type="button" class="sec" data-email-format="createLink">Link</button><button type="button" class="sec" data-email-format="removeFormat">Clear format</button>
-          <label for="jobLeadsEmailFont">Font</label><select id="jobLeadsEmailFont"><option value="Calibri">Calibri</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Times New Roman">Times New Roman</option></select><label for="jobLeadsEmailSize">Size</label><select id="jobLeadsEmailSize"><option value="2">10 pt</option><option value="3" selected>12 pt</option><option value="4">14 pt</option><option value="5">18 pt</option></select><label for="jobLeadsEmailColor">Text color</label><input id="jobLeadsEmailColor" type="color" value="#005bb4">
-          <label for="jobLeadsEmailImage">Insert signature/banner</label><input id="jobLeadsEmailImage" type="file" accept="image/png,image/jpeg,image/gif">
+          <label for="jobLeadsEmailFont" class="job-leads-sr">Font</label><select id="jobLeadsEmailFont"><option value="Calibri">Calibri</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Times New Roman">Times New Roman</option></select><label for="jobLeadsEmailSize" class="job-leads-sr">Size</label><select id="jobLeadsEmailSize"><option value="2">10 pt</option><option value="3" selected>12 pt</option><option value="4">14 pt</option><option value="5">18 pt</option></select><label for="jobLeadsEmailColor" class="job-leads-sr">Text color</label><input id="jobLeadsEmailColor" title="Text color" type="color" value="#005bb4">
+          <button type="button" class="sec" id="jobLeadsEmailImageChoose">Insert banner</button><input id="jobLeadsEmailImage" type="file" accept="image/png,image/jpeg,image/gif" hidden>
         </div>
         <label id="jobLeadsEmailEditorLabel">Message</label><div id="jobLeadsEmailEditor" class="job-leads-email-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="jobLeadsEmailEditorLabel"></div><textarea id="jobLeadsEmailBody" hidden aria-hidden="true"></textarea>
         <label for="jobLeadsEmailFiles">Attachments · up to 10 files/images, 2.5 MB total</label><input id="jobLeadsEmailFiles" type="file" multiple><ul id="jobLeadsEmailAttachments" class="job-leads-email-files"></ul>
@@ -2762,42 +2762,42 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.547"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.548"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2815,10 +2815,10 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/setup-file.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.547"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.547"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/setup-file.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.548"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.548"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

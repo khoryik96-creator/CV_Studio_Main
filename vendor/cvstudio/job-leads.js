@@ -419,20 +419,29 @@
       list.appendChild(tr);
     });
   }
-  let emailBusy=false, emailDone=false, emailAccount=null, emailRequest='', emailGeneration=0, emailComposeGeneration=0;
+  let emailBusy=false, emailDone=false, emailSentEditable=false, emailAccount=null, emailRequest='', emailGeneration=0, emailComposeGeneration=0;
   let emailFiles=[],emailTemplates=[],emailTemplate='',emailTemplateRevision=null,emailTemplateBusy=false;
   const emailLimit=2560*1024;
+  const emailReadOnly=()=>emailDone && !emailSentEditable;
+  function emailChanged() {
+    if(!emailDone || !emailSentEditable)return;
+    emailDone=false;emailSentEditable=false;emailRequest='job-email:'+hex();
+    emailMessage('Edited message. Send email will create a new email after confirmation.');
+    // Async paste/image insertion already locks controls. Relocking here from
+    // its synchronous input event would disable the editor and discard focus.
+    if(!emailBusy)emailLock(false);
+  }
   const emailDirty=()=>!emailDone && (['To','Cc','Bcc','Subject','Body'].some(name=>el('Email'+name).value.trim()) || emailFiles.length>0 || !!el('EmailEditor').querySelector?.('img'));
   const emailMessage=value=>{el('EmailMessage').textContent=value;};
   function emailLock(value) {
     emailBusy=value;const locked=value || emailTemplateBusy;
-    for (const name of ['To','Cc','Bcc','Subject','Body','Files','Image','Font','Size','Color']) el('Email'+name).disabled=locked || emailDone;
+    for (const name of ['To','Cc','Bcc','Subject','Body','Files','Image','ImageChoose','Font','Size','Color']) el('Email'+name).disabled=locked || emailReadOnly();
     for (const name of ['Connect','Finish','Close','New']) el('Email'+name).disabled=locked;
-    el('EmailEditor').contentEditable=String(!locked && !emailDone);
-    for(const button of document.querySelectorAll?.('[data-email-format]') || [])button.disabled=locked || emailDone;
-    for(const button of el('EmailAttachments').querySelectorAll('button'))button.disabled=locked || emailDone;
-    for(const name of ['Template','TemplateName','TemplateUse','TemplateSave','TemplateCopy','TemplateRefresh'])el('Email'+name).disabled=locked || emailDone || emailTemplateBusy;
-    el('EmailTemplateDelete').disabled=locked || emailDone || emailTemplateBusy || !emailTemplate;
+    el('EmailEditor').contentEditable=String(!locked && !emailReadOnly());
+    for(const button of document.querySelectorAll?.('[data-email-format]') || [])button.disabled=locked || emailReadOnly();
+    for(const button of el('EmailAttachments').querySelectorAll('button'))button.disabled=locked || emailReadOnly();
+    for(const name of ['Template','TemplateName','TemplateUse','TemplateSave','TemplateCopy','TemplateRefresh'])el('Email'+name).disabled=locked || emailReadOnly() || emailTemplateBusy;
+    el('EmailTemplateDelete').disabled=locked || emailReadOnly() || emailTemplateBusy || !emailTemplate;
     el('EmailDraft').disabled=locked || emailDone || !emailAccount?.connected;
     el('EmailSend').disabled=locked || emailDone || !emailAccount?.can_send;
   }
@@ -454,7 +463,7 @@
         !window.confirm('Replace the email currently in the composer?')) return;
     const generation=++emailComposeGeneration;
     emailFiles=[];emailTemplate='';emailTemplateRevision=null;el('EmailAttachments').replaceChildren();el('EmailTemplate').value='';el('EmailTemplateName').value='';
-    emailSelection=null;emailDone=false; emailRequest='job-email:'+hex(); emailAccount=null;
+    emailSelection=null;emailDone=false;emailSentEditable=false; emailRequest='job-email:'+hex(); emailAccount=null;
     el('EmailTo').value=contact.email || contact.email_result?.email || emailAddressesFromContact(contact.contact).join('; ');
     el('EmailCc').value='';el('EmailBcc').value='';el('EmailRecipients').replaceChildren();
     el('EmailSubject').value=contact.role ? 'Hiring for '+contact.role+(contact.company ? ' at '+contact.company : '') : '';
@@ -464,11 +473,11 @@
   }
   let emailSelection=null;
   function emailFormat(command,value=null) {
-    if(emailBusy || emailDone || emailTemplateBusy)return;
+    if(emailBusy || emailReadOnly() || emailTemplateBusy)return;
     const editor=el('EmailEditor'),selection=window.getSelection();editor.focus();
     if(emailSelection && editor.contains(emailSelection.commonAncestorContainer)){selection.removeAllRanges();selection.addRange(emailSelection);}
     if(!selection?.rangeCount || !editor.contains(selection.anchorNode) || !editor.contains(selection.focusNode))return;
-    document.execCommand(command,false,value);el('EmailBody').value=editor.innerText || editor.textContent;
+    document.execCommand(command,false,value);el('EmailBody').value=editor.innerText || editor.textContent;emailChanged();
   }
   const emailEscape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   function emailAddresses(value,required=false) {
@@ -535,13 +544,13 @@
       if(single && !el('EmailTo').value)el('EmailTo').value=single.email;
       for(const row of contacts) {
         const button=node('button','Add '+row.name+' · '+row.email,'sec');button.type='button';
-        button.addEventListener('click',()=>{if(emailBusy || emailDone)return;try{el('EmailTo').value=[...new Set([...emailAddresses(el('EmailTo').value),row.email])].join('; ');}catch(error){emailMessage(error.message);}});
+        button.addEventListener('click',()=>{if(emailBusy || emailReadOnly())return;try{el('EmailTo').value=[...new Set([...emailAddresses(el('EmailTo').value),row.email])].join('; ');emailChanged();}catch(error){emailMessage(error.message);}});
         el('EmailRecipients').append(button);
       }
     }catch(error){if(generation===emailComposeGeneration)emailMessage(error.message+' Enter the recipient manually.');}
   }
   async function emailPaste(event) {
-    if(emailBusy || emailDone || emailTemplateBusy)return;
+    if(emailBusy || emailReadOnly() || emailTemplateBusy)return;
     event.preventDefault();
     const clipboard=event.clipboardData;
     const html=clipboard.getData('text/html'),plain=clipboard.getData('text/plain');
@@ -565,7 +574,7 @@
       if(range && editor.contains(range.commonAncestorContainer)){selection.removeAllRanges();selection.addRange(range);}
       else {const end=document.createRange();end.selectNodeContents(editor);end.collapse(false);selection.removeAllRanges();selection.addRange(end);}
       document.execCommand('insertHTML',false,clean);
-      el('EmailBody').value=editor.innerText || editor.textContent;
+      el('EmailBody').value=editor.innerText || editor.textContent;emailChanged();
     }catch(error){emailMessage(error.message);}finally{emailLock(false);}
   }
   function emailImageStats(html) {
@@ -573,30 +582,43 @@
     return {count:images.length,size:images.reduce((sum,source)=>{const bytes=source.split(',')[1];return sum+bytes.length*3/4-(bytes.endsWith('==')?2:bytes.endsWith('=')?1:0);},0)};
   }
   async function emailInsertImage(file) {
-    if(!file || emailBusy || emailDone || emailTemplateBusy)return;
+    if(!file || emailBusy || emailReadOnly() || emailTemplateBusy)return;
     const images=emailImageStats(el('EmailEditor').innerHTML || '');
     if(images.count+emailFiles.length>=10 || images.size+emailFiles.reduce((sum,value)=>sum+value.size,0)+file.size>emailLimit){emailMessage('Use at most 10 files/images, totaling 2.5 MB or less.');return;}
     if(!['image/png','image/jpeg','image/gif'].includes(file.type) || file.size>emailLimit){emailMessage('Choose a PNG, JPEG or GIF of up to 2.5 MB.');return;}
-    const generation=emailComposeGeneration;emailLock(true);
+    const generation=emailComposeGeneration;
+    const insertion=emailSelection?.cloneRange();
+    emailLock(true);
     try {
       const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('Could not read the image.'));reader.readAsDataURL(file);});
       if(generation!==emailComposeGeneration)return;
       const clean=emailSanitizeHTML('<img src="'+emailEscape(source)+'" alt="Signature banner">');
-      el('EmailEditor').contentEditable='true';el('EmailEditor').focus();
-      const selection=window.getSelection();
-      if(!selection?.rangeCount || !el('EmailEditor').contains(selection.anchorNode)){
-        const range=document.createRange();range.selectNodeContents(el('EmailEditor'));range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+      const editor=el('EmailEditor'),selection=window.getSelection();
+      editor.contentEditable='true';editor.focus();
+      if(insertion && editor.contains(insertion.commonAncestorContainer)){
+        selection.removeAllRanges();selection.addRange(insertion);
+      }else{
+        const end=document.createRange();end.selectNodeContents(editor);end.collapse(false);selection.removeAllRanges();selection.addRange(end);
       }
-      document.execCommand('insertHTML',false,clean);el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;
+      // Separate editable lines let Enter move the banner down, including in an
+      // empty editor. Keep the range captured before the file picker/async lock.
+      const marker=hex();
+      document.execCommand('insertHTML',false,'<div data-email-banner="'+marker+'"><div><br></div><div>'+clean+'</div><div><br></div></div>');
+      const wrapper=editor.querySelector('[data-email-banner="'+marker+'"]');
+      if(!wrapper)throw Error('Could not insert the banner. Click in the message and try again.');
+      wrapper.removeAttribute('data-email-banner');
+      const after=document.createRange();after.setStart(wrapper.lastElementChild,0);after.collapse(true);
+      selection.removeAllRanges();selection.addRange(after);emailSelection=after.cloneRange();
+      el('EmailBody').value=editor.innerText || editor.textContent;emailChanged();
       emailMessage('Banner embedded. Save the template to keep it with your signature.');
     }catch(error){emailMessage(error.message);}finally{emailLock(false);}
   }
   function emailRenderFiles() {
     el('EmailAttachments').replaceChildren();
-    emailFiles.forEach((file,index)=>{const item=node('li',file.name+' · '+Math.ceil(file.size/1024)+' KB '),remove=node('button','Remove','sec');remove.type='button';remove.disabled=emailBusy || emailDone;remove.addEventListener('click',()=>{if(emailBusy || emailDone)return;emailFiles.splice(index,1);emailRenderFiles();});item.append(remove);el('EmailAttachments').append(item);});
+    emailFiles.forEach((file,index)=>{const item=node('li',file.name+' · '+Math.ceil(file.size/1024)+' KB '),remove=node('button','Remove','sec');remove.type='button';remove.disabled=emailBusy || emailReadOnly();remove.addEventListener('click',()=>{if(emailBusy || emailReadOnly())return;emailFiles.splice(index,1);emailChanged();emailRenderFiles();});item.append(remove);el('EmailAttachments').append(item);});
   }
   async function emailAttach() {
-    if(emailBusy || emailDone)return;
+    if(emailBusy || emailReadOnly())return;
     const files=Array.from(el('EmailFiles').files || []);el('EmailFiles').value='';
     const images=emailImageStats(el('EmailEditor').innerHTML || '');
     if(images.count+emailFiles.length+files.length>10 || images.size+[...emailFiles,...files].reduce((sum,file)=>sum+file.size,0)>emailLimit){emailMessage('Attach at most 10 files, totaling 2.5 MB or less.');return;}
@@ -608,7 +630,7 @@
         const contentBytes=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1] || '');reader.onerror=()=>reject(Error('Could not read '+file.name));reader.readAsDataURL(file);});
         added.push({name:file.name,size:file.size,contentBytes});
       }
-      emailFiles.push(...added);emailRenderFiles();emailMessage('Attachments added. Review them before sending.');
+      emailFiles.push(...added);emailChanged();emailRenderFiles();emailMessage('Attachments added. Review them before sending.');
     }catch(error){emailMessage(error.message);}finally{emailLock(false);}
   }
   function emailTemplateChoices(selected=emailTemplate) {
@@ -623,18 +645,18 @@
     finally{emailTemplateBusy=false;emailLock(emailBusy);}
   }
   function emailApplyTemplate() {
-    if(emailBusy || emailDone || emailTemplateBusy)return;
+    if(emailBusy || emailReadOnly() || emailTemplateBusy)return;
     const selected=el('EmailTemplate').value,template=emailTemplates.find(value=>value.id===selected);
     if(!template){emailTemplate='';emailTemplateRevision=null;el('EmailTemplateName').value='';emailLock(false);return;}
     if((el('EmailSubject').value || el('EmailBody').value || el('EmailEditor').querySelector('img')) && !window.confirm('Replace this subject and message with the selected template?')){el('EmailTemplate').value=emailTemplate;return;}
     try {
       const html=emailSanitizeHTML(template.html);
-      el('EmailEditor').innerHTML=html;el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;
-      el('EmailSubject').value=template.subject;el('EmailTemplateName').value=template.name;emailTemplate=selected;emailTemplateRevision=template.revision;emailLock(false);
+      emailSelection=null;el('EmailEditor').innerHTML=html;el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;
+      el('EmailSubject').value=template.subject;el('EmailTemplateName').value=template.name;emailTemplate=selected;emailTemplateRevision=template.revision;emailChanged();emailLock(false);
     }catch(error){emailMessage(error.message);el('EmailTemplate').value=emailTemplate;}
   }
   async function emailSaveTemplate(copy=false,remove=false) {
-    if(emailBusy || emailDone || emailTemplateBusy)return;
+    if(emailBusy || emailReadOnly() || emailTemplateBusy)return;
     const template=emailTemplates.find(value=>value.id===emailTemplate);
     if(remove && (!template || !window.confirm('Delete template "'+template.name+'"?')))return;
     let payload;
@@ -667,7 +689,7 @@
       if (previousSender && previousSender!==emailAccount.account.email) throw Error('The Outlook account changed. Review the sender and try again.');
       if (send && !emailAccount.can_send) throw Error('Enable Outlook sending and approve Mail.Send first.');
       if (!window.confirm((send?'Send this email now?':'Create this draft in Outlook?')+'\n\nFrom: '+emailAccount.account.email+'\nTo: '+to.join('; ')+'\nCC: '+(cc.join('; ') || 'None')+'\nBCC: '+(bcc.join('; ') || 'None')+'\nSubject: '+subject+'\nAttachments: '+(emailFiles.map(file=>file.name).join(', ') || 'None')+'\nEmbedded images: '+(html.match(/<img\b/g) || []).length)) return;
-      attempted=true;emailDone=true;
+      attempted=true;emailDone=true;emailSentEditable=false;
       const payload={composer_version:2,to,cc,bcc,subject,html,attachments:emailFiles.map(({name,contentBytes})=>({name,contentBytes})),request_id:emailRequest,sender:emailAccount.account.email};
       if (send) Object.assign(payload,{action:'outlook_send',confirmed:true});
       const response=await fetch(send?'/job-leads':'/ppc/outlook/create_draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -678,7 +700,7 @@
         }
         throw Error(result.error || 'The Outlook result could not be confirmed. Check Outlook before composing again.');
       }
-      if (send) emailMessage('Accepted by Outlook for sending. Check Sent Items for the email.');
+      if (send) {emailSentEditable=true;emailMessage('Accepted by Outlook for sending. You can edit this message here and send another email after confirmation.');}
       else {
         const url=new URL(result.webLink);
         if (url.protocol!=='https:' || !/^(outlook\.office\.com|outlook\.office365\.com|outlook\.live\.com)$/.test(url.hostname)) throw Error('Draft created. Open Outlook Drafts to review and send it.');
@@ -1576,17 +1598,20 @@
       for (const id of ['Filter', 'ClientFilter', 'PostedFilter']) el(id).value = '';
       el('FolderFilter').value = '*'; applySavedFilters();
     });
-    el('EmailEditor').addEventListener('input',()=>{el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;});
+    for(const name of ['To','Cc','Bcc','Subject'])el('Email'+name).addEventListener('input',emailChanged);
+    el('EmailEditor').addEventListener('input',()=>{el('EmailBody').value=el('EmailEditor').innerText || el('EmailEditor').textContent;emailChanged();});
     el('EmailEditor').addEventListener('paste',emailPaste);
     el('EmailEditor').addEventListener('drop',event=>event.preventDefault());
     for(const button of document.querySelectorAll?.('[data-email-format]') || []) {
       button.addEventListener('mousedown',event=>event.preventDefault());
       button.addEventListener('click',()=>{const command=button.dataset.emailFormat;let value=null;if(command==='createLink'){value=window.prompt('Enter an https:// link or mailto: email link');if(!value || !/^(https?:\/\/|mailto:)/i.test(value))return;}emailFormat(command,value);});
     }
-    document.addEventListener('selectionchange',()=>{const selection=window.getSelection?.();if(selection?.rangeCount && el('EmailEditor').contains(selection.anchorNode) && el('EmailEditor').contains(selection.focusNode))emailSelection=selection.getRangeAt(0).cloneRange();});
+    document.addEventListener('selectionchange',()=>{const selection=window.getSelection?.();if(document.activeElement===el('EmailEditor') && selection?.rangeCount && el('EmailEditor').contains(selection.anchorNode) && el('EmailEditor').contains(selection.focusNode))emailSelection=selection.getRangeAt(0).cloneRange();});
     el('EmailFont').addEventListener('change',()=>emailFormat('fontName',el('EmailFont').value));
     el('EmailSize').addEventListener('change',()=>emailFormat('fontSize',el('EmailSize').value));
     el('EmailColor').addEventListener('change',()=>emailFormat('foreColor',el('EmailColor').value));
+    el('EmailImageChoose').addEventListener('mousedown',event=>{event.preventDefault();const selection=window.getSelection();if(document.activeElement===el('EmailEditor') && selection?.rangeCount && el('EmailEditor').contains(selection.anchorNode) && el('EmailEditor').contains(selection.focusNode))emailSelection=selection.getRangeAt(0).cloneRange();});
+    el('EmailImageChoose').addEventListener('click',()=>{if(!emailBusy && !emailReadOnly() && !emailTemplateBusy)el('EmailImage').click();});
     el('EmailImage').addEventListener('change',()=>{const file=el('EmailImage').files?.[0];el('EmailImage').value='';emailInsertImage(file);});
     el('EmailFiles').addEventListener('change',emailAttach);
     el('EmailTemplate').addEventListener('change',emailApplyTemplate);

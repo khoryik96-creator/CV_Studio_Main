@@ -7,7 +7,32 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Local work: v24.6.547 Job Leads rich email composer (unmerged)**
+**Current source: v24.6.548 email banner placement, compact toolbar and follow-up editing**
+on `codex/email-banner-placement-toolbar`, from merged v24.6.547 / PR292 / `eee33ad`.
+- Banner insertion restores a range captured before the file picker and async
+  editor lock, then provides editable lines above and below the image. The caret
+  lands below the banner. Without a prior range, insertion appends to the message.
+- Compact toolbar selectors override the later generic 160px flex minimums;
+  font/size controls are bounded and the text-color picker is a 30px swatch.
+  Banner selection is a button with a hidden native file input.
+- The global caret guard used to make descendants of the rich editor transparent.
+  Editable email content and its formatted descendants now have a visible caret.
+- Confirmed sends leave message fields editable in place. A subsequent edit creates
+  a fresh send request id, protects unsaved edits on reload, and still requires
+  confirmation. Unchanged messages cannot replay. Drafts and unknown send outcomes
+  keep their existing completion lock; no send backend or permission changed.
+- Independent bug testing found banner/paste as the first edit after sending
+  re-entered the async editor lock from the input event and lost focus. The edit
+  transition now leaves that active mutation to its existing lock/finally pair.
+  Both first-edit cases have Chromium focus/typing regressions. Follow-up review
+  independently verified the fix and reported no remaining actionable findings.
+- Validation: 234 relevant backend/contract/version tests, all 92 frontend fixtures,
+  and Chromium workflows including real file chooser selection, inserting between
+  paragraphs, Enter above the banner, typing below, nested formatted carets,
+  desktop/mobile toolbar bounds and a confirmed edited follow-up send.
+  All Outlook calls were fictional. No installed-app update was performed.
+
+**Previous checkpoint: v24.6.547 Job Leads rich email composer (merged PR292)**
 on `codex/job-leads-email-composer`, from merged v24.6.546 / PR291 / `ea046fa`.
 - Email client prefills explicit contact emails and addresses in the ad's contact
   field. Ads with a confirmed HR company id also offer saved contacts; a uniquely
