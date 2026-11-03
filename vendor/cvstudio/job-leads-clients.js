@@ -50,7 +50,7 @@
   // One LinkedIn job search for several companies; LinkedIn's company filter
   // takes a comma-separated list of numeric company IDs.
   function linkedinSearch(ids) {
-    const clean = [...new Set(ids)].filter(id => /^[0-9]{1,24}$/.test(id));
+    const clean = [...new Set(ids.flatMap(value=>typeof value==='string'?value.split(','):[]))].filter(id => /^[0-9]{1,24}$/.test(id));
     if (!clean.length) return '';
     const url = new URL('https://www.linkedin.com/jobs/search/');
     url.searchParams.set('f_C', clean.join(','));
@@ -583,10 +583,13 @@
     try {
       const resolved = await app.rpc('jobCompanyID', {company_url:client.linkedin_url, operation_id:run}, 35000);
       check(token);
-      if (resolved?.company_url !== client.linkedin_url || typeof resolved?.company_id !== 'string' || !/^[0-9]{1,24}$/.test(resolved.company_id))
+      const ids=resolved?.company_ids===undefined?[resolved?.company_id]:resolved.company_ids;
+      if (resolved?.company_url !== client.linkedin_url || !Array.isArray(ids) || !ids.length || ids.length>20 ||
+          new Set(ids).size!==ids.length || ids.some(id=>typeof id!=='string' || !/^[0-9]{1,24}$/.test(id)) ||
+          resolved.company_ids!==undefined && resolved.company_id!==undefined)
         throw Error('LinkedIn did not confirm this company. Save its See all jobs search link and try again.');
-      remember(client, resolved.company_id);
-      return resolved.company_id;
+      const filter=ids.join(',');remember(client,filter);
+      return filter;
     } catch (error) {
       try { await app.rpc('jobReadCancel', {operation_id:run}, 1500); } catch {}
       throw error;
@@ -601,7 +604,7 @@
     try {
       const companyId = knownId(client) || await resolveCompany(app, token, client, run);
       check(token);
-      const source = await app.rpc('jobSearchBegin', {run_id:run, query:'', location:'', max_pages:pages, use_open:false, company_id:companyId});
+      const source = await app.rpc('jobSearchBegin', {run_id:run, query:'', location:'', max_pages:pages, use_open:false, ...(companyId.includes(',')?{company_ids:companyId.split(',')}:{company_id:companyId})});
       check(token);
       await window.cvStudioJobSearch.walk({rpc:app.rpc, run, tab:source.tab_id, pages, check:() => check(token),
         keep:snapshot => {
@@ -643,8 +646,9 @@
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
       if (status.concurrent_scans_revision !== 1 || status.job_search !== true || status.job_search_company_revision !== 1)
         throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to pull client ads. Updating CV Studio alone does not update the companion.');
-      if (targets.some(client=>!knownId(client)) && (status.job_search_company_link_revision!==1 || status.company_jobs_action_revision!==1))
+      if (targets.some(client=>!knownId(client)) && (status.job_search_company_link_revision!==1 || status.company_jobs_action_revision!==1 || status.company_jobs_group_revision!==1))
         throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to pull ads from a named company page using See all jobs.');
+      if(targets.some(client=>knownId(client).includes(',')) && status.company_jobs_group_revision!==1)throw Error('Apply the latest companion update to pull all companies in LinkedIn’s Jobs group.');
       if (status.busy) throw Error('Finish the current companion search or ad read first.');
       for (const [index, client] of targets.entries()) {
         check(token);
@@ -739,7 +743,7 @@
       const status = await app.rpc('jobStatus', {}, 1500).catch(() => null);
       check(token);
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
-      if (status.job_search_company_link_revision !== 1 || status.company_jobs_action_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to read company numbers using See all jobs.');
+      if (status.job_search_company_link_revision !== 1 || status.company_jobs_action_revision !== 1 || status.company_jobs_group_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to read company numbers using See all jobs.');
       if (status.busy) throw Error('Finish the current companion search or ad read first.');
       for (const [index, client] of missing.entries()) {
         check(token);

@@ -78,6 +78,19 @@ function jobURL(value) {
     return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
   } catch { return ''; }
 }
+function jobCompanyIDs(value) {
+  if(typeof value!=='string')return [];
+  const ids=value.split(',');
+  return ids.length<=20 && new Set(ids).size===ids.length && ids.every(id=>/^[0-9]{1,24}$/.test(id))?ids:[];
+}
+function companyJobsSearchIDs(value) {
+  try {
+    const u=new URL(value);
+    if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash ||
+        !/^\/jobs\/(?:search(?:-results)?|[a-z0-9][a-z0-9-]{0,160}-jobs(?:-[a-z0-9-]{1,80})?)\/?$/.test(u.pathname))return null;
+    return u.searchParams.getAll('f_C').length===1?jobCompanyIDs(u.searchParams.get('f_C')):[];
+  } catch { return null; }
+}
 const jobSearchFilter = /^(?:keywords|location|geoId|distance|sortBy|f_[A-Za-z0-9]{1,20})$/;
 function jobSearchKey(value) {
   try {
@@ -90,6 +103,7 @@ function jobSearchKey(value) {
     // paging parameters while the page is open; those never change it.
     for (const name of [...new Set(url.searchParams.keys())])
       if (!jobSearchFilter.test(name) || url.searchParams.getAll(name).every(item => item === '')) url.searchParams.delete(name);
+    if(url.searchParams.getAll('f_C').length===1){const ids=jobCompanyIDs(url.searchParams.get('f_C'));if(ids.length)url.searchParams.set('f_C',ids.sort().join(','));}
     url.searchParams.sort(); return url.href;
   } catch { return ''; }
 }
@@ -332,13 +346,13 @@ async function restore() {
       !Number.isInteger(saved.nextCount) || saved.nextCount < 0 || saved.nextCount > 15 ||
       !Number.isInteger(saved.profileCount) || saved.profileCount < 0 || saved.profileCount > 76) throw Error('Invalid companion session.');
   for (const row of saved.owned) {
-    if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1] || scope==='leads' && (hrExperienceURL(row[1]) || companyJobsPage(row[1])))) throw Error('Invalid owned tab.');
+    if (!Array.isArray(row) || row.length !== 2 || !Number.isInteger(row[0]) || row[0] < 0 || owned.has(row[0]) || typeof row[1] !== 'string' || !row[1] || row[1].length > 2048 || !(profile(row[1]) || jobURL(row[1]) === row[1] || scope==='leads' && (hrExperienceURL(row[1]) || companyJobsPage(row[1]) || companyJobsSearchIDs(row[1])?.length))) throw Error('Invalid owned tab.');
     owned.set(row[0], row[1]);
   }
   const protectedTabs=saved.viewed === undefined ? [] : saved.viewed;
   if (!Array.isArray(protectedTabs) || saved.owned.length+protectedTabs.length>76) throw Error('Invalid viewed tabs.');
   for (const row of protectedTabs) {
-    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1] || scope==='leads' && (hrExperienceURL(row[1]) || companyJobsPage(row[1])))) throw Error('Invalid viewed tab.');
+    if (!Array.isArray(row) || row.length!==2 || !Number.isInteger(row[0]) || row[0]<0 || owned.has(row[0]) || viewed.has(row[0]) || typeof row[1]!=='string' || !row[1] || row[1].length>2048 || !(profile(row[1]) || jobURL(row[1])===row[1] || scope==='leads' && (hrExperienceURL(row[1]) || companyJobsPage(row[1]) || companyJobsSearchIDs(row[1])?.length))) throw Error('Invalid viewed tab.');
     viewed.set(row[0],row[1]);
   }
   const bound = saved.connection;
@@ -524,13 +538,26 @@ function removed(id) { return event(async () => {
   if (hrRemoved) await closeHROwnedTabs();
   return changed;
 }); }
+function retainCompanyJobsTransition(id,url,tab) {
+  const transition=jobCapture?.jobsTransition;
+  if(!transition || transition.tab!==id || jobCapture.bound!==connection || connection?.run ||
+      !owned.has(id) || viewed.has(id) || owned.get(id)!==transition.ownedURL || tab.active ||
+      tab.url!==url && tab.pendingUrl!==url)return false;
+  const ids=companyJobsSearchIDs(url),key=ids?.length?[...ids].sort().join(','):'';
+  if(!key || transition.key && transition.key!==key)return false;
+  transition.key=key;transition.ownedURL=url;owned.set(id,url);return true;
+}
 function updated(id,change) { return event(async () => {
   let changed = false;
   if (id === connection?.tabId && change.status === 'loading') {
     const wasHR=connection.kind === 'hr'; connection = null; changed = true;
     if (wasHR) await closeHROwnedTabs();
   }
-  if ((owned.has(id) || viewed.has(id)) && change.url && !sameOwnedPage(change.url,owned.get(id) || viewed.get(id))) { owned.delete(id); viewed.delete(id); changed = true; }
+  if ((owned.has(id) || viewed.has(id)) && change.url && !sameOwnedPage(change.url,owned.get(id) || viewed.get(id))) {
+    let retained=false;
+    try { retained=retainCompanyJobsTransition(id,change.url,await chrome.tabs.get(id)); } catch {}
+    if(!retained){owned.delete(id);viewed.delete(id);}changed=true;
+  }
   if (change.status === 'complete') {
     try {
       const tab=await chrome.tabs.get(id);
@@ -673,7 +700,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,full_ad_background_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_jobs_action_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,full_ad_background_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_jobs_action_revision:1,company_jobs_group_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrDate') {
     const bound=connection;
     if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
@@ -751,10 +778,14 @@ async function handle(message, sender) {
     if (connection.run || jobCapture) throw Error('Stop the current browser action first.');
     let url;
     if (!args.use_open) {
-      // An optional single LinkedIn company filter (f_C) lists one signed
-      // client's ads; keywords become optional only with that filter.
-      const company = args.company_id === undefined ? '' : args.company_id;
+      // One client can have an officially grouped company Jobs filter. Keep
+      // all observed IDs; never silently choose the first member.
+      let company = args.company_id === undefined ? '' : args.company_id;
       if (company !== '' && (typeof company !== 'string' || !/^[0-9]{1,24}$/.test(company))) throw Error('Choose a valid LinkedIn company.');
+      if(args.company_ids!==undefined){
+        if(args.company_id!==undefined || !hrCompanyGroup(args.company_ids))throw Error('Choose a valid LinkedIn company group.');
+        company=args.company_ids.join(',');
+      }
       if (typeof args.query !== 'string' || !args.query.trim() && !company || args.query.length > 240 || /[\x00-\x1f]/.test(args.query) ||
           typeof args.location !== 'string' || args.location.length > 160 || /[\x00-\x1f]/.test(args.location)) throw Error('Enter valid job keywords and location.');
       const target = new URL('https://www.linkedin.com/jobs/search/');
@@ -786,6 +817,7 @@ async function handle(message, sender) {
     if(!root || !companyJobsPage(expected) || !/^[a-f0-9]{32}$/.test(args.operation_id || ''))throw safeError('Choose a saved LinkedIn company page.');
     if(bound.run || jobCapture)throw safeError('Finish the current Job Leads browser action first.');
     const token={bound,operation:args.operation_id};jobCapture=token;let created=null,landed=null,seen='',jobsAttempted=false,jobsOpened=false,actionLanding='';
+    const resultFor=ids=>ids.length===1?{company_url:root,company_id:ids[0]}:{company_url:root,company_ids:ids};
     const pageOf=value=>{try{const u=new URL(value);return u.origin+u.pathname.replace(/\/?$/,'/');}catch{return '';}};
     // LinkedIn may redirect a company's Jobs page as it first loads: to a jobs
     // search filtered to that one company (its number is then in f_C), to the
@@ -798,11 +830,15 @@ async function handle(message, sender) {
       if(linkedinAccessPage(tab.url) || linkedinAccessPage(tab.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in the browser and try again.','HR_ACCESS_REQUIRED');
       if(landed) {
         if(jobsOpened && (tab.pendingUrl || tab.url!==landed.url)) {
-          const key=jobSearchKey(tab.pendingUrl || tab.url),ids=key?new URL(key).searchParams.getAll('f_C'):[];
-          if(ids.length!==1 || !/^[0-9]{1,24}$/.test(ids[0]))throw safeError('LinkedIn’s See all jobs action did not open a search for one company. Save its exact company-filtered search link.');
+          const ids=companyJobsSearchIDs(tab.pendingUrl || tab.url);
+          if(!ids?.length)throw safeError('LinkedIn’s See all jobs action did not open a valid company-filtered search. Save its exact company Jobs search link.');
+          const key=[...ids].sort().join(',');
+          if(token.jobsTransition?.key && token.jobsTransition.key!==key)throw safeError('The company Jobs filter changed after opening. Start a new pull.');
+          if(token.jobsTransition)token.jobsTransition.key=key;
+          retainCompanyJobsTransition(created,tab.pendingUrl || tab.url,tab);
           if(tab.status!=='complete' || tab.pendingUrl)return false;
           if(actionLanding!==tab.url){actionLanding=tab.url;return false;}
-          landed={url:tab.url,id:ids[0]};jobsOpened=false;return landed;
+          landed={url:tab.url,ids};jobsOpened=false;return landed;
         }
         if(tab.pendingUrl || tab.url!==landed.url)throw safeError('The saved company page changed. Check its LinkedIn link or save its See all jobs search link.');
         return tab.status==='complete' && landed;
@@ -812,10 +848,10 @@ async function handle(message, sender) {
       // landing only when two checks half a second apart agree.
       if(seen!==tab.url){seen=tab.url;return false;}
       landed={url:tab.url}; // our first landing, closed on the way out
-      const page=pageOf(tab.url),search=jobSearchKey(tab.url),ids=search?new URL(search).searchParams.getAll('f_C'):[];
-      if(search) {
-        if(ids.length!==1 || !/^[0-9]{1,24}$/.test(ids[0]))throw safeError('LinkedIn opened a job search that is not for one company. Save this client\u2019s See all jobs search link and try again.');
-        landed.id=ids[0];
+      const page=pageOf(tab.url),ids=companyJobsSearchIDs(tab.url);
+      if(ids!==null) {
+        if(!ids.length)throw safeError('LinkedIn opened a job search without a valid company filter. Save this client’s See all jobs search link and try again.');
+        landed.ids=ids;
       } else if(page===expected || companyJobsPage(page)) landed.root=page.replace(/jobs\/$/,'');
       else if(hrCompanyURL(page) || companyPeopleRoot(page+'people/')===page)
         throw safeError('LinkedIn shows no Jobs page for this company, so it has no open jobs right now.','HR_COMPANY_NO_JOBS');
@@ -824,12 +860,12 @@ async function handle(message, sender) {
     };
     try {
       // Reap only our unchanged inactive reads left by a suspended worker.
-      for(const [id,url] of [...owned,...viewed])if(companyJobsPage(url))await closeOwned(id,url);
+      for(const [id,url] of [...owned,...viewed])if(companyJobsPage(url) || companyJobsSearchIDs(url)?.length)await closeOwned(id,url);
       live(bound);if(token.cancelled)throw safeError('The company read was stopped.','HR_STOPPED');
       const tab=await chrome.tabs.create({url:expected,active:false});created=tab.id;owned.set(created,expected);await persist();
       for(let attempt=0;attempt<40;attempt++) {
         const where=await check();
-        if(where?.id)return {company_url:root,company_id:where.id};
+        if(where?.ids)return resultFor(where.ids);
         if(where) {
           await jobScript({target:{tabId:created},files:['reader.js']},jobReaderStartError);
           if(await check()) {
@@ -840,6 +876,7 @@ async function handle(message, sender) {
               const result=read?.result;
               if(result?.failed)throw safeError('LinkedIn could not confirm one company. Save its See all jobs search link and try again.');
               if(result?.company_url===where.root && typeof result?.company_id==='string' && /^[0-9]{1,24}$/.test(result.company_id))return {company_url:root,company_id:result.company_id};
+              if(result?.company_url===where.root && result.company_id===undefined && hrCompanyGroup(result.company_ids))return resultFor(result.company_ids);
               if(result?.jobs_action===true && !jobsAttempted && attempt>=3) {
                 await check();
                 const current=await chrome.tabs.get(created);live(bound);
@@ -848,6 +885,7 @@ async function handle(message, sender) {
                 // fallback. Never drive a tab the user has taken over.
                 if(current.active || current.pendingUrl || current.url!==landed.url || current.status!=='complete' || owned.get(created)!==expected)throw safeError('The company tab is open for you. Use See all jobs there, or retry after closing it.');
                 jobsAttempted=true;
+                token.jobsTransition={tab:created,ownedURL:owned.get(created),key:''};
                 const [opened]=await jobScript({target:{tabId:created},func:page=>globalThis.SourcerReader.openCompanyJobs(page),args:[where.root]},jobReaderReadError);
                 jobsOpened=opened?.result===true;
               }
@@ -859,23 +897,19 @@ async function handle(message, sender) {
       throw safeError(jobsOpened ? 'LinkedIn’s See all jobs action did not finish opening its company-filtered search. Open the company page in Chrome or Brave and check its Jobs section.' : 'LinkedIn did not expose a company number or a usable See all jobs action. Open its company page in Chrome or Brave and check its Jobs section.');
     } finally {
       if(created!==null) {
-        // A cancelled read can observe our native action's search before its
-        // second stable landing check. Reap that unchanged inactive owned tab.
-        if(jobsOpened) {
-          try {
-            const tab=await chrome.tabs.get(created),key=jobSearchKey(tab.url),ids=key?new URL(key).searchParams.getAll('f_C'):[];
-            if(owned.get(created)===expected && !tab.active && !tab.pendingUrl && ids.length===1 && /^[0-9]{1,24}$/.test(ids[0]))await chrome.tabs.remove(created);
-          } catch {}
-        }
+        // Chrome's onUpdated event and passive checks share ownership tracking
+        // for this one authorized transition, including cancellation mid-hop.
+        if(token.jobsTransition){try{const tab=await chrome.tabs.get(created);retainCompanyJobsTransition(created,tab.url,tab);}catch{}}
+        const cleanupURL=token.jobsTransition?.ownedURL || expected;
         // Close our inactive tab only while it still shows the page it was
         // opened at or the page LinkedIn first redirected it to.
         if(landed && landed.url!==expected) {
           try {
             const tab=await chrome.tabs.get(created);
-            if(owned.get(created)===expected && !tab.active && !tab.pendingUrl && tab.url===landed.url)await chrome.tabs.remove(created);
+            if(owned.get(created)===cleanupURL && !tab.active && !tab.pendingUrl && tab.url===landed.url)await chrome.tabs.remove(created);
           } catch {}
           owned.delete(created);viewed.delete(created);
-        } else await closeOwned(created,expected);
+        } else await closeOwned(created,cleanupURL);
       }
       if(jobCapture===token)jobCapture=null;await persist();
     }

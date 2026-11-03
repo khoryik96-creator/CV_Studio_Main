@@ -7,32 +7,38 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Local work: v24.6.552 company Jobs action and full-ad fallback (unmerged)**
+**Review candidate: v24.6.552 grouped company Jobs and full-ad recovery — [PR296](https://github.com/khoryik96-creator/CV_Studio_Main/pull/296)**
 on `codex/company-jobs-button-resolution`, from merged v24.6.551 / PR295.
-- Company-number lookup retains passive exact-ID evidence first. When absent,
-  one visible, unambiguous native See/View/Show all jobs action can run in the
-  companion's own unchanged inactive company Jobs tab. The result must settle
-  on a search with exactly one numeric company filter. No guessed ID, repeated
-  clicks, foreign-company recommendation, user-tab navigation or private API.
-- Cancel, access checks, first-page URL identity and tab ownership remain checked.
-  A failed/unfinished action gives a distinct explanation. The new
-  `company_jobs_action_revision:1` capability makes old companions ask for an
-  update before resolving an unknown named company; cached exact IDs still work.
+- Verified public evidence: Lear Corporation's own See all jobs link is an SEO
+  Jobs URL with FOUR comma-separated f_C IDs (Lear plus affiliates). Previous
+  code required one numeric ID and /jobs/search/, so it rejected this link.
+- Company Jobs lookup now preserves the whole group exposed by the saved page's
+  Jobs CTA. Up to 20 distinct numeric IDs are accepted; conflicting evidence
+  still stops. People/associated-member groups alone never authorize a Jobs
+  group. Canonical and observed SEO-style Jobs links are recognized.
+- The client caches the group against its exact saved page for this session and
+  passes `company_ids` to jobSearchBegin, which creates a normal Jobs search.
+  Open LinkedIn also keeps every member. Filter ordering may change; dropping or
+  replacing a member still invalidates the run. No storage/schema changes.
+- If no numeric filter is exposed, one unambiguous native Jobs action can run in
+  the companion's own unchanged inactive tab. Exact authorized navigation retains
+  ownership across Chrome onUpdated events; cleanup, user takeover, restart,
+  cancellation and access checks remain enforced. Old companions get an update
+  prompt via company_jobs_action_revision/group_revision capabilities.
 - Manual/background full-ad reads fall back once to the existing public lookup
   after recognized browser layout/empty-content timeouts. Exact job identity,
   role, company and readable body are required; rich formatting/cache are kept.
-  No fallback around access, disconnect or changed-ad errors. Public rate/busy
-  errors pause the queue. Stop aborts the browser's pending public request and
-  ignores late results; saved records and editing drafts remain unchanged.
-- Validation: all 95 frontend fixtures, 192 focused backend/version tests,
-  JavaScript syntax, whitespace and repository consistency pass. Chromium tests
-  native company buttons, hidden/ambiguous/other-employer controls, and a full
-  companion-error → public lookup → rich cached preview workflow.
-- Lear's authenticated DOM is unavailable. Public web views show descriptions
-  for the two reported ad URLs (4437968792 / 4373530413); direct public requests
-  from this cloud workspace did not return usable ads. Controlled tests verify
-  the recovery paths, not live success on the owner's installation. Update both
-  app and companion when adopting this source. No live email/paid action.
+  Access, disconnect, changed-ad and stopped reads do not trigger fallback. Public
+  busy/rate errors pause the queue; Stop aborts pending browser public requests.
+- Validation: all 95 frontend fixtures and 192 focused backend/version checks
+  pass, with Chromium checks for native/grouped Jobs and public full-ad fallback.
+  PR296 review corrected event-driven ownership/cleanup; regressions invoke real
+  onUpdated/onActivated hooks and protect viewed/changed destinations.
+- Lear's signed-in DOM remains unavailable. Public web views expose descriptions
+  for the reported ad URLs, but direct public requests from this cloud workspace
+  did not yield usable ads. Live success in the owner's browser is unverified.
+  Update app AND companion to use this source. PR296 records current CI/review
+  and merge state. No live email, JobAdder write or paid action.
 
 **Latest source: v24.6.551 job-ad cards and background capture — [PR295](https://github.com/khoryik96-creator/CV_Studio_Main/pull/295)**
 on `codex/job-search-results-scroll`, including the v24.6.550 work below.

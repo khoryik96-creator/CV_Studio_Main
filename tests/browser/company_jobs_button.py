@@ -25,5 +25,11 @@ with sync_playwright() as p:
   else:
    assert not page.evaluate('(root)=>SourcerReader.openCompanyJobs(root)',root)
    assert page.url==root+'jobs/'
+ # Public-style company Jobs CTAs preserve their entire affiliate filter.
+ page.fixture_body='<section><h2>Jobs</h2><a href="https://www.linkedin.com/jobs/fictional-client-jobs-worldwide?f_C=44%2C22%2C11%2C33">See all jobs</a></section>'
+ page.goto(root+'jobs/');page.add_script_tag(content=source)
+ group=page.evaluate('(root)=>SourcerReader.readCompanyJobsID(root)',root)
+ assert group['company_ids']==['44','22','11','33'] and 'company_id' not in group
+ assert not page.evaluate('(root)=>SourcerReader.openCompanyJobs(root)',root),'observed filters need no click'
  print('Chromium native company Jobs fallback passed: visible and aria-label buttons navigate to the exact filter; hidden, ambiguous and other-employer controls remain untouched. All navigation intercepted with fictional pages.')
  b.close()

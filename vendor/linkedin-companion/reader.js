@@ -553,29 +553,41 @@
     const ids = [...new Set(singles.map(item=>item.ids[0]))];
     return {ids,groups};
   }
+  function companyJobsFilter(value) {
+    try {
+      const u=new URL(value);
+      if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash ||
+          !/^\/jobs\/(?:search(?:-results)?|[a-z0-9][a-z0-9-]{0,160}-jobs(?:-[a-z0-9-]{1,80})?)\/?$/.test(u.pathname) ||
+          u.searchParams.getAll('f_C').length!==1)return [];
+      const ids=u.searchParams.get('f_C').split(',');
+      return ids.length<=20 && new Set(ids).size===ids.length && ids.every(id=>/^[0-9]{1,24}$/.test(id))?ids:[];
+    } catch { return []; }
+  }
   const companyJobsLabel = value => /^(?:(?:see|view|show)(?: all)?(?: [0-9,]+)? jobs?|all jobs?)(?: at .+)?$/i.test(compact(value));
+  function companyJobsOwnControl(control,expected) {
+    if(control.closest?.('aside, nav, [role="complementary"], [role="navigation"]'))return false;
+    const scope=control.closest?.('section') || control.parentElement || document.querySelector('main');
+    return ![...(scope?.querySelectorAll('a[href]') || [])].filter(visible).some(link=>{
+      const company=companyURL(link.href);return company && company!==expected;
+    });
+  }
   function companyJobsAction(expected) {
     const main=document.querySelector('main');
     const actions=[...(main?.querySelectorAll('button, [role="button"], a[href]') || [])].filter(control=>{
-      if(!visible(control) || control.disabled || control.getAttribute('aria-disabled')==='true' ||
+      if(!visible(control) || typeof control.click!=='function' || control.disabled || control.getAttribute('aria-disabled')==='true' ||
           ![text(control),control.getAttribute('aria-label') || ''].some(companyJobsLabel) ||
-          control.closest?.('aside, nav, [role="complementary"], [role="navigation"]'))return false;
+          !companyJobsOwnControl(control,expected))return false;
       const href=control.href || control.getAttribute('href');
       if(href) {
         try {
           const u=new URL(href,location.href);
           if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash ||
-              !/^\/jobs\/search(?:-results)?\/?$/.test(u.pathname) ||
-              u.searchParams.getAll('f_C').length>1 || u.searchParams.has('f_C') && !/^[0-9]{1,24}$/.test(u.searchParams.get('f_C')) ||
+              !/^\/jobs\/(?:search(?:-results)?|[a-z0-9][a-z0-9-]{0,160}-jobs(?:-[a-z0-9-]{1,80})?)\/?$/.test(u.pathname) ||
+              u.searchParams.getAll('f_C').length>1 || u.searchParams.has('f_C') && !companyJobsFilter(href).length ||
               control.getAttribute('target') && control.getAttribute('target')!=='_self')return false;
         } catch { return false; }
       }
-      // A jobs call-to-action in another employer's recommendation is not
-      // authority for this company, even when its label says "See all jobs".
-      const scope=control.closest?.('section') || control.parentElement || main;
-      return ![...(scope?.querySelectorAll('a[href]') || [])].filter(visible).some(link=>{
-        const company=companyURL(link.href);return company && company!==expected;
-      });
+      return true;
     });
     const unique=[...new Set(actions)];return unique.length===1?unique[0]:null;
   }
@@ -586,23 +598,31 @@
     if(companyURL(location.href)!==expected || !/\/jobs\/?$/.test(location.pathname))throw Error('The company page changed.');
     const main=document.querySelector('main'),heading=[...document.querySelectorAll('main h1, h1')].find(visible);
     if(!main || !heading)return {loading:true};
-    const ids=new Set();
+    const ids=new Set(),groups=[];
     const header=heading.closest('section, .org-top-card') || heading.parentElement?.parentElement;
-    for(const link of [...(main.querySelectorAll('a[href]') || [])].filter(visible)) {
+    for(const link of [...(main.querySelectorAll('a[href]') || [])].filter(link=>visible(link) && companyJobsOwnControl(link,expected))) {
       try {
         const u=new URL(link.href);
         if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash)continue;
         // All-jobs calls to action belong to the company jobs panel. Individual
         // job links/recommendations are never treated as company evidence.
-        if(/^\/jobs\/search(?:-results)?\/?$/.test(u.pathname) &&
-            [text(link),link.getAttribute('aria-label') || ''].some(companyJobsLabel) &&
-            u.searchParams.getAll('f_C').length===1 && /^[0-9]{1,24}$/.test(u.searchParams.get('f_C')))ids.add(u.searchParams.get('f_C'));
+        if([text(link),link.getAttribute('aria-label') || ''].some(companyJobsLabel)) {
+          const found=companyJobsFilter(link.href);
+          if(found.length===1)ids.add(found[0]);else if(found.length>1)groups.push(found);
+        }
       } catch {}
     }
     // Share the HR reader's header evidence rules. Some company headers use
     // an HTTP-valued connections link; its ID is usable only when corroborated
     // by the visible HTTPS associated-members group. Never follow that link.
     for(const id of companyHeaderEvidence(header).ids)ids.add(id);
+    if(groups.length) {
+      const group=groups[0],key=[...group].sort().join(',');
+      if(groups.some(value=>[...value].sort().join(',')!==key) || [...ids].some(id=>!group.includes(id)))throw Error('LinkedIn showed different company numbers. Save the exact company See all jobs search link.');
+      // Preserve the complete group published by this company's own Jobs CTA.
+      // The company's People group alone never authorizes a jobs search.
+      return {company_url:expected,company_ids:group};
+    }
     if(ids.size>1)throw Error('LinkedIn showed different company numbers. Save the exact company See all jobs search link.');
     return ids.size===1 ? {company_url:expected,company_id:[...ids][0]} : {loading:true,...(companyJobsAction(expected)?{jobs_action:true}:{})};
   }

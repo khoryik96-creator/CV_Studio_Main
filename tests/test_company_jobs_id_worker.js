@@ -33,7 +33,7 @@ const install=f=>{f.state.fastWait=true;f.state.onScript=args=>args.args?.[0]===
  const realGet=settling.tabs.get.bind(settling.tabs);settling.tabs.get=id=>{const tab=realGet(id);if(id===11 && tab && ++hops===2)tab.url='https://www.linkedin.com/jobs/search-results/?keywords=jobs&f_C=24242';return tab;};
  assert.equal((await read(settling)).result.company_id,'24242','an address rewritten just after load is followed before anything is read');
  const many=fixture();install(many);await many.arm();many.state.onCreated=tab=>{many.tabs.get(tab.id).url='https://www.linkedin.com/jobs/search-results/?f_C=1%2C2';};
- assert.match((await read(many)).error,/not for one company/);assert.deepEqual(many.state.removed,[11]);
+ assert.deepEqual([...(await read(many)).result.company_ids],['1','2'],'initial company search redirects preserve their complete official group');assert.deepEqual(many.state.removed,[11]);
  const renamed=fixture();await renamed.arm();renamed.state.fastWait=true;let readRoot='';
  renamed.state.onCreated=tab=>{renamed.tabs.get(tab.id).url='https://www.linkedin.com/company/fictional-client-group/jobs/?viewAsMember=true';};
  renamed.state.onScript=args=>{if(args.args?.[0]==='readCompanyJobsID'){readRoot=args.args[1];return [{result:{company_url:readRoot,company_id:'5151'}}];}};
@@ -52,9 +52,17 @@ const install=f=>{f.state.fastWait=true;f.state.onScript=args=>args.args?.[0]===
    if(args.args?.[0]==='readCompanyJobsID')return [{result:{loading:true,jobs_action:true}}];
    if(args.args?.[0]===root){
     a.state.clicks++;
+    if(['event','event-group','event-viewed','event-changed'].includes(mode))return (async()=>{
+     const target=mode==='event-group'?'https://www.linkedin.com/jobs/fictional-client-jobs-worldwide?f_C=44%2C22%2C11%2C33':'https://www.linkedin.com/jobs/search/?f_C=4242';
+     a.tabs.get(11).url=target;await a.hooks().updated(11,{url:target,status:'complete'});
+     if(mode==='event-viewed'){a.tabs.get(11).active=true;await a.hooks().activated({tabId:11});}
+     if(mode==='event-changed'){a.tabs.get(11).url='https://www.linkedin.com/jobs/search/?f_C=9999';await a.hooks().updated(11,{url:a.tabs.get(11).url,status:'complete'});}
+     return [{result:true}];
+    })();
     if(mode==='hold')return new Promise(resolve=>{a.state.releaseAction=()=>{a.tabs.get(11).url='https://www.linkedin.com/jobs/search/?f_C=4242';resolve([{result:true}]);};});
     if(mode==='success')a.tabs.get(11).url='https://www.linkedin.com/jobs/search/?f_C=4242';
-    if(mode==='many')a.tabs.get(11).url='https://www.linkedin.com/jobs/search/?f_C=1%2C2';
+    if(mode==='many')a.tabs.get(11).url='https://www.linkedin.com/jobs/search/?f_C=1%2C1';
+    if(mode==='group')a.tabs.get(11).url='https://www.linkedin.com/jobs/fictional-client-jobs-worldwide?f_C=44%2C22%2C11%2C33';
     if(mode==='access')a.tabs.get(11).url='https://www.linkedin.com/checkpoint/challenge/';
     if(mode==='pending'){
      const tab=a.tabs.get(11);tab.status='loading';tab.pendingUrl='https://www.linkedin.com/jobs/search/?f_C=4242';a.state.pendingTicks=5;
@@ -69,18 +77,29 @@ const install=f=>{f.state.fastWait=true;f.state.onScript=args=>args.args?.[0]===
   if(mode==='active')a.state.onCreated=tab=>{a.tabs.get(tab.id).active=true;};
   return a;
  };
- for(const mode of ['success','pending']){
-  const a=await actionFixture(mode);const resolved=await read(a);assert.equal(resolved.result?.company_id,'4242',resolved.error);
+ for(const mode of ['success','pending','group','event','event-group']){
+  const a=await actionFixture(mode);const resolved=await read(a);if(mode==='group'||mode==='event-group')assert.deepEqual([...resolved.result.company_ids],['44','22','11','33']);else assert.equal(resolved.result?.company_id,'4242',resolved.error);
   assert.equal(a.state.clicks,1);assert.deepEqual(a.state.removed,[11]);assert.equal(a.state.created.length,1,'native fallback never opens another automation tab');
  }
  for(const mode of ['many','access','no-navigation','not-ready','active']){
   const a=await actionFixture(mode),result=await read(a);assert(result.error,mode);
   assert.equal(a.state.clicks,mode==='active'?0:1,'one action at most, never replayed: '+mode);
-  if(mode==='many')assert.match(result.error,/one company/);
+  if(mode==='many')assert.match(result.error,/valid company-filtered/);
   if(mode==='access')assert.equal(result.error_code,'HR_ACCESS_REQUIRED');
   if(mode==='active')assert(a.tabs.has(11),'a user-activated company tab is preserved');
   if(['no-navigation','not-ready'].includes(mode))assert.deepEqual(a.state.removed,[11]);
  }
+ const takenOver=await actionFixture('event-viewed');assert((await read(takenOver)).result);assert(takenOver.tabs.has(11),'a user-taken-over result survives its onActivated event');assert.equal(takenOver.state.removed.length,0);
+ const replaced=await actionFixture('event-changed');assert((await read(replaced)).error,'changing the observed group after the authorized transition stops the read');assert(replaced.tabs.has(11),'a different destination is not closed');
+ const passiveGroup=fixture();await passiveGroup.arm();passiveGroup.state.fastWait=true;
+ passiveGroup.state.onScript=args=>args.args?.[0]==='readCompanyJobsID'?[{result:{company_url:root,company_ids:['44','22','11','33']}}]:undefined;
+ assert.deepEqual([...(await read(passiveGroup)).result.company_ids],['44','22','11','33'],'reader groups cross the worker boundary intact');
+ const restored=fixture();install(restored);await restored.arm();await read(restored);
+ const searchURL='https://www.linkedin.com/jobs/search/?f_C=44%2C22%2C11%2C33';
+ restored.tabs.set(77,{id:77,url:searchURL,status:'complete',active:false});restored.tabs.set(78,{id:78,url:searchURL,status:'complete',active:false});
+ restored.state.session.cvstudioLinkedinLeadsSessionV1.owned.push([77,searchURL]);restored.state.session.cvstudioLinkedinLeadsSessionV1.viewed.push([78,searchURL]);restored.boot();
+ assert.equal((await restored.rpc('jobStatus',{},undefined,'leads')).result.connected,true,'a persisted authorized search destination restores cleanly');
+ assert((await read(restored)).result);assert(!restored.tabs.has(77),'a suspended owned destination can be reaped');assert(restored.tabs.has(78),'a user-viewed destination is never reaped');
  const stoppedAction=await actionFixture('hold'),pendingAction=read(stoppedAction);
  for(let i=0;i<100&&!stoppedAction.state.releaseAction;i++)await new Promise(resolve=>setTimeout(resolve,1));
  assert(stoppedAction.state.releaseAction);await stoppedAction.rpc('jobReadCancel',{operation_id:operation},undefined,'leads');

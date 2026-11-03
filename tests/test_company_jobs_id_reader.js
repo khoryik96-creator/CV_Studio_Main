@@ -16,7 +16,7 @@ const jobs=id=>'https://www.linkedin.com/jobs/search/?f_C='+id;
 assert(read().loading);state.heading=false;state.links=[link('See all jobs',jobs('42'))];assert(read().loading);state.heading=true;
 assert.equal(read().company_id,'42');assert.equal(read().company_url,root);
 state.links=[link('See all 1,234 jobs',jobs('42')),link('See all jobs',jobs('42'))];assert.equal(read().company_id,'42');
-for(const bad of ['https://attacker.invalid/jobs/search/?f_C=42',jobs('1,2'),jobs('1')+'&f_C=2','https://user@www.linkedin.com/jobs/search/?f_C=42',jobs('42')+'#bad']){
+for(const bad of ['https://attacker.invalid/jobs/search/?f_C=42',jobs('1,1'),jobs('1')+'&f_C=2','https://user@www.linkedin.com/jobs/search/?f_C=42',jobs('42')+'#bad']){
  state.links=[link('See all jobs',bad)];assert(read().loading);
 }
 state.links=[link('See all jobs',jobs('42'),{getClientRects:()=>[]})];assert(read().loading);
@@ -40,6 +40,17 @@ state.headerLinks=[link('Associated members',people(['11','99'])),connection];as
 state.headerLinks=[group,link('Connections',people(['42'],'http:'))];assert(read().loading,'the exact connections-filter evidence is required');
 state.headerLinks=[group];assert(read().loading,'a multi-company group never selects an arbitrary member');
 state.headerLinks=[group,connection];state.links=[link('See all jobs',jobs('99'))];assert.throws(read,/different company numbers/);
+// Company-authored Jobs links can include the parent and affiliates. Preserve
+// the complete observed group, including SEO-style public Jobs URLs.
+state.links=[link('See all jobs','https://www.linkedin.com/jobs/fictional-client-jobs-worldwide?f_C=44%2C22%2C11%2C33')];state.headerLinks=[];
+assert.deepEqual([...read().company_ids],['44','22','11','33']);assert.equal(read().company_id,undefined,'a group never silently becomes its first member');
+state.headerLinks=[link('Employees',people(['11']))];assert.deepEqual([...read().company_ids],['44','22','11','33'],'the primary header ID inside the official group does not discard affiliates');
+state.links.push(link('See all jobs',jobs('11,22,33,44')));assert.deepEqual([...read().company_ids],['44','22','11','33'],'reordered duplicate group links agree');
+state.links.push(link('See all jobs',jobs('11,22,33,55')));assert.throws(read,/different company numbers/);
+state.links=[link('See all jobs',jobs('11,22'))];state.headerLinks=[link('Employees',people(['99']))];assert.throws(read,/different company numbers/);
+state.links=[];state.headerLinks=[group];assert(read().loading,'associated members alone never authorize an affiliate Jobs group');
+state.links=[link('See all jobs',jobs('11,22'),{closest:selector=>selector==='section'?node('',{querySelectorAll:()=>[link('Other employer','https://www.linkedin.com/company/other/')] }):null})];state.headerLinks=[];
+assert(read().loading,'another employer’s grouped Jobs CTA is not authority for this page');
 // Native Jobs buttons can expose the numeric filter only after activation.
 state.links=[];state.headerLinks=[];
 const button=(label='See all jobs',extra={})=>node(label,{click:()=>state.clicks++,...extra});
@@ -49,7 +60,7 @@ state.actions=[button('',{getAttribute:name=>name==='aria-label'?'View all 123 j
 for(const control of [button('See all jobs',{disabled:true}),button('See all jobs',{getClientRects:()=>[]}),button('See all jobs',{getAttribute:name=>name==='aria-disabled'?'true':null}),button('Follow'),
  button('See all jobs',{closest:selector=>selector.startsWith('aside')?{}:null}),
  button('See all jobs',{closest:selector=>selector==='section'?node('',{querySelectorAll:()=>[link('Other employer','https://www.linkedin.com/company/other/')] }):null}),
- link('See all jobs','https://evil.invalid/jobs/search/'),link('See all jobs',jobs('1,2')),
+ link('See all jobs','https://evil.invalid/jobs/search/'),link('See all jobs',jobs('1,1')),
  link('See all jobs','https://www.linkedin.com/jobs/search/',{getAttribute:name=>name==='target'?'_blank':null})]){
  state.actions=[control];assert(!read().jobs_action);assert.equal(open(),false);
 }

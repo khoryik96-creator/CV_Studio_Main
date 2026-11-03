@@ -2,24 +2,38 @@
 
 Branch `codex/company-jobs-button-resolution`, based on merged v24.6.551 / PR295.
 
-## Company-number recovery
+## Company/group recovery
 
-The old reader could parse an existing company-filter link but could not perform
-the “See all jobs” action its error recommended. The companion now checks passive
-ID evidence first, then permits one native action in its own unchanged, inactive
-company Jobs tab. It accepts only a stable resulting job search with one numeric
-`f_C` filter. The source page remains authority; no company ID is guessed.
+Lear's public company Jobs page links its own “See all jobs” action to
+`/jobs/lear-corporation-jobs-worldwide?f_C=63345,44466,34111,3701` (plus tracking).
+The resulting public search labels Lear and three affiliated employers. Earlier
+code accepted only `/jobs/search/` links with one numeric ID. This is concrete
+public evidence explaining why the prior numeric-header fix could still fail.
+The signed-in DOM has not been reproduced.
 
-The reader checks visible/native or aria-labeled controls, rejects ambiguous,
-disabled, hidden, foreign-employer and unsafe-link controls, and rechecks before
-clicking. The worker retains scoped authority, cancellation, access checks,
-ownership protection and bounded polling. It never repeats the action. A tab
-taken over by the user is preserved. Distinct failures replace the generic
-number-not-found message after an incomplete action.
+The reader now preserves all IDs in the company-authored Jobs CTA, including
+observed SEO-style links. It accepts up to 20 distinct numeric IDs, compares
+multiple CTAs as complete sets, and rejects conflicting header evidence. A
+People/associated-member group alone never authorizes a Jobs group. IDs are not
+hardcoded or inferred from names. The client caches the complete group against
+its exact saved page for the session. Pull and Open LinkedIn retain all members;
+`jobSearchBegin` accepts a bounded `company_ids` array while preserving the old
+single `company_id` contract. Search identity ignores group ordering but rejects
+any dropped/replaced member. No backend storage/schema change is needed.
 
-`company_jobs_action_revision:1` identifies this behavior. Resolving an unknown
-named company asks for a companion update if it is missing; already-known exact
-IDs continue to work.
+If no numeric filter is exposed, one native Jobs action may run in the owned
+inactive company tab. Hidden, disabled, ambiguous, foreign-employer and unsafe
+controls are rejected and rechecked before activation. The resulting search must
+contain a valid complete numeric company filter. Actions are never replayed.
+Capabilities `company_jobs_action_revision:1` and `company_jobs_group_revision:1`
+prompt older companions to update before resolving unknown pages.
+
+PR296 review found Chrome's onUpdated handler could discard ownership during
+this authorized native navigation. The transition now retains exact destination
+ownership and filter identity, including persistence/reaping across restart.
+Actual onUpdated/onActivated regressions verify inactive cleanup and permanent
+protection for user-viewed or differently navigated tabs. Cancellation mid-hop
+also cleans up the owned destination. No existing user tab is driven or closed.
 
 ## Full-ad recovery
 
@@ -34,8 +48,9 @@ results; the bounded server reader may still finish its own read.
 
 ## Validation and limits
 
-- All 95 frontend fixtures pass, including expanded company reader/worker and
-  client capability tests and the new full-content fallback fixture.
+- All 95 frontend fixtures pass, including grouped/SEO company evidence, all-ID
+  pull/cache/open propagation, reordered/changed filters, restart/event ownership,
+  client capability checks and the full-content fallback fixture.
 - 192 relevant public-ad, Job Leads/folder/organization/HR, version and composition
   tests pass under isolated paths. One existing pytest deprecation warning.
 - Chromium tests native and aria-labeled company Jobs buttons, rejected hidden /
@@ -53,9 +68,12 @@ description is visible in their browser. Public web views expose descriptions
 for the two job URLs; one redirected to LinkedIn's Malaysian public site. This
 does not reproduce the user's authenticated DOM. Direct requests through the
 existing public reader in this cloud environment returned `JOB_AD_UNAVAILABLE`.
-Therefore live success for Lear or either ad on the owner's installation is not
-claimed. The implemented recovery paths are verified with controlled responses.
+The grouped public Lear link is verified, but live signed-in success for Lear
+or either ad on the owner's installation is not claimed. The implemented recovery paths are verified with controlled responses.
 
 No routes, schemas, credentials or provider/paid-call boundaries change. No live
 email, JobAdder write or paid provider action was made. Both app and companion
-need updating to use the company-action recovery.
+need updating to use grouped-company recovery.
+
+[PR296](https://github.com/khoryik96-creator/CV_Studio_Main/pull/296) records current
+CI, review and merge status.

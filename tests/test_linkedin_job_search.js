@@ -82,6 +82,17 @@ if(require.main===module)(async()=>{
     assert.match(error,/LinkedIn|reader/,'the failed browser step is actionable');assert(!error.includes('PRIVATE'),'raw injection errors never leave the worker');
     assert.match(error,kind==='failInjection'?/reader could not start/:/could not be read/);
   }
+  // An explicit grouped filter keeps every observed company and tolerates only
+  // ordering changes, not removal/replacement of any member.
+  const grouped=fixture();await grouped.arm();const gid=(await grouped.begin({query:'',location:'',company_ids:['44','22','11','33']})).result.tab_id;
+  assert.equal(new URL(grouped.state.created[0].url).searchParams.get('f_C'),'44,22,11,33');
+  grouped.tabs.get(gid).url='https://www.linkedin.com/jobs/search/?f_C=11%2C22%2C33%2C44';
+  assert((await grouped.read(gid)).result.jobs,'reordering the complete group is the same search');grouped.boot();assert((await grouped.read(gid)).result.jobs,'the exact grouped search survives worker restart');
+  grouped.tabs.get(gid).url='https://www.linkedin.com/jobs/search/?f_C=11%2C22%2C33';assert((await grouped.read(gid)).error,'dropping an affiliate changes the search');await grouped.end();
+  for(const company_ids of [[],['1'],['1','1'],['1',2],['1','bad'],Array.from({length:21},(_,i)=>String(i+1))]){
+    const invalid=fixture();await invalid.arm();assert((await invalid.begin({query:'',company_ids})).error,'invalid grouped search');assert.equal(invalid.state.created.length,0);
+  }
+  const conflicting=fixture();await conflicting.arm();assert((await conflicting.begin({query:'',company_id:'1',company_ids:['1','2']})).error);
   // Signed-client pulls: one LinkedIn company (f_C), keywords optional.
   const client=fixture();await client.arm();
   assert.equal((await client.rpc('jobStatus')).result.job_search_company_revision,1,'the app can detect the company filter');
