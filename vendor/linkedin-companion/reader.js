@@ -553,6 +553,32 @@
     const ids = [...new Set(singles.map(item=>item.ids[0]))];
     return {ids,groups};
   }
+  const companyJobsLabel = value => /^(?:(?:see|view|show)(?: all)?(?: [0-9,]+)? jobs?|all jobs?)(?: at .+)?$/i.test(compact(value));
+  function companyJobsAction(expected) {
+    const main=document.querySelector('main');
+    const actions=[...(main?.querySelectorAll('button, [role="button"], a[href]') || [])].filter(control=>{
+      if(!visible(control) || control.disabled || control.getAttribute('aria-disabled')==='true' ||
+          ![text(control),control.getAttribute('aria-label') || ''].some(companyJobsLabel) ||
+          control.closest?.('aside, nav, [role="complementary"], [role="navigation"]'))return false;
+      const href=control.href || control.getAttribute('href');
+      if(href) {
+        try {
+          const u=new URL(href,location.href);
+          if(u.origin!=='https://www.linkedin.com' || u.username || u.password || u.hash ||
+              !/^\/jobs\/search(?:-results)?\/?$/.test(u.pathname) ||
+              u.searchParams.getAll('f_C').length>1 || u.searchParams.has('f_C') && !/^[0-9]{1,24}$/.test(u.searchParams.get('f_C')) ||
+              control.getAttribute('target') && control.getAttribute('target')!=='_self')return false;
+        } catch { return false; }
+      }
+      // A jobs call-to-action in another employer's recommendation is not
+      // authority for this company, even when its label says "See all jobs".
+      const scope=control.closest?.('section') || control.parentElement || main;
+      return ![...(scope?.querySelectorAll('a[href]') || [])].filter(visible).some(link=>{
+        const company=companyURL(link.href);return company && company!==expected;
+      });
+    });
+    const unique=[...new Set(actions)];return unique.length===1?unique[0]:null;
+  }
   // The saved company URL, not a JobAdder display-name guess, is authority.
   // Read public, visible filter links from this exact company page only.
   function readCompanyJobsID(expected) {
@@ -569,7 +595,7 @@
         // All-jobs calls to action belong to the company jobs panel. Individual
         // job links/recommendations are never treated as company evidence.
         if(/^\/jobs\/search(?:-results)?\/?$/.test(u.pathname) &&
-            /^(?:(?:see|view|show)(?: all)?(?: [0-9,]+)? jobs|all jobs)(?: at .+)?$/i.test(text(link)) &&
+            [text(link),link.getAttribute('aria-label') || ''].some(companyJobsLabel) &&
             u.searchParams.getAll('f_C').length===1 && /^[0-9]{1,24}$/.test(u.searchParams.get('f_C')))ids.add(u.searchParams.get('f_C'));
       } catch {}
     }
@@ -578,7 +604,14 @@
     // by the visible HTTPS associated-members group. Never follow that link.
     for(const id of companyHeaderEvidence(header).ids)ids.add(id);
     if(ids.size>1)throw Error('LinkedIn showed different company numbers. Save the exact company See all jobs search link.');
-    return ids.size===1 ? {company_url:expected,company_id:[...ids][0]} : {loading:true};
+    return ids.size===1 ? {company_url:expected,company_id:[...ids][0]} : {loading:true,...(companyJobsAction(expected)?{jobs_action:true}:{})};
+  }
+  function openCompanyJobs(expected) {
+    // Recheck the current company/DOM immediately before one native action.
+    const snapshot=readCompanyJobsID(expected);
+    if(!snapshot.jobs_action)return false;
+    const control=companyJobsAction(expected);if(!control)return false;
+    control.click();return true;
   }
   function readHRCompany(expected, company, sourceConfirmed=false, expectedId='') {
     const problem = issue(); if (problem) throw Error(problem);
@@ -827,5 +860,5 @@
     button.click(); return true;
   }
   globalThis.SourcerReader = {readSearch, next, search, readProfile, profileURL, readJob, readJobSearch, nextJobSearch, scrollJobSearch, jobSearchContext, readJobPick, jobTargets,
-    readCompanyJobsID, readHRCompany, hrCompanyOpen, hrCompanyOnly, hrCompanyApply, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined,jobUnavailable};
+    readCompanyJobsID, openCompanyJobs, readHRCompany, hrCompanyOpen, hrCompanyOnly, hrCompanyApply, hrCountryOpen, hrCountryType, hrCountryPick, hrCountryApply, peopleCountrySelected, readHRSearch, nextHRSearch, readHRJoined, prepareHRJoined,jobUnavailable};
 })();

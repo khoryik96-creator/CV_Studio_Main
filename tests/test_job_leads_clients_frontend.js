@@ -35,7 +35,7 @@ function fixture(options={}){
     details:{11:{linkedin_url:'https://www.linkedin.com/company/example-client/',linkedin_id:'4242'},12:{linkedin_url:'',linkedin_id:''}},
     records:[{id:'1'.repeat(32),url:'https://www.linkedin.com/jobs/view/900',company:'Example Client',role:'Saved role',deleted:false},
              {id:'2'.repeat(32),url:'https://www.linkedin.com/jobs/view/901',company:'PT Example Client Tbk',role:'Other saved',deleted:false,hr:{company_url:'https://www.linkedin.com/company/second-client/',company_id:'5151'}}],
-    folders:['Clients'],busy:false,locks:[],refreshes:0,apiInfo:null,companion:{connected:true,concurrent_scans_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,busy:false},
+    folders:['Clients'],busy:false,locks:[],refreshes:0,apiInfo:null,companion:{connected:true,concurrent_scans_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_jobs_action_revision:1,busy:false},
     pages:{'4242':[[job(1001),job(900),job(1002)],[job(1003)]],'5151':[[job(1002,'Second Client'),job(2001,'Second Client'),{url:'https://evil.test/jobs/view/1',company:'X',role:'Bad'}]]},hold:null,holdBegin:null,...options};
   const deadlines=new Map();let timerId=100000;
   const reply=data=>({ok:true,json:async()=>({ok:true,...data})});
@@ -178,15 +178,15 @@ process.on('exit',()=>{if(!finished && !process.exitCode){console.error('Signed 
   {const f=fixture({signed:[2],followed:[client(11,''),client(12,'5151')],failRefresh:11});
    await f.el('Tab').click();await settle();await f.el('FollowedRefresh').click();
    assert.match(f.el('Progress').textContent,/1 could not be refreshed/);assert.equal(rows(f).length,2);assert.equal(f.calls.filter(c=>c.action==='refresh_linkedin').length,2,'a failed refresh does not block the next client');}
-  for(const mode of ['stop','account','failed','old']){
+  for(const mode of ['stop','account','failed','old','old-action']){
    const row={...client(11,''),linkedin_url:'https://www.linkedin.com/company/fictional-client/'};
    const f=fixture({signed:[2],followed:[row],holdCompany:mode==='stop'||mode==='account',failCompany:mode==='failed'});
-   await f.el('Tab').click();await settle();if(mode==='old')delete f.state.companion.job_search_company_link_revision;
+   await f.el('Tab').click();await settle();if(mode==='old')delete f.state.companion.job_search_company_link_revision;if(mode==='old-action')delete f.state.companion.company_jobs_action_revision;
    const pulling=f.el('Pull').click();await settle();
    if(mode==='stop'){await f.el('Stop').click();assert(f.rpcCalls.some(c=>c.action==='jobReadCancel'));f.state.releaseCompany();}
    if(mode==='account'){f.clear();f.state.releaseCompany();}
    await pulling;assert(!f.rpcCalls.some(c=>c.action==='jobSearchBegin'),'no search after '+mode+' lookup');
-   if(mode==='old')assert.match(f.el('Progress').textContent,/latest companion update/);
+   if(mode==='old'||mode==='old-action')assert.match(f.el('Progress').textContent,/latest companion update/);
   }
   // Pure helpers.
   {const {api}=fixture();

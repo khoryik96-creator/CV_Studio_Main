@@ -643,8 +643,8 @@
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
       if (status.concurrent_scans_revision !== 1 || status.job_search !== true || status.job_search_company_revision !== 1)
         throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to pull client ads. Updating CV Studio alone does not update the companion.');
-      if (targets.some(client=>!linkedinId(client,state.records)) && status.job_search_company_link_revision!==1)
-        throw Error('Apply the latest companion update to pull ads from a named company page.');
+      if (targets.some(client=>!knownId(client)) && (status.job_search_company_link_revision!==1 || status.company_jobs_action_revision!==1))
+        throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to pull ads from a named company page using See all jobs.');
       if (status.busy) throw Error('Finish the current companion search or ad read first.');
       for (const [index, client] of targets.entries()) {
         check(token);
@@ -739,7 +739,7 @@
       const status = await app.rpc('jobStatus', {}, 1500).catch(() => null);
       check(token);
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
-      if (status.job_search_company_link_revision !== 1) throw Error('Apply the latest companion update to read company numbers from LinkedIn company pages.');
+      if (status.job_search_company_link_revision !== 1 || status.company_jobs_action_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to read company numbers using See all jobs.');
       if (status.busy) throw Error('Finish the current companion search or ad read first.');
       for (const [index, client] of missing.entries()) {
         check(token);

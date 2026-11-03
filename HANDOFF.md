@@ -7,6 +7,33 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.552 company Jobs action and full-ad fallback (unmerged)**
+on `codex/company-jobs-button-resolution`, from merged v24.6.551 / PR295.
+- Company-number lookup retains passive exact-ID evidence first. When absent,
+  one visible, unambiguous native See/View/Show all jobs action can run in the
+  companion's own unchanged inactive company Jobs tab. The result must settle
+  on a search with exactly one numeric company filter. No guessed ID, repeated
+  clicks, foreign-company recommendation, user-tab navigation or private API.
+- Cancel, access checks, first-page URL identity and tab ownership remain checked.
+  A failed/unfinished action gives a distinct explanation. The new
+  `company_jobs_action_revision:1` capability makes old companions ask for an
+  update before resolving an unknown named company; cached exact IDs still work.
+- Manual/background full-ad reads fall back once to the existing public lookup
+  after recognized browser layout/empty-content timeouts. Exact job identity,
+  role, company and readable body are required; rich formatting/cache are kept.
+  No fallback around access, disconnect or changed-ad errors. Public rate/busy
+  errors pause the queue. Stop aborts the browser's pending public request and
+  ignores late results; saved records and editing drafts remain unchanged.
+- Validation: all 95 frontend fixtures, 192 focused backend/version tests,
+  JavaScript syntax, whitespace and repository consistency pass. Chromium tests
+  native company buttons, hidden/ambiguous/other-employer controls, and a full
+  companion-error → public lookup → rich cached preview workflow.
+- Lear's authenticated DOM is unavailable. Public web views show descriptions
+  for the two reported ad URLs (4437968792 / 4373530413); direct public requests
+  from this cloud workspace did not return usable ads. Controlled tests verify
+  the recovery paths, not live success on the owner's installation. Update both
+  app and companion when adopting this source. No live email/paid action.
+
 **Latest source: v24.6.551 job-ad cards and background capture — [PR295](https://github.com/khoryik96-creator/CV_Studio_Main/pull/295)**
 on `codex/job-search-results-scroll`, including the v24.6.550 work below.
 The PR records current CI, review and merge status.

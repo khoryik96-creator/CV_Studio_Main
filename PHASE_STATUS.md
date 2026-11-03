@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.552 is local/unmerged on `codex/company-jobs-button-resolution`, from
+  merged551/PR295. Adds a bounded native See all jobs fallback for unresolved
+  company IDs, and an exact-ad public-reader fallback for full-ad layout failures.
+  All 95 frontend fixtures and 192 relevant backend/version checks pass; fictional
+  Chromium workflows pass. Live Lear/signed-in ad DOM remains unverified.
+
 - v24.6.551 is tracked in PR295 on `codex/job-search-results-scroll`, including
   v550 below. See PR295 for current CI, review and merge status. Refreshes search-result cards and the preview with clearer hierarchy,
   company initials, compact indicators/actions and responsive spacing. All 94

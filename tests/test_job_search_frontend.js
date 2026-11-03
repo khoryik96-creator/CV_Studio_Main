@@ -47,7 +47,8 @@ function fixture(options={}){
     assert.equal(endpoint,'/job-leads','search must not call a paid route');
     if(!options?.body)return {ok:true,json:async()=>({records:structuredClone(state.records),folders:[...state.folders]})};
     const data=JSON.parse(options.body);requests.push(data);
-    if(state.onRequest){const response=await state.onRequest(data);if(response)return response;}
+    if(state.onRequest){const response=await state.onRequest(data,options);if(response)return response;}
+    if(data.action==='lookup')return {ok:false,json:async()=>({error:'Synthetic unavailable public page',code:'JOB_AD_UNAVAILABLE'})};
     if(data.action==='format_content')return {ok:true,json:async()=>({description_rich:[{tag:'p',children:[{tag:'strong',children:[{text:data.description}]}]}]})};
     if(data.action==='create_folder'){if(!data.folder?.trim())return {ok:false,json:async()=>({error:'Enter a folder name.'})};if(!state.folders.includes(data.folder))state.folders.push(data.folder);return {ok:true,json:async()=>({folder:data.folder})};}
     if(['trash','untrash','move_folder'].includes(data.action)){
@@ -67,7 +68,7 @@ function fixture(options={}){
   const preferences=options.preferences || new Map();
   const localStorage=options.storage || {getItem:key=>preferences.get(key)??null,setItem:(key,value)=>preferences.set(key,value),removeItem:key=>preferences.delete(key)};
   const context=vm.createContext({window,document,location,localStorage,fetch,URL,URLSearchParams,Blob,Map,Set,Date,crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
-    ...options.activity,
+    AbortController,...options.activity,
     navigator:{clipboard:{writeText:async value=>{state.clipboard=value}}},
     setTimeout:(fn,ms)=>setTimeout(fn,ms===350?0:ms),clearTimeout,Option:function(text,value){const node=new Element('option',text);node.value=value;return node}});
   if(options.emailVerifier) vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/email-verifier.js'),'utf8'),context);
