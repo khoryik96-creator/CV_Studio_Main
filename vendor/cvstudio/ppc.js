@@ -362,8 +362,9 @@ async function ppcDisconnectOutlook(showMessage){
   }catch(e){if(showMessage!==false)showToast((e&&e.message)||'Could not disconnect Outlook','err');return false;}
 }
 function ppcOutlookTokenClear(){ppcDisconnectOutlook(false);}
-async function ppcStartOutlookLogin(){
+async function ppcStartOutlookLogin(enableSend){
   var cfg=ppcOutlookClientLoad();
+  if(enableSend===true)cfg.enable_send=true;
   if(!ppcOutlookClientIdValid(cfg.client_id)){ppcOpenOutlookSettings();showToast('Save a dedicated Microsoft Outlook app Client ID first.','info');return false;}
   var r=await fetch('/ppc/outlook/device_start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}),d=await r.json().catch(function(){return {};});
   if(!r.ok){ppcShowOutlookError(d,'Could not start Outlook login');return false;}
@@ -371,7 +372,7 @@ async function ppcStartOutlookLogin(){
   ppcOutlookDeviceSave(pending);ppcUpdateOutlookConnectButton();ppcSetOutlookTechnicalError(null);
   try{if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(pending.user_code);}catch(e){}
   var loginWindow=null;try{loginWindow=window.open(pending.verification_uri,'_blank');}catch(e){loginWindow=null;}
-  window.alert('Microsoft Outlook login code: '+pending.user_code+'\n\nThe code was copied when clipboard access was available. Complete the Microsoft login and approve User.Read and Mail.ReadWrite. Then return to CV Studio and click Finish Outlook Login.');
+  window.alert('Microsoft Outlook login code: '+pending.user_code+'\n\nThe code was copied when clipboard access was available. Complete the Microsoft login and approve User.Read and Mail.ReadWrite'+(enableSend===true?' and Mail.Send':'')+'. Then return to CV Studio and click Finish Outlook Login.');
   showToast(loginWindow?'Microsoft Outlook login opened. Finish it, then click Finish Outlook Login.':'Open microsoft.com/devicelogin, enter '+pending.user_code+', then click Finish Outlook Login.','info');return true;
 }
 async function ppcFinishOutlookLogin(){

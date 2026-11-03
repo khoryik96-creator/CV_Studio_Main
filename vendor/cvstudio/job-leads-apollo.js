@@ -90,7 +90,8 @@
       } else name.textContent=row.name;
       tr.append(name,...['position','company','country','email'].map(key=>text('td',row[key] || '—')),
         text('td',statusLabels[row.email_status] || statusLabels.unknown));
-      const action=document.createElement('td');window.cvStudioJAContacts?.decorate(action,row);tr.append(action);
+      const action=document.createElement('td');window.cvStudioJAContacts?.decorate(action,row);
+      if(row.email){const email=text('button','Email','sec');email.type='button';email.addEventListener('click',()=>window.cvStudioJobLeads?.composeEmail(row));action.append(email);}tr.append(action);
       const verify=document.createElement('td'),key=row.contact_key || row.profile_url+'|'+row.email;
       if(!contactVerifiers.has(key)) {
         const host=document.createElement('div');

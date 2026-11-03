@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.545"
+_INSTALL_RECEIPT_VERSION = "v24.6.546"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.545"
+_CVSTUDIO_VERSION = "v24.6.546"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14920,6 +14920,10 @@ def job_leads():
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             raise JobLeadsError("Enter valid job details or select a Job Leads backup.")
+        if data.get("action") == "outlook_send":
+            response = app.make_response(_OUTLOOK_SERVICE.send_job_leads_email())
+            response.headers["Cache-Control"] = "no-store"
+            return response
         if data.get("action") == "save":
             result = _JOB_LEADS.save(data.get("record"))
         elif data.get("action") == "restore":
