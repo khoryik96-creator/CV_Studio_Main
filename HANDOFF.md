@@ -7,7 +7,23 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Review candidate: v24.6.552 grouped company Jobs and full-ad recovery — [PR296](https://github.com/khoryik96-creator/CV_Studio_Main/pull/296)**
+**Source checkpoint: v24.6.553 click-card job preview**
+on `codex/job-card-click-preview`, from merged v24.6.552 / PR296.
+The associated pull request records current CI, review and merge status.
+- Clicking a search card's title, company, initials, metadata or blank area opens
+  its preview. The separate Preview button is removed. Titles are visually plain
+  native buttons, so Enter/Space and visible keyboard focus remain available.
+- Checkbox labels/inputs, links, read/retry actions and expandable descriptions
+  keep their own behavior. Selecting text does not switch previews. Busy guards,
+  cached content and list scroll/focus preservation remain in place; a card click
+  does not start another companion read.
+- Validation: all 95 frontend fixtures and five version tests pass. The existing
+  Chromium workflow now verifies card clicks, title keyboard activation, nested
+  control/text-selection isolation and mobile preview visibility, alongside the
+  background capture/focus/scroll/Stop/Clear regressions. Syntax, whitespace and
+  repository consistency pass. No live service action or installed-app update.
+
+**Previous checkpoint: v24.6.552 grouped company Jobs and full-ad recovery (merged) — [PR296](https://github.com/khoryik96-creator/CV_Studio_Main/pull/296)**
 on `codex/company-jobs-button-resolution`, from merged v24.6.551 / PR295.
 - Verified public evidence: Lear Corporation's own See all jobs link is an SEO
   Jobs URL with FOUR comma-separated f_C IDs (Lear plus affiliates). Previous

@@ -4,7 +4,14 @@
 
 ## Release state
 
-- v24.6.552 is in PR296 on `codex/company-jobs-button-resolution`, from merged551.
+- v24.6.553 is on `codex/job-card-click-preview`, from merged552. Its pull
+  request records current CI, review and merge status.
+  Cards open previews on click; the separate Preview button is removed. Native
+  title buttons preserve keyboard access; controls and selected text stay
+  independent. All 95 frontend fixtures, five version tests and Chromium desktop /
+  mobile interaction checks pass.
+
+- v24.6.552 was merged in PR296 from `codex/company-jobs-button-resolution`, from merged551.
   Lear's official See all jobs link contains four IDs on an SEO-style Jobs URL;
   the reader, session cache and search now preserve the complete observed group.
   Also adds bounded native Jobs navigation and exact-ad public-reader fallback.

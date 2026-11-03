@@ -23,7 +23,7 @@ with sync_playwright() as p:
  b=p.chromium.launch(headless=True,executable_path=os.environ.get('CVSTUDIO_CHROMIUM','/usr/bin/chromium'),args=['--no-sandbox'])
  page=b.new_page(viewport={'width':1450,'height':1000});errors=[]
  page.on('pageerror',lambda error:errors.append(str(error)))
- page.route('**/*',lambda route:route.continue_() if route.request.url.startswith('http://127.0.0.1:5077/') else route.abort())
+ page.context.route('**/*',lambda route:route.continue_() if route.request.url.startswith('http://127.0.0.1:5077/') else route.abort())
  assert page.request.get('http://127.0.0.1:5077/__job_leads_email_fixture__').json()['fictional_email_fixture']
  page.add_init_script(MOCK)
  page.goto('http://127.0.0.1:5077/?module=jobleads')
@@ -35,14 +35,32 @@ with sync_playwright() as p:
  assert page.locator('#jobLeadsSearchAdd').is_disabled()
  assert page.locator('#jobLeadsSearchNext').is_enabled()
  region=page.locator('#jobLeadsSearchResults');first=region.locator('article').first
- first.locator('summary').click();first.get_by_role('checkbox').check()
- first.get_by_role('button',name='Preview',exact=True).focus()
+ second=region.locator('article').nth(1)
+ assert first.get_by_role('button',name='Preview',exact=True).count()==0,'the separate Preview button is removed'
+ second.locator('.job-ad-company').click()
+ assert '2 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'card content opens its preview'
+ first.get_by_role('checkbox').check();first.locator('summary').click()
+ assert '2 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'selection and expandable summaries do not activate the card'
+ with page.expect_popup() as popup:first.get_by_role('link',name='Open on LinkedIn').click()
+ popup.value.close()
+ assert '2 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'LinkedIn links keep their own action'
+ first.locator('.job-ad-card-title').focus();page.keyboard.press('Enter')
+ assert '1 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'the title is a native keyboard preview button'
+ second.locator('.job-ad-card-title').focus();page.keyboard.press('Space')
+ assert '2 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text()
+ first.locator('.job-ad-company-mark').click()
+ assert '1 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'card whitespace/initials open the preview too'
+ page.evaluate('''()=>{const company=document.querySelectorAll('.job-ad-company')[1],range=document.createRange();range.selectNodeContents(company);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);company.dispatchEvent(new MouseEvent('click',{bubbles:true}));}''')
+ assert '1 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'selecting card text does not switch previews'
+ page.evaluate('()=>window.getSelection().removeAllRanges()')
+ assert page.evaluate('()=>window.jobFixture.reads.length')==1,'preview clicks do not trigger more companion reads'
+ first.locator('.job-ad-card-title').focus()
  page.evaluate('()=>document.getElementById("jobLeadsSearchResults").scrollTop=220')
  assert page.locator('#jobLeadsSearchAdd').is_enabled()
  page.evaluate('()=>window.jobFixture.release()')
  page.wait_for_function('()=>window.jobFixture.reads.length===2')
  assert first.locator('details').evaluate('(el)=>el.open')
- assert page.evaluate('()=>document.activeElement.textContent')=='Preview'
+ assert page.evaluate('()=>document.activeElement.classList.contains("job-ad-card-title")')
  assert region.evaluate('(el)=>el.scrollTop')==220
  assert first.inner_text().find('Full ad captured')>=0
  assert page.locator('#jobLeadsPreviewContent strong').count()>0
@@ -60,7 +78,13 @@ with sync_playwright() as p:
  assert page.evaluate('()=>window.jobFixture.cancel.length')==1
  assert page.evaluate('()=>window.jobFixture.reads.length')==4
  assert page.locator('#jobLeadsBackgroundStatus').inner_text().startswith('3 of 25')
+ page.set_viewport_size({'width':390,'height':844})
+ second.locator('.job-ad-company').click()
+ assert '2 of 25' in page.locator('#jobLeadsPreviewPosition').inner_text(),'mobile card taps open the selected preview'
+ page.wait_for_function('()=>{const r=document.getElementById("jobLeadsPreview").getBoundingClientRect();return r.top<innerHeight && r.bottom>0;}')
+ assert page.locator('#jobLeadsCuration').evaluate('(el)=>el.scrollWidth<=el.clientWidth+1')
+ assert page.evaluate('()=>window.jobFixture.reads.length')==4
  page.locator('#jobLeadsSearchClear').click();page.wait_for_function('()=>document.getElementById("jobLeadsSearchResults").children.length===0')
  assert not errors,errors
- print('Chromium passed: 25 summaries first, sequential capture, rich preview, usable selection, stable scroll/button/link/summary focus/expanded content, Stop and Clear; no page errors or external requests.')
+ print('Chromium passed: 25 summaries first, sequential capture, rich preview, desktop/mobile card click and keyboard preview, independent controls/text selection, stable scroll/button/link/summary focus/expanded content, Stop and Clear; no page errors or external requests.')
  b.close()

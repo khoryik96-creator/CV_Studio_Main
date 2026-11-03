@@ -158,7 +158,7 @@ if(require.main===module)(async()=>{
   const scrollResults=paging.el('SearchResults'),replaceResults=scrollResults.replaceChildren.bind(scrollResults);
   scrollResults.replaceChildren=(...children)=>{replaceResults(...children);scrollResults.scrollTop=0;};
   scrollResults.scrollTop=240;
-  await scrollResults.children[5].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  await scrollResults.children[5].click();
   assert.equal(scrollResults.scrollTop,240,'opening a preview preserves the list scroll position');
   paging.el('SearchSelectPage').checked=true;paging.el('SearchSelectPage').handlers.change();
   assert.equal(scrollResults.scrollTop,240,'selection redraws preserve the list scroll position');
@@ -187,7 +187,7 @@ if(require.main===module)(async()=>{
   f.el('notes').value='Keep unsaved notes';f.el('contact').value='Unsaved Contact';f.el('notes').handlers.input();
   await f.el('SearchStart').click();assert.match(f.el('SearchCount').textContent,/3 found/);
   assert.equal(f.el('PreviewTitle').textContent,'Finance Manager');
-  await f.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();
+  await f.el('SearchResults').children[2].click();
   assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent===c.description));
   assert.equal(f.calls.filter(call=>call.args.method==='nextJobSearch').length,1);
   assert.equal(f.calls.filter(call=>call.args.method==='scrollJobSearch').length,1);
@@ -296,7 +296,7 @@ if(require.main===module)(async()=>{
   await single.el('PreviewClose').click();single.el('SearchSelectPage').handlers.change();
   assert(single.el('Preview').hidden,'changing selections does not reopen a dismissed preview');
   assert.match(single.el('SearchCount').textContent,/2 selected/,'closing the preview retains selected results');
-  await single.el('SearchResults').children[2].querySelectorAll('button').find(button=>button.textContent==='Preview').click();await single.el('PreviewSave').click();
+  await single.el('SearchResults').children[2].click();await single.el('PreviewSave').click();
   assert(single.state.records.some(row=>row.url===c.url));assert(!single.state.records.some(row=>row.url===a.url),'Add this ad does not save other selected results');
   console.log('Job search UI: multi-page scroll/deduplication, review-only capture, full previews, selected folder import, partial failure/retry, existing notes/drafts, open filters, Stop and 15-page bounds passed');
 })().catch(error=>{console.error(error);process.exitCode=1});
