@@ -187,8 +187,8 @@
     if (!value) { updateClear(); updateSelection(); }
     nextGuide();
   }
-  async function api(body) {
-    const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {})} : {});
+  async function api(body, signal) {
+    const response = await fetch('/job-leads', body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), ...(body.action === 'lookup' ? {timeout:30000} : {}), ...(signal ? {signal} : {})} : {});
     const data = await response.json();
     if (!response.ok || data.error) {
       const error = Error(data.error || 'Job Leads could not finish this request.');
@@ -1327,6 +1327,32 @@
       description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
       full:true,fullState:'ready',fullError:''};
   }
+  async function readFullContent(row, operation, read = rpc, queue = null) {
+    const check = () => {
+      if (queue?.stopped) { const error=Error('Full-ad loading was stopped.'); error.companionCode='HR_STOPPED'; throw error; }
+    };
+    try {
+      const data=await prepareSource(await read('jobFromLink',{url:row.url,operation_id:operation}));
+      check(); fullAd(row,data); return data;
+    } catch (browserError) {
+      check();
+      // A second, independent parser can read public ads even when LinkedIn's
+      // signed-in layout is unknown. Never fall back around an access check or
+      // a disconnected/busy companion, and never replay either read.
+      if (!['HR_AD_TIMEOUT','HR_AD_LAYOUT','HR_AD_EMPTY'].includes(browserError.companionCode)) throw browserError;
+      const controller=typeof AbortController==='function'?new AbortController():null;
+      if(queue)queue.publicController=controller;
+      try {
+        const data=(await api({action:'lookup',url:row.url},controller?.signal)).record;
+        check(); fullAd(row,data); return data;
+      } catch (publicError) {
+        check();
+        if(publicError.code!=='JOB_AD_UNAVAILABLE')throw publicError;
+        browserError.message+=' The public job page could not be read either; the previous content is kept.';
+        throw browserError;
+      } finally { if(queue)queue.publicController=null; }
+    }
+  }
   function backgroundAdStatus(message) {
     const ready = discovered.filter(row => row.full).length, failed = discovered.filter(row => row.fullError && !row.full).length;
     el('BackgroundStatus').textContent = discovered.length ? `${ready} of ${discovered.length} full ads ready` +
@@ -1335,7 +1361,7 @@
   async function stopBackgroundAds(message = 'Stopped. Resume loading whenever you are ready.') {
     const queue = backgroundAds;
     if (!queue) return;
-    queue.stopped = true; queue.message = message; discoveryControls();
+    queue.stopped = true; queue.message = message; queue.publicController?.abort(); discoveryControls();
     if (queue.operation) await rpc('jobReadCancel',{operation_id:queue.operation}).catch(() => {});
     await queue.done;
   }
@@ -1355,7 +1381,7 @@
           queue.operation = hex(); row.fullState = 'reading'; row.fullError = '';
           backgroundAdStatus('Loading descriptions in the background…'); drawDiscovery();
           try {
-            const data = await prepareSource(await sendRPC('jobFromLink',{url:row.url,operation_id:queue.operation}));
+            const data = await readFullContent(row,queue.operation,sendRPC,queue);
             if (!queue.stopped && discovered.includes(row)) {
               Object.assign(row,fullAd(row,data));
               if (previewCapture?.url === row.url) previewCapture = {...row};
@@ -1391,7 +1417,7 @@
     }
     lock(true); searchStatus('Reading the selected ad in Chrome…');
     try {
-      const data = await prepareSource(await rpc('jobFromLink',{url:row.url,operation_id:hex()}));
+      const data = await readFullContent(row,hex());
       // Reading a saved ad is a temporary preview; never overwrite its durable content or editing draft.
       previewCapture = fullAd(row,data);
       const found = discovered.find(value => value.url === row.url); if (found) Object.assign(found,previewCapture);

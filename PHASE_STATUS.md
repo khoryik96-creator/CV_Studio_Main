@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.552 is in PR296 on `codex/company-jobs-button-resolution`, from merged551.
+  Lear's official See all jobs link contains four IDs on an SEO-style Jobs URL;
+  the reader, session cache and search now preserve the complete observed group.
+  Also adds bounded native Jobs navigation and exact-ad public-reader fallback.
+  All 95 frontend fixtures and 192 focused backend/version checks pass. Live
+  signed-in pages remain unverified; PR296 records CI, review and merge state.
+
 - v24.6.551 is tracked in PR295 on `codex/job-search-results-scroll`, including
   v550 below. See PR295 for current CI, review and merge status. Refreshes search-result cards and the preview with clearer hierarchy,
   company initials, compact indicators/actions and responsive spacing. All 94
