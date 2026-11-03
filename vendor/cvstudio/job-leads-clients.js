@@ -634,7 +634,7 @@
     if (state.found.length >= MAX_FOUND) { progress(`The review list is full (${MAX_FOUND} ads). Add or clear ads, then pull again.`); return; }
     const token = generation, activity = app.activityStart?.() ?? null, tally = {ads:0};
     let done = 0, failed = 0, skipped = 0, partial = 0, failure = '', dated = 0;
-    const failures = [], empty = [], unfinished = [];
+    const failures = [], empty = [], unfinished = [], earlier = new Set(state.found.map(row=>row.url));
     state.pulling = true; state.stopped = false; app.lock(true); controls();
     try {
       progress('Checking the browser companion…');
@@ -671,9 +671,9 @@
     finally {
       if (token === generation) {
         state.pulling = false; app.lock(false);
-        const fresh = state.found.filter(row => !savedJob(row.url)).length, started = done || failed || partial || state.stopped;
+        const waiting = state.found.filter(row => !savedJob(row.url)), fresh = waiting.length, retained = waiting.filter(row=>earlier.has(row.url)).length, started = done || failed || partial || state.stopped;
         progress((state.stopped ? 'Stopped. ' : failure && !started ? '' : 'Finished. ') +
-          (started ? `${done} client${done === 1 ? '' : 's'} pulled, ${tally.ads} ads found, ${fresh} new to review.` : '') +
+          (started ? `${done} client${done === 1 ? '' : 's'} pulled, ${tally.ads} ads added this pull, ${fresh} unsaved ads in review.${retained ? ' Includes '+retained+' from earlier pulls.' : ''}` : '') +
           (partial || skipped ? ` The review list is full (${MAX_FOUND} ads): ${partial + skipped} client${partial + skipped === 1 ? ' was' : 's were'} not fully pulled. Add or clear ads, then pull again.` : '') +
           (empty.length ? ` No open jobs on LinkedIn: ${empty.join(', ')}.` : '') +
           (dated ? ` Posted dates added to ${dated} saved ad${dated === 1 ? '' : 's'}.` : '') +

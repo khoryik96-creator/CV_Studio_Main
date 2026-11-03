@@ -7,7 +7,25 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Current source: v24.6.548 email banner placement, compact toolbar and follow-up editing**
+**Current source: v24.6.549 company-header resolution and pull summary**
+on `codex/client-company-resolution-summary`, from merged v24.6.548 / PR293.
+- The reported Lear Corporation company URL is a valid named company-page link.
+  Its authenticated live DOM has not been reproduced in this environment.
+- Company Jobs resolution now shares the HR reader's existing visible header
+  evidence parser. An HTTP-valued connections link supplies an id only when the
+  visible HTTPS associated-members group corroborates it, with exact URL/query
+  constraints. The link is never followed; groups alone never select an id, and
+  conflicting job/header ids still fail. HR behavior is unchanged by extraction.
+- Pull summaries distinguish ads added in this run from all unsaved review ads,
+  including the count retained from earlier pulls. The queue is never cleared to
+  make counts agree. A regression covers 0 additions / 31 retained / 1 failure.
+- Validation: 128 relevant backend/version tests, all 92 frontend fixtures,
+  company reader/worker identity and cancellation tests, HR reader regressions,
+  syntax, whitespace and repository consistency passed. Fixtures use fictional
+  companies and ids. No live LinkedIn read or paid call was performed.
+  Applying this source change requires updating/reloading the companion too.
+
+**Previous checkpoint: v24.6.548 email banner placement, compact toolbar and follow-up editing (merged PR293)**
 on `codex/email-banner-placement-toolbar`, from merged v24.6.547 / PR292 / `eee33ad`.
 - Banner insertion restores a range captured before the file picker and async
   editor lock, then provides editable lines above and below the image. The caret
