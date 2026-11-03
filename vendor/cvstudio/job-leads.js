@@ -19,7 +19,7 @@
   }
   let folderNames = [];
   let discovered = [], discoveryPage = 0, discoveryRenderedPage = -1, discovering = false, discoveryStopped = false, discoveryRun = '';
-  let backgroundAds = null;
+  let backgroundAds = null, publicJobPausedUntil = 0;
   const discoveryPicked = new Set();
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
   let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
@@ -193,6 +193,10 @@
     if (!response.ok || data.error) {
       const error = Error(data.error || 'Job Leads could not finish this request.');
       error.code = data.code; error.requestId = data.request_id;
+      if(error.code === 'JOB_AD_RATE_LIMITED') {
+        const seconds=Number.isInteger(data.retry_after_seconds) && data.retry_after_seconds>0 && data.retry_after_seconds<=2147483647 ? data.retry_after_seconds : 300;
+        publicJobPausedUntil=Math.max(publicJobPausedUntil,Date.now()+seconds*1000);
+      }
       throw error;
     }
     return data;
@@ -1351,6 +1355,10 @@
       // signed-in layout is unknown. Never fall back around an access check or
       // a disconnected/busy companion, and never replay either read.
       if (!['HR_AD_TIMEOUT','HR_AD_LAYOUT','HR_AD_EMPTY'].includes(browserError.companionCode)) throw browserError;
+      if(Date.now()<publicJobPausedUntil) {
+        browserError.message+=' Public reads are paused; this ad’s summary is kept.';
+        throw browserError;
+      }
       const controller=typeof AbortController==='function'?new AbortController():null;
       if(queue)queue.publicController=controller;
       try {
@@ -1358,6 +1366,10 @@
         check(); fullAd(row,data); return data;
       } catch (publicError) {
         check();
+        if(publicError.code==='JOB_AD_RATE_LIMITED') {
+          browserError.message+=' Public reads are temporarily paused; this ad’s summary is kept.';
+          throw browserError;
+        }
         if(publicError.code!=='JOB_AD_UNAVAILABLE')throw publicError;
         browserError.message+=' The public job page could not be read either; the previous content is kept.';
         throw browserError;
@@ -1367,7 +1379,7 @@
   function backgroundAdStatus(message) {
     const ready = discovered.filter(row => row.full).length, failed = discovered.filter(row => row.fullError && !row.full).length;
     el('BackgroundStatus').textContent = discovered.length ? `${ready} of ${discovered.length} full ads ready` +
-      (failed ? ` · ${failed} could not load` : '') + (message ? ' · ' + message : '') : '';
+      (failed ? ` · ${failed} could not load` : '') + (Date.now()<publicJobPausedUntil ? ' · Public reads paused; Chrome companion only' : '') + (message ? ' · ' + message : '') : '';
   }
   async function stopBackgroundAds(message = 'Stopped. Resume loading whenever you are ready.') {
     const queue = backgroundAds;

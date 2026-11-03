@@ -7,7 +7,28 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Source checkpoint: v24.6.553 click-card job preview**
+**Local work: v24.6.554 public-read rate-limit recovery (unmerged)**
+on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
+- A public fallback HTTP 429 no longer stops the entire background queue. Public
+  requests pause while remaining ads are still read sequentially by the companion.
+  Per-ad browser failures keep summaries/retry controls; cached/saved ads remain.
+- The backend shares an in-memory cooldown across public-ad requests/windows,
+  checks it before every request/redirect, and makes no retry during that pause.
+  Numeric/HTTP-date Retry-After values are honored with bounded representation;
+  unknown values default to five minutes. The API returns safe remaining seconds
+  in JSON and Retry-After while retaining request IDs and no-store error responses.
+- Frontend cooldown spans automatic/manual full-ad retries, Clear and new searches.
+  Status explicitly says public reads are paused and Chrome companion only. A
+  later requested read may use public content after expiry; no timer replays work.
+  Access, identity, cancellation and public-busy handling retain their boundaries.
+- Validation: all 95 frontend fixtures, 204 focused backend/version checks,
+  syntax, whitespace and repository consistency pass. Chromium reproduces public
+  429 → healthy companion capture → further per-ad failure, confirming a single
+  public request, preserved rich cache/summaries, continued queue and guarded
+  manual retry. Existing card/background/focus/scroll/Stop/Clear checks pass.
+  No live LinkedIn/provider action, publication, merge or installed-app update.
+
+**Previous checkpoint: v24.6.553 click-card job preview (merged PR297)**
 on `codex/job-card-click-preview`, from merged v24.6.552 / PR296.
 The associated pull request records current CI, review and merge status.
 - Clicking a search card's title, company, initials, metadata or blank area opens

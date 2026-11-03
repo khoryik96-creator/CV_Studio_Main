@@ -138,6 +138,67 @@ def test_public_rate_limit_is_distinct_and_never_retried_or_disguised():
     assert get.call_count == 1 and reply.closed
 
 
+def test_public_cooldown_is_shared_across_ads_and_expires_without_replay():
+    now = [100.0]
+    limited = Reply(status=429, headers={'Retry-After': '120'})
+    get = mock.Mock(side_effect=[limited, Reply()])
+    service = PublicLinkedInJobs(get=get, clock=lambda: now[0])
+    with pytest.raises(JobLeadsError) as first:
+        service.read(URL)
+    assert first.value.retry_after_seconds == 120 and limited.closed
+    now[0] += 30
+    with pytest.raises(JobLeadsError) as other:
+        service.read('https://www.linkedin.com/jobs/view/999')
+    assert other.value.retry_after_seconds == 90 and get.call_count == 1
+    assert service.slots.acquire(False) and service.slots.acquire(False)
+    service.slots.release(); service.slots.release()
+    now[0] += 90
+    assert service.read(URL)['role'] == POSTING['title']
+    assert get.call_count == 2, 'expiry permits a requested read, never an automatic retry'
+
+
+@pytest.mark.parametrize('header', [None, '', 'garbage', '-1', '0', '1.5', '9' * 129])
+def test_unknown_public_retry_after_uses_five_minutes(header):
+    service = PublicLinkedInJobs(get=mock.Mock(return_value=Reply(status=429, headers={'Retry-After': header})), clock=lambda: 0)
+    with pytest.raises(JobLeadsError) as failure:
+        service.read(URL)
+    assert failure.value.retry_after_seconds == 300
+
+
+def test_public_retry_after_longer_than_a_day_is_not_shortened():
+    service = PublicLinkedInJobs(get=mock.Mock(return_value=Reply(status=429, headers={'Retry-After': '90000'})), clock=lambda: 0)
+    with pytest.raises(JobLeadsError) as failure:
+        service.read(URL)
+    assert failure.value.retry_after_seconds == 90000
+
+
+def test_public_retry_after_http_date():
+    from datetime import datetime, timezone
+    from email.utils import format_datetime
+    deadline = format_datetime(datetime.fromtimestamp(1700000120, timezone.utc), usegmt=True)
+    service = PublicLinkedInJobs(get=mock.Mock(return_value=Reply(status=429, headers={'Retry-After': deadline})), clock=lambda: 0)
+    with mock.patch('cvstudio_job_ads.time.time', return_value=1700000000), pytest.raises(JobLeadsError) as failure:
+        service.read(URL)
+    assert failure.value.retry_after_seconds == 120
+
+
+def test_another_window_rate_limit_stops_later_redirect_requests():
+    redirect = Reply(status=302, headers={'Location': URL})
+    limited = Reply(status=429, headers={'Retry-After': '60'})
+    def get_page(*args, **kwargs):
+        if get.call_count == 1:
+            with pytest.raises(JobLeadsError):
+                service.read(URL)
+            return redirect
+        return limited
+    get = mock.Mock(side_effect=get_page)
+    service = PublicLinkedInJobs(get=get, clock=lambda: 0)
+    with pytest.raises(JobLeadsError) as failure:
+        service.read(URL)
+    assert failure.value.code == 'JOB_AD_RATE_LIMITED'
+    assert get.call_count == 2 and redirect.closed and limited.closed
+
+
 def test_time_redirect_and_concurrency_limits_release_after_failure():
     redirect=Reply(status=302,headers={'Location':URL})
     get=mock.Mock(return_value=redirect)

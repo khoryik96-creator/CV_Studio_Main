@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.553"
+_INSTALL_RECEIPT_VERSION = "v24.6.554"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.553"
+_CVSTUDIO_VERSION = "v24.6.554"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -14894,7 +14894,7 @@ def linkedin_sourcer():
 
 
 from cvstudio_job_leads import JobLeadsStore, JobLeadsError, format_description
-from cvstudio_job_ads import PublicLinkedInJobs
+from cvstudio_job_ads import PublicLinkedInJobs, PUBLIC_RATE_LIMIT_MAX
 from cvstudio_storage import default_state_directory as _job_leads_state_directory
 
 _JOB_LEADS = JobLeadsStore(_job_leads_state_directory() / "job_leads.sqlite3")
@@ -14964,9 +14964,16 @@ def job_leads():
         response.headers["Cache-Control"] = "no-store"
         return response
     except JobLeadsError as error:
-        return _cvstudio_error_payload(error.code, str(error), error.status,
+        pause = getattr(error, 'retry_after_seconds', None)
+        rate_limited = error.code == 'JOB_AD_RATE_LIMITED' and type(pause) is int and 0 < pause <= PUBLIC_RATE_LIMIT_MAX
+        response, status = _cvstudio_error_payload(error.code, str(error), error.status,
                                        retryable=error.retryable,
-                                       action="restore_job_leads_backup" if error.code in {"JOB_LEADS_CORRUPT", "JOB_LEADS_INCOMPATIBLE"} else "refresh_job_leads")
+                                       action="restore_job_leads_backup" if error.code in {"JOB_LEADS_CORRUPT", "JOB_LEADS_INCOMPATIBLE"} else "refresh_job_leads",
+                                       extra={'retry_after_seconds': pause} if rate_limited else None)
+        if rate_limited:
+            response.headers['Retry-After'] = str(pause)
+            response.headers['Cache-Control'] = 'no-store'
+        return response, status
 
 
 from cvstudio_email_verifier import EmailVerifier, VerifierError
