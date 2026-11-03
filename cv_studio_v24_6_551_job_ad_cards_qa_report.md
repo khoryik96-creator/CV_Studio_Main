@@ -29,3 +29,9 @@ Validation:
 No live LinkedIn, email, JobAdder, Apollo or AI provider calls were made. Existing
 search/capture/storage behavior, routes and schemas were not changed. The fixture
 uses sample content; its named companies do not represent verified current ads.
+
+PR295 review correction: background redraws also preserve keyboard focus on
+LinkedIn anchors and description summaries. The Chromium workflow now focuses
+both elements across successive background reads; it reproduces the lost anchor
+focus before correction and passes afterwards. Existing button/input focus,
+expanded summaries and list position remain covered by that workflow.

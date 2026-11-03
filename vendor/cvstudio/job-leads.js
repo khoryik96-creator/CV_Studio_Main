@@ -814,7 +814,7 @@
     const expanded = new Set(), focus = {};
     for (const card of target.children) {
       if ([...card.querySelectorAll('details')].some(item => item.open)) expanded.add(card.dataset.url);
-      const controls = [...card.querySelectorAll('button, input')];
+      const controls = [...card.querySelectorAll('button, input, a[href], summary')];
       const index = controls.indexOf(document.activeElement);
       if (index >= 0) { focus.url = card.dataset.url; focus.index = index; }
     }
@@ -858,7 +858,7 @@
       details.open = expanded.has(row.url);
       details.append(summary); const body = node('div'); content(body,row.description,row.description_rich); details.append(body); card.append(details);
       target.append(card);
-      if (focus.url === row.url) [...card.querySelectorAll('button, input')][focus.index]?.focus({preventScroll:true});
+      if (focus.url === row.url) [...card.querySelectorAll('button, input, a[href], summary')][focus.index]?.focus({preventScroll:true});
     }
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;
     drawPreview(); discoveryControls();

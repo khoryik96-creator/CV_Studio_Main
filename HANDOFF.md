@@ -21,6 +21,9 @@ The PR records current CI, review and merge status.
   whitespace and repository consistency pass. Chromium rechecked the background
   workflow and desktop/390px/320px layouts, including long titles/employers and
   no card overflow. Sample screenshots are under `/tmp/cvstudio551`.
+  PR295 review also corrected keyboard focus on LinkedIn links and expandable
+  summaries during background redraws; the Chromium regression fails before
+  correction and passes afterwards.
   No live LinkedIn/provider action or installed-app update.
 
 **Included checkpoint: v24.6.550 job-search scrolling and background full ads**

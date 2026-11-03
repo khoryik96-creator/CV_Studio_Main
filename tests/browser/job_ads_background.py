@@ -46,14 +46,21 @@ with sync_playwright() as p:
  assert region.evaluate('(el)=>el.scrollTop')==220
  assert first.inner_text().find('Full ad captured')>=0
  assert page.locator('#jobLeadsPreviewContent strong').count()>0
+ # Background redraws must also preserve keyboard focus on links/summaries.
+ for selector in ['a[href]','summary']:
+  first.locator(selector).first.focus()
+  previous=page.evaluate('()=>window.jobFixture.reads.length')
+  page.evaluate('()=>window.jobFixture.release()')
+  page.wait_for_function('(previous)=>window.jobFixture.reads.length===previous+1',arg=previous)
+  assert first.locator(selector).first.evaluate('(el)=>el===document.activeElement'),selector+' lost focus during background update'
  Path('/tmp/cvstudio550').mkdir(exist_ok=True)
  region.scroll_into_view_if_needed();page.screenshot(path='/tmp/cvstudio550/background-job-ads.png')
  page.locator('#jobLeadsBackgroundStop').click()
  page.wait_for_function('()=>document.getElementById("jobLeadsBackgroundStop").hidden')
  assert page.evaluate('()=>window.jobFixture.cancel.length')==1
- assert page.evaluate('()=>window.jobFixture.reads.length')==2
- assert page.locator('#jobLeadsBackgroundStatus').inner_text().startswith('1 of 25')
+ assert page.evaluate('()=>window.jobFixture.reads.length')==4
+ assert page.locator('#jobLeadsBackgroundStatus').inner_text().startswith('3 of 25')
  page.locator('#jobLeadsSearchClear').click();page.wait_for_function('()=>document.getElementById("jobLeadsSearchResults").children.length===0')
  assert not errors,errors
- print('Chromium passed: 25 summaries first, sequential capture, rich preview, usable selection, stable scroll/focus/expanded content, Stop and Clear; no page errors or external requests.')
+ print('Chromium passed: 25 summaries first, sequential capture, rich preview, usable selection, stable scroll/button/link/summary focus/expanded content, Stop and Clear; no page errors or external requests.')
  b.close()
