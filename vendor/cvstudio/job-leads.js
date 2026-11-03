@@ -424,7 +424,8 @@
   const emailMessage=value=>{el('EmailMessage').textContent=value;};
   function emailLock(value) {
     emailBusy=value;
-    for (const name of ['To','Subject','Body','Connect','Finish','Close','New']) el('Email'+name).disabled=value;
+    for (const name of ['To','Subject','Body']) el('Email'+name).disabled=value || emailDone;
+    for (const name of ['Connect','Finish','Close','New']) el('Email'+name).disabled=value;
     el('EmailDraft').disabled=value || emailDone || !emailAccount?.connected;
     el('EmailSend').disabled=value || emailDone || !emailAccount?.can_send;
   }

@@ -28,6 +28,14 @@ and missing retry-safe markers on draft failures. The reviewer independently
 reran the focused MSGraph/email tests and Job Leads frontend fixture and reported
 no remaining actionable findings.
 
+## Hosted review follow-up
+
+GitHub review on PR #291 found that completed-message fields stayed editable
+while submission and unload tracking were already finished. Recipient, subject
+and body now remain disabled after a successful or uncertain email operation
+until New message starts. Definitive failures still leave the message editable
+for an explicit safe retry. The frontend regression checks all three states.
+
 ## Validation
 
 - 216 relevant backend, architecture, version and Outlook crypto tests passed.

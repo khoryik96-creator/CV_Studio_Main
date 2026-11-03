@@ -29,7 +29,9 @@ on `codex/job-ads-favorites-outlook`, based on merged v24.6.545 / `19ee040`.
   responses cannot overwrite a newer connection; definitive email failures retain
   the composed message for an explicit retry; unsaved/in-flight emails warn before
   unload; starring an ad preserves its open editor's fields and current revision.
-  Follow-up review verified every correction with no outstanding findings.
+  Follow-up review verified every correction. Hosted review additionally required
+  completed/uncertain email fields to remain read-only until New message; fixed
+  with draft, uncertain-result and safe-retry regression checks.
 - Validation: 216 focused backend/contract/version tests, all 92 frontend fixtures,
   repository consistency, and Chromium workflow checks passed with isolated state
   and fictional Outlook calls. No live Microsoft consent or real email was tested.
