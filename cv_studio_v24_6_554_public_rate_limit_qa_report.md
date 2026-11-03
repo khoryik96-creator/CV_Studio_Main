@@ -1,7 +1,8 @@
 # CV Studio v24.6.554 — public-read rate-limit recovery
 
-Local work on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
-Not pushed, merged or installed on the owner's machine.
+Source work on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
+The associated PR records current CI, review and merge status. Source validation
+below preceded publication; no installed-app update was performed.
 
 A public-reader HTTP 429 previously stopped the entire full-ad queue, replacing
 its progress with a generic instruction to connect the companion even when it

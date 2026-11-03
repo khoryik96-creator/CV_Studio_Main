@@ -7,8 +7,9 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Local work: v24.6.554 public-read rate-limit recovery (unmerged)**
+**Source checkpoint: v24.6.554 public-read rate-limit recovery**
 on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
+The associated pull request records current CI, review and merge status.
 - A public fallback HTTP 429 no longer stops the entire background queue. Public
   requests pause while remaining ads are still read sequentially by the companion.
   Per-ad browser failures keep summaries/retry controls; cached/saved ads remain.
@@ -26,7 +27,7 @@ on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
   429 → healthy companion capture → further per-ad failure, confirming a single
   public request, preserved rich cache/summaries, continued queue and guarded
   manual retry. Existing card/background/focus/scroll/Stop/Clear checks pass.
-  No live LinkedIn/provider action, publication, merge or installed-app update.
+  No live LinkedIn/provider action or installed-app update.
 
 **Previous checkpoint: v24.6.553 click-card job preview (merged PR297)**
 on `codex/job-card-click-preview`, from merged v24.6.552 / PR296.
