@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('ass
 const source=fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-search-walk.js'),'utf8')+'\n'+fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8');
 const url='https://www.linkedin.com/jobs/view/1234567890',other='https://www.linkedin.com/jobs/view/7777777777';
 class Element {
-  constructor(tagName='div',textContent=''){Object.assign(this,{tagName,textContent,value:'',children:[],handlers:{},disabled:false,dataset:{}})}
+  constructor(tagName='div',textContent=''){Object.assign(this,{tagName,textContent,value:'',children:[],handlers:{},disabled:false,dataset:{},classes:new Set()});this.classList={toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name),contains:name=>this.classes.has(name)}}
   addEventListener(type,fn){this.handlers[type]=fn} append(...values){this.children.push(...values)}
   appendChild(value){this.children.push(value);return value} replaceChildren(...values){this.children=values}
   querySelectorAll(tag){return this.children.flatMap(child=>[...(child.tagName===tag?[child]:[]),...child.querySelectorAll(tag)])}

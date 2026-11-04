@@ -47,7 +47,7 @@ const root = path.resolve(__dirname, '..');
   assert((await rpc('jobRead',{tab_id:2,expected_url:url})).error, 'reload must revoke browser authority');
 
   class Element {
-    constructor(tag='div', text='') {this.tagName=tag;this.textContent=text;this.value='';this.children=[];this.handlers={};this.dataset={};this.disabled=false;this.files=[];}
+    constructor(tag='div', text='') {this.tagName=tag;this.textContent=text;this.value='';this.children=[];this.handlers={};this.dataset={};this.disabled=false;this.files=[];this.classes=new Set();this.classList={toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name),contains:name=>this.classes.has(name)};}
     addEventListener(type,fn){this.handlers[type]=fn}
     append(...children){this.children.push(...children)}
     appendChild(child){this.children.push(child);return child}

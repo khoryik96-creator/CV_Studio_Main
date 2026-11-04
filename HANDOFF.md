@@ -7,7 +7,99 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Source checkpoint: v24.6.554 public-read rate-limit recovery**
+**Current source: v24.6.560 search recovery and activity highlights**
+on `codex/job-read-queue-recovery`, from merged v24.6.554 / PR298.
+The associated pull request records current CI, review and merge status.
+- Includes v555–v559 below: faster committed-document full-ad reads, per-ad queue
+  recovery and saved full-content reuse; orange running indicators and red failure
+  outlines for Job Leads, HR scans and LinkedIn Sourcer, with reduced motion.
+- Local code review reproduced and fixed two stale red highlights: manual capture
+  of all ads now clears failed background preflight; a successful scanned/copied
+  bulk HR result clears a previous individual failure for the same ad. Regressions
+  failed on the previous source and pass with the corrections. Saved data, provider
+  calls and scan ownership/cleanup decisions are unchanged.
+- See `cv_studio_v24_6_560_review_qa_report.md` for combined verification. No live
+  LinkedIn/provider operation or installed update. The owner needs both the app and
+  companion updates for the full-ad reader improvement.
+
+**Local work: v24.6.559 Job Leads/HR failure highlights (unmerged)**
+on `codex/job-read-queue-recovery`, including v555–v558 below.
+- Failed job discovery gives the search panel the same static red border/tint as
+  Sourcer. Terminal full-ad preflight failures or unread failed ads also mark the
+  panel and description-loading status red after the queue settles. New searches,
+  retries and Clear reset their relevant error state; active reads stay orange.
+- Single-ad HR failures/cleanup issues mark only that ad's HR panel red. Retry,
+  Clear or selecting another ad clears the state. Normal Stop is neutral. HR queue
+  progress turns red for partial failures or an abnormal stopped reason and resets
+  when its next queue starts. Existing error text/results remain visible.
+- All 96 JavaScript fixtures, five version checks, syntax, whitespace and repository
+  consistency pass. Fictional Chromium confirms computed red borders, HR/search
+  retry resets, normal Stop, Clear, orange/reduced-motion and mobile behavior.
+  See `cv_studio_v24_6_559_job_hr_failure_qa_report.md`. No live provider action,
+  push, merge, installation, route/storage or companion behavior change.
+
+**Local work: v24.6.558 Sourcer activity and failure highlight (unmerged)**
+on `codex/job-read-queue-recovery`, including v555–v557 below.
+- The entire LinkedIn Sourcer control card has an orange border, warm fill and
+  gentle pulse throughout a search and its cleanup. Success/normal Stop restore
+  its default appearance. A failed search instead leaves a static red outline
+  and tint beside the existing error message. Start or Clear resets failure.
+- Reduced motion keeps orange static. Stop stays usable; consent, browser reads,
+  provider calls/accounting and candidate retention are unchanged.
+- Sourcer UI, candidate-folder and assessment fixtures, five version tests,
+  syntax, whitespace and repository consistency pass. Fictional Chromium checks
+  whole-panel activity, success/Stop/failure, Clear, reduced motion and mobile.
+  See `cv_studio_v24_6_558_sourcer_activity_qa_report.md`. No live provider action,
+  push, merge or installed update.
+
+**Local work: v24.6.557 HR panel activity highlight (unmerged)**
+on `codex/job-read-queue-recovery`, including unmerged v555/v556 below.
+- The single-ad HR people panel gets an orange border, warm fill and gentle pulse
+  throughout its scan and stopping cleanup. Completion, Stop and failure clear it.
+  Other operations and bulk scans do not light up this single-ad panel.
+- Reduced motion keeps a static highlight. Stop remains enabled during scanning.
+  Existing HR and bulk-HR fixtures, five version tests, syntax, whitespace and
+  repository consistency pass. Fictional Chromium checks orange animation,
+  reduced motion, mobile wrapping and Stop/failure cleanup. No live provider action.
+  See `cv_studio_v24_6_557_hr_activity_qa_report.md`. Local, unmerged/uninstalled.
+
+**Local work: v24.6.556 full-ad queue recovery (unmerged)**
+on `codex/job-read-queue-recovery`, including the unmerged v555 visuals below.
+- Full-ad reads inspect a committed, exact-job document while Chrome still loads
+  unrelated resources. Immediate DOM injection and bounded same-document retries
+  handle transient frame/context changes. Pending navigation, access checks,
+  identity/connection/ownership checks and stricter HR employer readiness remain.
+- Outer page-load timeout now carries HR_AD_TIMEOUT. The frontend also recognizes
+  the exact legacy no-code loading error, allowing the existing one-time public
+  fallback and per-ad failure handling to continue the remaining queue.
+- Exact-URL, non-deleted saved ads with explicit complete-content flags and
+  nonempty bodies count as ready and reuse rich content without reopening LinkedIn.
+  Saved-content labels distinguish this from fresh capture; no saved fields change.
+- Validation: 96 JavaScript fixtures, five version checks, syntax, whitespace and
+  repository consistency pass. Fictional Chromium checks read content before the
+  load event, reuse saved rich content and continue after a legacy loading timeout.
+  Existing search/activity/card/background flows pass. See
+  `cv_studio_v24_6_556_job_queue_recovery_qa_report.md`. Live owner LinkedIn DOM
+  remains unverified. Update both app and companion for the worker improvement.
+  No push, merge, installed update or live provider action.
+
+**Local work: v24.6.555 job-search activity visuals (unmerged)**
+on `codex/job-search-running-indicator`, from merged v24.6.554 / PR298.
+- While the main LinkedIn search runs, the results list is dimmed/grayscaled and
+  marked aria-busy. The progress message has an orange border, dot, warm fill and
+  gentle pulse; Stop remains outside the dimmed area and stays accessible.
+- Background description loading has its own orange activity indicator while
+  results stay fully usable. Checking/stopping messages are visible immediately;
+  busy visuals clear after completion, Stop cleanup or errors. Reduced-motion
+  preference keeps a static orange highlight without animation/transitions.
+- Validation: all 95 frontend fixtures, five version checks, syntax, whitespace
+  and repository consistency pass. Chromium checks active search with 50 streamed
+  ads, enabled Stop, completion/Stop/failure reset, unlocked background capture,
+  reduced motion and mobile wrapping. Existing card/capture and rate-limit
+  workflows pass. See `tests/browser/job_search_activity.py`; preview screenshots
+  are under `/tmp/cvstudio555`. No live provider action, push or merge.
+
+**Previous checkpoint: v24.6.554 public-read rate-limit recovery (merged PR298)**
 on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
 The associated pull request records current CI, review and merge status.
 - A public fallback HTTP 429 no longer stops the entire background queue. Public

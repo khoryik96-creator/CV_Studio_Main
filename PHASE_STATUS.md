@@ -4,6 +4,43 @@
 
 ## Release state
 
+- v24.6.560 on `codex/job-read-queue-recovery` includes v555–559; the associated PR
+  records CI/review/merge status. Code review fixed two reproduced stale failure
+  outlines after manual full-ad recovery and bulk HR recovery. Includes all search
+  queue/readiness/cache and running/failure visuals below. Both app and companion
+  updates are needed for the browser-reader improvement.
+
+- v24.6.559 is local/unmerged on `codex/job-read-queue-recovery`, including v555–558.
+  Job search/full-ad failure and single/bulk HR failure areas get static red
+  outlines/tints. Relevant retry/new search/Clear resets them; normal Stop stays
+  neutral. All 96 JS fixtures, five version checks and fictional Chromium search/
+  HR failure/retry visuals pass. Existing provider/browser/storage behavior stays.
+
+- v24.6.558 is local/unmerged on `codex/job-read-queue-recovery`, including v555–557.
+  The whole Sourcer control card pulses orange while running and shows a static
+  red highlight after failure. Success/Stop clear activity; Start/Clear reset red.
+  Reduced motion, affected Sourcer fixtures, five version tests and fictional
+  Chromium activity/failure/mobile checks pass. No provider behavior change.
+
+- v24.6.557 is local/unmerged on `codex/job-read-queue-recovery`, including v555/556.
+  The single-ad HR panel has an orange pulsing outline and warm background while
+  scanning/stopping; completion/failure/Stop clear it. Reduced motion is static.
+  HR/bulk fixtures, five version checks and fictional Chromium visuals pass.
+
+- v24.6.556 is local/unmerged on `codex/job-read-queue-recovery`, including v555
+  below. Full-ad reads inspect committed content before full browser completion;
+  pending/access/identity/HR checks remain. Typed and exact legacy loading timeouts
+  allow per-ad fallback and queue continuation. Explicitly complete saved ads are
+  reused by exact URL without browser reads or durable writes. All 96 JavaScript
+  fixtures, five version checks and fictional Chromium recovery checks pass.
+
+- v24.6.555 is local/unmerged on `codex/job-search-running-indicator`, from
+  merged554/PR298. Search results dim during discovery, with an orange pulsing
+  progress highlight; background loading has a separate indicator with usable
+  results. All completion/Stop/error paths clear the visuals, and reduced motion
+  uses a static highlight. All 95 frontend fixtures, five version checks and
+  Chromium activity/mobile/capture/rate-limit workflows pass.
+
 - v24.6.554 is on `codex/job-public-rate-limit-recovery`, from merged553/PR297.
   Its pull request records current CI, review and merge status. Public 429s pause public HTTP traffic while companion reads
   continue, with a shared backend cooldown and frontend status/retry handling.

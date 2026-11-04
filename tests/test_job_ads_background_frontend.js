@@ -15,6 +15,7 @@ async function search(f){await f.init();f.state.backgroundCapable=true;await f.e
   };
   const before=structuredClone(f.state.records);await search(f);await until(()=>held);
   assert.equal(cards(f).length,3,'all matching summaries appear before the first description arrives');
+  assert.equal(f.el('SearchResults')['aria-busy'],'false','background capture does not dim/lock the review list');assert(f.el('BackgroundStatus').classList.contains('is-running'));assert(!f.el('SearchStatus').classList.contains('is-running'));
   assert.equal(f.el('SearchNext').disabled,true);assert.equal(f.el('SearchSelectPage').disabled,false);
   assert.equal(f.el('PreviewNext').disabled,false,'preview browsing stays usable');
   f.el('SearchResults').scrollTop=230;cards(f)[0].querySelectorAll('details')[0].open=true;
@@ -30,7 +31,7 @@ async function search(f){await f.init();f.state.backgroundCapable=true;await f.e
   release=held;held=null;release();await until(()=>held);release=held;held=null;release();
   await until(()=>f.el('BackgroundStop').hidden);
   assert.equal(maxActive,1);assert.equal(reads(f).length,3);assert.deepEqual(f.state.records,before,'existing saved details remain unchanged');
-  assert.match(f.el('BackgroundStatus').textContent,/3 of 3 full ads ready/);
+  assert.match(f.el('BackgroundStatus').textContent,/3 of 3 full ads ready/);assert(!f.el('BackgroundStatus').classList.contains('is-running'));
   await cards(f)[0].querySelectorAll('button').find(button=>button.textContent==='View full ad').click();
   assert.equal(reads(f).length,3,'cached full-ad previews do not reopen LinkedIn');
   await f.el('SearchAdd').click();assert.equal(f.state.records.length,3);
@@ -44,8 +45,18 @@ async function search(f){await f.init();f.state.backgroundCapable=true;await f.e
   assert.equal(reads(failed).length,3,'one ad timeout does not block the remaining ads');
   assert.match(text(cards(failed)[0]),/Slow job details/);assert.match(text(cards(failed)[0]),/Search summary/);
   assert.match(failed.el('BackgroundStatus').textContent,/2 of 3.*1 could not load/);
+  assert(failed.el('SearchPanel').classList.contains('has-error'));assert(failed.el('BackgroundStatus').classList.contains('has-error'));
   await failed.el('BackgroundStart').click();assert.equal(reads(failed).length,4,'resume retries only unfinished ads');
-  assert.match(failed.el('BackgroundStatus').textContent,/3 of 3/);
+  assert.match(failed.el('BackgroundStatus').textContent,/3 of 3/);assert(!failed.el('SearchPanel').classList.contains('has-error'));assert(!failed.el('BackgroundStatus').classList.contains('has-error'));
+
+  const preflight=fixture();let statuses=0;
+  preflight.state.onRPC=(message,reply)=>{if(message.action==='jobStatus' && ++statuses===2){reply({connected:false});return true;}return false;};
+  await search(preflight);await until(()=>preflight.el('BackgroundStop').hidden);
+  assert(preflight.el('SearchPanel').classList.contains('has-error'),'a failed background preflight requires attention');
+  for(let index=0;index<3;index++)await cards(preflight)[index].querySelectorAll('button').find(button=>button.textContent==='Read full ad').click();
+  assert.match(preflight.el('BackgroundStatus').textContent,/3 of 3 full ads ready/);
+  assert(!preflight.el('SearchPanel').classList.contains('has-error'),'manual recovery of all content clears the stale preflight error');
+  assert(!preflight.el('BackgroundStatus').classList.contains('has-error'));
 
   for(const action of ['stop','clear','foreground','foreground-status','new-search','pagehide']){
     const g=fixture();let replyRead,operation;

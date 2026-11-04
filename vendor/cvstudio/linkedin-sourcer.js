@@ -4,7 +4,7 @@
   const hex = () => crypto.randomUUID().replaceAll('-', '');
   const channel = hex(), pending = new Map();
   let agent = null, run = null, abort = null, results = [], browserRun = '', busy = false, runOptions = null, setupSequence = 0;
-  let folderBusy = false, folderChoice = '', companionUpdating = false;
+  let folderBusy = false, folderChoice = '', companionUpdating = false, searchFailed = false;
   const folderPreference = 'cvstudio_linkedin_sourcer_folder';
   try { const value=sessionStorage.getItem(folderPreference);if(typeof value==='string' && value.length<=80 && !/[\x00-\x1f]/.test(value))folderChoice=value; } catch {}
   const guideNames = ['Brief','Consent','Pages','Calls','Source','Refresh','Start','Stop','SetupGuide','FolderName','FolderCreate','Boolean','CountryMode','CountryName','OpenSearch'];
@@ -32,6 +32,8 @@
   function invalidGuide(name) { guideNotice = el('Status').textContent; guide(name,true,true); }
   function tell(value) { el('Status').textContent = value; }
   function controls() {
+    el('Panel').classList.toggle('is-running',busy);
+    el('Panel').classList.toggle('has-error',!busy && searchFailed);
     el('Start').disabled = busy || folderBusy || companionUpdating; el('Stop').disabled = !busy && (!run || run.stopped);
     el('Export').disabled = !results.length; el('Clear').disabled = busy;
     for (const name of ['Brief', 'Boolean', 'CountryMode', 'CountryName', 'Mode', 'Pages', 'Calls', 'Source', 'OpenSearch', 'Consent', 'Refresh']) el(name).disabled = busy;
@@ -311,7 +313,7 @@
     if(options.use_open_search && (options.boolean_query || options.country_mode!=='auto')){tell('Turn off Review open search in Search options to apply your Boolean or country selection.');invalidGuide('OpenSearch');return;}
     if(!['auto','standard'].includes(options.mode) && options.country_mode==='specific'){tell('Automatic country filters use LinkedIn People search. In Recruiter set Locations there and review the open search.');invalidGuide('Mode');return;}
     if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); invalidGuide(!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 ? 'Pages' : 'Calls'); return; }
-    busy = true; abort = new AbortController(); browserRun = ''; draw();
+    searchFailed = false; busy = true; abort = new AbortController(); browserRun = ''; draw();
     const activity = markTabRunning('linkedinsourcer');
     let failed = false;
     try {
@@ -346,7 +348,7 @@
     catch (error) { failed = !abort.signal.aborted; tell(abort.signal.aborted ? 'Stopped. Your current list is kept.' : error.message); }
     finally {
       if (browserRun) { try { await rpc('end', {run_id: browserRun}); } catch {} browserRun = ''; }
-      busy = false; abort = null; draw(); finishTabRun('linkedinsourcer', failed ? 'failed' : 'done', activity);
+      searchFailed = failed; busy = false; abort = null; draw(); finishTabRun('linkedinsourcer', failed ? 'failed' : 'done', activity);
     }
   };
   window.stopLinkedinSourcer = async function() {
@@ -360,7 +362,7 @@
     const url = URL.createObjectURL(new Blob([CVLinkedinCore.csv(results)], {type: 'text/csv;charset=utf-8'}));
     const link = document.createElement('a'); link.href = url; link.download = 'linkedin-candidates.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 3000);
   };
-  window.clearLinkedinSourcer = function() { if (!busy) { results = []; draw(); } };
+  window.clearLinkedinSourcer = function() { if (!busy) { searchFailed = false; results = []; draw(); } };
   window.addEventListener('pagehide', () => {
     abort?.abort();
     if (run && !run.stopped) fetch('/linkedin-sourcer', {method: 'POST', keepalive: true,

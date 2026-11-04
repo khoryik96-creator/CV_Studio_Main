@@ -10,7 +10,7 @@ function fixture() {
     tabs:{onRemoved:{addListener:()=>{}},onUpdated:{addListener:fn=>hooks.updated=fn},onActivated:{addListener:()=>{}},
       query:async()=>{if(state.queryWait)await state.queryWait;return [...tabs.values()]},
       get:async id=>{const row=tabs.get(id);if(!row)throw Error('Missing synthetic tab');if(state.metadataGap&&id>10&&!state.gapSeen){state.gapSeen=true;return {...row,url:'about:blank',status:'loading',pendingUrl:state.changedPending?'https://attacker.invalid/':undefined}}return row},
-      create:async args=>{state.created.push(args);const tab={id:++state.counter,url:args.url,active:args.active,status:state.loading?'loading':'complete'};tabs.set(tab.id,tab);return tab},
+      create:async args=>{state.created.push(args);const tab={id:++state.counter,url:args.url,active:args.active,status:state.loading?'loading':'complete',...(state.loading?{pendingUrl:args.url}:{})};tabs.set(tab.id,tab);return tab},
       remove:async id=>{state.removed.push(id);tabs.delete(id)},
       update:async()=>{throw Error('Must not navigate an existing tab')}},
     scripting:{executeScript:async args=>{

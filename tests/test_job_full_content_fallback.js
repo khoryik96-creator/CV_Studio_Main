@@ -23,6 +23,13 @@ async function background(f){await f.init();f.state.backgroundCapable=true;await
   assert.deepEqual(f.state.records,before,'public fallback does not overwrite saved ads');
   await f.el('PreviewRead').click();assert.equal(reads(f).length,3);assert.equal(lookups(f).length,3,'cached public content is reused');
  }
+ const legacy=fixture();legacy.state.onRPC=(message,reply)=>{
+  if(message.action!=='jobFromLink')return false;
+  reply(null,'The LinkedIn ad did not finish loading. Open it in your browser, wait for the page to load, then try again.');return true;
+ };
+ legacy.state.onRequest=data=>data.action==='lookup'?response(publicAd(data.url)):null;
+ await background(legacy);await until(()=>legacy.el('BackgroundStop').hidden);
+ assert.equal(reads(legacy).length,3);assert.equal(lookups(legacy).length,3);assert.match(legacy.el('BackgroundStatus').textContent,/3 of 3/,'the old fixed loading error still falls back and never stops the queue');
  const manual=fixture();await manual.init();await manual.el('SearchStart').click();
  failingBrowser(manual,'HR_AD_LAYOUT');manual.state.onRequest=data=>data.action==='lookup'?response(publicAd(data.url)):null;
  await manual.el('PreviewRead').click();assert.equal(lookups(manual).length,1);assert.match(text(manual.el('PreviewContent')),/Public full job description/);
