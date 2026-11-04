@@ -96,7 +96,11 @@ def _location(value):
     return '; '.join(dict.fromkeys(result))[:240]
 
 
-def parse_public_job(html, expected_url):
+class _PublicLayoutUnavailable(JobLeadsError):
+    """An ordinary public document lacked supported ad markup."""
+
+
+def parse_public_job(html, expected_url, *, _trusted_guest=False):
     expected = job_url(expected_url)
     if not expected or not isinstance(html, bytes) or len(html) > MAX_HTML_BYTES:
         raise _unavailable()
@@ -107,7 +111,7 @@ def parse_public_job(html, expected_url):
     identities += [job_url(node.get('content', '')) for node in soup.select('meta[property="og:url"]')]
     if any(identity and identity != expected for identity in identities):
         raise _unavailable()
-    canonical = expected in identities
+    canonical = expected in identities or _trusted_guest
     expected_id = expected.rsplit('/', 1)[-1]
     postings = []
     for node in soup.select('script[type="application/ld+json"]')[:16]:
@@ -123,6 +127,15 @@ def parse_public_job(html, expected_url):
         identity = posting.get('identifier')
         identity = identity.get('value') if isinstance(identity, dict) else identity
         identity = str(identity) if isinstance(identity, (str, int)) and not isinstance(identity, bool) else ''
+        identity = identity.strip()
+        identity_url = job_url(identity)
+        identity_urn = re.fullmatch(r'urn:li:jobPosting:([0-9]{1,24})', identity, re.I)
+        if identity_url:
+            identity = identity_url.rsplit('/', 1)[-1]
+        elif identity_urn:
+            identity = identity_urn.group(1)
+        elif re.match(r'^[A-Za-z][A-Za-z0-9+.-]*:', identity):
+            continue
         posting_url = job_url(posting.get('url'))
         if posting_url and posting_url != expected or identity.isdigit() and identity != expected_id:
             continue
@@ -133,6 +146,8 @@ def parse_public_job(html, expected_url):
         role, company = _text(posting.get('title'), 240), _text(company, 200)
         if role and company:
             words = _description(posting.get('description'))
+            if not words.strip():
+                continue
             candidates.append({'url':expected, 'company':company, 'role':role,
                                'location':_location(posting.get('jobLocation')),
                                'date_posted':_posted_date(posting.get('datePosted')),
@@ -153,7 +168,8 @@ def parse_public_job(html, expected_url):
         return result
     # Public markup fallback is confined to the canonical job's top card.
     # Search headers and recommended jobs are never used as field guesses.
-    card = soup.select_one('.top-card-layout') if canonical and not postings else None
+    cards = soup.select('.top-card-layout') if canonical and not postings else []
+    card = cards[0] if len(cards) == 1 else None
     if card:
         role = card.select_one('.top-card-layout__title')
         company = card.select_one('.topcard__org-name-link')
@@ -162,12 +178,16 @@ def parse_public_job(html, expected_url):
         posted = card.select_one('time[itemprop="datePosted"], meta[itemprop="datePosted"], time[data-test-job-posted-date]')
         if role and company:
             words = _description(str(description)) if description else ''
-            return {'url':expected, 'role':_text(str(role),240), 'company':_text(str(company),200),
-                    'location':_text(str(location),240) if location else '',
-                    'date_posted':_posted_date(posted.get('datetime') or posted.get('content')) if posted else '',
-                    'description':words[:20000], 'description_rich':format_description(words[:20000], str(description)) if description else [],
-                    'description_truncated':len(words)>20000}
-    raise _unavailable()
+            if words.strip():
+                return {'url':expected, 'role':_text(str(role),240), 'company':_text(str(company),200),
+                        'location':_text(str(location),240) if location else '',
+                        'date_posted':_posted_date(posted.get('datetime') or posted.get('content')) if posted else '',
+                        'description':words[:20000], 'description_rich':format_description(words[:20000], str(description)) if description else [],
+                        'description_truncated':len(words)>20000}
+    headings = {_text(str(node), 160).lower() for node in soup.select('h1, h2')}
+    if headings & {'sign in', 'sign in to linkedin', 'security verification', 'verify your identity', 'temporarily restricted'}:
+        raise _unavailable()
+    raise _PublicLayoutUnavailable(str(_unavailable()), 422, 'JOB_AD_UNAVAILABLE')
 
 
 def _public_retry_after(value):
@@ -213,6 +233,33 @@ class PublicLinkedInJobs:
         if remaining:
             raise _public_rate_error(remaining)
 
+    def _read_guest(self, expected, deadline):
+        # One independent public endpoint after a 200 document with unsupported
+        # markup. Never retry an access/rate/redirect/transport failure.
+        self._check_rate_pause()
+        if self.clock() >= deadline:
+            raise _unavailable()
+        guest = 'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/' + expected.rsplit('/', 1)[-1]
+        with self.get(guest, allow_redirects=False, stream=True,
+                      headers={'Accept':'text/html'}, auth=_without_credentials, timeout=(5, 8)) as response:
+            if response.status_code == 429:
+                pause = _public_retry_after(response.headers.get('Retry-After'))
+                with self._rate_lock:
+                    self._public_paused_until = max(self._public_paused_until, self.clock() + pause)
+                raise _public_rate_error(max(1, self._rate_pause()))
+            if response.status_code != 200 or not response.headers.get('Content-Type', '').lower().startswith('text/html'):
+                raise _unavailable()
+            length = response.headers.get('Content-Length', '')
+            if length.isdigit() and int(length) > MAX_HTML_BYTES:
+                raise _unavailable()
+            chunks, size = [], 0
+            for chunk in response.iter_content(chunk_size=16384):
+                size += len(chunk)
+                if size > MAX_HTML_BYTES or self.clock() >= deadline:
+                    raise _unavailable()
+                chunks.append(chunk)
+            return parse_public_job(b''.join(chunks), expected, _trusted_guest=True)
+
     def read(self, value):
         expected = job_url(value)
         if not expected:
@@ -255,7 +302,11 @@ class PublicLinkedInJobs:
                         if size > MAX_HTML_BYTES or self.clock() >= deadline:
                             raise _unavailable()
                         chunks.append(chunk)
-                    return parse_public_job(b''.join(chunks), expected)
+                    try:
+                        return parse_public_job(b''.join(chunks), expected)
+                    except _PublicLayoutUnavailable:
+                        pass
+                return self._read_guest(expected, deadline)
             raise _unavailable()
         except (requests.RequestException, OSError, ValueError) as error:
             if isinstance(error, JobLeadsError):

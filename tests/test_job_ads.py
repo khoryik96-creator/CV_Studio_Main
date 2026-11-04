@@ -230,3 +230,84 @@ def test_public_auth_callback_disables_netrc_and_removes_auth_and_cookies():
         with requests.Session() as session:
             request=session.prepare_request(requests.Request('GET',URL,auth=_without_credentials,headers={'Authorization':'synthetic-secret','Cookie':'synthetic-cookie'}))
     assert 'Authorization' not in request.headers and 'Cookie' not in request.headers
+
+
+def guest_html():
+    return b'<section class="top-card-layout"><h2 class="top-card-layout__title">Fictional Engineer</h2><a class="topcard__org-name-link">Fictional Employer</a><span class="topcard__flavor--bullet">Penang</span></section><div class="description__text"><p><strong>Full public duties.</strong></p><ul><li>Deliver fictional systems.</li></ul></div>'
+
+
+def test_unrecognized_public_layout_uses_one_exact_guest_endpoint_after_closing_primary():
+    primary, guest = Reply(body=b'<main>Unsupported LinkedIn layout</main>'), Reply(body=guest_html())
+    def get(url, **kwargs):
+        assert kwargs['auth'] is _without_credentials and kwargs['allow_redirects'] is False
+        if url == URL:
+            return primary
+        assert primary.closed
+        assert url == 'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/1234567890'
+        return guest
+    record = PublicLinkedInJobs(get=get).read(URL)
+    assert record['url'] == URL and record['company'] == 'Fictional Employer'
+    assert record['role'] == 'Fictional Engineer' and 'Full public duties.' in record['description']
+    assert record['description_rich'][0]['children'][0]['tag'] == 'strong'
+    assert primary.closed and guest.closed
+
+
+def test_empty_structured_description_recovers_from_guest_body():
+    get = mock.Mock(side_effect=[Reply(body=html({**POSTING, 'description':''})), Reply(body=guest_html())])
+    assert PublicLinkedInJobs(get=get).read(URL)['role'] == 'Fictional Engineer'
+    assert get.call_count == 2
+
+
+@pytest.mark.parametrize('body', [b'<main><h1>Sign in to LinkedIn</h1></main>', b'<div id="captcha-internal"></div>', html(canonical='https://www.linkedin.com/jobs/view/999')])
+def test_access_or_identity_failure_does_not_try_guest(body):
+    get = mock.Mock(return_value=Reply(body=body))
+    with pytest.raises(JobLeadsError): PublicLinkedInJobs(get=get).read(URL)
+    assert get.call_count == 1
+
+
+@pytest.mark.parametrize('guest', [Reply(status=302,headers={'Location':URL}), Reply(status=403), Reply(body=html(canonical='https://www.linkedin.com/jobs/view/999')), Reply(body=b'<main>Still unsupported</main>')])
+def test_guest_failure_is_bounded_and_never_guesses_or_follows_redirects(guest):
+    get = mock.Mock(side_effect=[Reply(body=b'<main>Unsupported layout</main>'), guest])
+    with pytest.raises(JobLeadsError): PublicLinkedInJobs(get=get).read(URL)
+    assert get.call_count == 2 and guest.closed
+
+
+def test_guest_rate_limit_uses_the_same_cross_ad_cooldown():
+    get = mock.Mock(side_effect=[Reply(body=b'<main>Unsupported layout</main>'), Reply(status=429,headers={'Retry-After':'120'})])
+    service = PublicLinkedInJobs(get=get, clock=lambda:100)
+    for url in [URL, 'https://www.linkedin.com/jobs/view/4456899159']:
+        with pytest.raises(JobLeadsError) as exc: service.read(url)
+        assert exc.value.code == 'JOB_AD_RATE_LIMITED' and exc.value.retry_after_seconds == 120
+    assert get.call_count == 2
+
+
+def test_header_without_body_can_recover_and_guest_size_type_limits_apply():
+    primary = Reply(body=f'<link rel="canonical" href="{URL}"><section class="top-card-layout"><h1 class="top-card-layout__title">Fictional Engineer</h1><a class="topcard__org-name-link">Fictional Employer</a></section>'.encode())
+    get = mock.Mock(side_effect=[primary, Reply(body=guest_html())])
+    assert 'Full public duties.' in PublicLinkedInJobs(get=get).read(URL)['description']
+    for guest in [Reply(headers={'Content-Length':str(MAX_HTML_BYTES+1)}), Reply(headers={'Content-Type':'application/octet-stream'})]:
+        get = mock.Mock(side_effect=[Reply(body=b'<main>Unsupported</main>'), guest])
+        with pytest.raises(JobLeadsError): PublicLinkedInJobs(get=get).read(URL)
+        assert get.call_count == 2 and guest.closed
+
+
+def test_deadline_expiry_between_primary_and_guest_prevents_an_extra_request():
+    now = [0]
+    class SlowReply(Reply):
+        def iter_content(self, chunk_size):
+            yield b'<main>Unsupported</main>'
+            now[0] = 25
+    get = mock.Mock(return_value=SlowReply())
+    with pytest.raises(JobLeadsError): PublicLinkedInJobs(get=get, clock=lambda:now[0]).read(URL)
+    assert get.call_count == 1
+
+
+@pytest.mark.parametrize('identity', ['https://www.linkedin.com/jobs/view/999', 'urn:li:jobPosting:999'])
+def test_explicit_job_url_or_urn_identifier_cannot_be_overridden_by_canonical(identity):
+    with pytest.raises(JobLeadsError):
+        parse_public_job(html({**POSTING, 'identifier':{'value':identity}}), URL)
+
+
+@pytest.mark.parametrize('identity', [URL, 'urn:li:jobPosting:1234567890'])
+def test_matching_job_url_or_urn_identifiers_are_read(identity):
+    assert parse_public_job(html({**POSTING, 'identifier':{'value':identity}}), URL)['role'] == POSTING['title']

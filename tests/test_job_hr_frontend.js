@@ -59,6 +59,7 @@ if(require.main===module)(async()=>{
   assert.deepEqual(f.activity,[]);
   assert(!f.el('HR').hidden);assert.equal(f.el('HRCountryMode').value,'');
   await f.el('PreviewRead').click();assert(!f.el('HR').hidden,'temporary full-ad capture must retain the saved ad HR column');
+  f.activity.length=0; // The earlier manual full-ad read is its own completed activity.
   f.el('notes').value='Unsaved draft stays';
   f.state.loading=true;await f.el('HRStart').click();
   assert.equal(f.state.hrArgs.country,'');assert.match(f.state.hrArgs.keywords,/CHRO/);

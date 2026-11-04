@@ -45,7 +45,7 @@ const searchHeader={querySelectorAll:()=>[
   ...state.locations.map(value=>visible(value,{querySelectorAll:selector=>selector==='[aria-label]'?[visible(value,{getAttribute:name=>name==='aria-label'?'Location '+value:null})]:[]})),
   ...state.filters.map(value=>visible(value,{getAttribute:name=>name==='aria-label'?value:null}))
 ]};
-const document={body:workspace,querySelector:selector=>selector==='[componentkey="searchResultsHeaderComponent"]'?searchHeader:selector==='main#workspace'||selector==='main'?workspace:null,
+const document={body:workspace,querySelector:selector=>selector==='[componentkey="searchResultsHeaderComponent"]'?searchHeader:selector==='main#workspace'?(state.noWorkspaceId?null:workspace):selector==='main'?workspace:null,
   querySelectorAll:selector=>selector.includes('.jobs-search-results-list')?[scope]:[]};
 const context=vm.createContext({document,location,URL,URLSearchParams,Date,Number,getComputedStyle:node=>({visibility:'visible',...node.computedStyle})});
 vm.runInContext(source,context);const reader=context.SourcerReader;
@@ -77,6 +77,7 @@ for(const label of ['10 jobs','20 jobs','100 jobs','1,000 jobs','10,000 jobs']){
 }
 scope.innerText='0 jobs';assert.equal(reader.readJobSearch().empty,true,'modern zero count remains a true empty result');
 scope.innerText='100 jobs';state.cards=[duplicate];assert.equal(reader.readJobSearch().jobs.length,1,'modern cards are read after loading');
+state.noWorkspaceId=true;assert.equal(reader.readJob(url).role,'Finance Manager','verified detail components work when main no longer has workspace id');state.noWorkspaceId=false;
 let captured=reader.readJob(url);assert.equal(captured.role,'Finance Manager');assert.equal(captured.company,'Example Finance');assert.equal(captured.location,'Penang');
 assert.equal(captured.date_posted,'');assert.match(captured.date_posted_estimate,/^\d{4}-\d{2}-\d{2}$/,'the ad header age gives an estimated posted date');
 {const RealDate=Date,now=new RealDate(2026,2,10,0,30).getTime();
