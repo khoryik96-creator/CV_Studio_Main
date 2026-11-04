@@ -7,8 +7,9 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Local work: v24.6.563 captured-tab cleanup and review fix (unmerged)**
-on `codex/browser-tab-grouping`, including unmerged v561/v562 below.
+**Current source: v24.6.563 captured-tab cleanup, grouping and module locks**
+on `codex/browser-tab-grouping`, from merged v560 / PR299, including v561/v562 below.
+The associated pull request records current CI, review and merge status.
 - Successful full-ad reads now retain cleanup ownership across same-job path-only
   trailing-slash/SEO redirects. Previously the reader accepted these aliases but
   cleanup could leave the captured tab open. Query/hash/other-job changes still
@@ -27,7 +28,7 @@ on `codex/browser-tab-grouping`, including unmerged v561/v562 below.
   no additional actionable issues. See `cv_studio_v24_6_563_capture_cleanup_qa_report.md`.
 - All 98 JavaScript fixtures, nineteen version/Sourcer Python checks, syntax,
   whitespace and repository consistency pass. No live provider action,
-  push, merge, installed update or native browser-extension verification.
+  installed update or native browser-extension verification.
 
 **Local work: v24.6.562 browser tab grouping (unmerged)**
 on `codex/browser-tab-grouping`, including unmerged v561 below.

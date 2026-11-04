@@ -4,7 +4,8 @@
 
 ## Release state
 
-- v24.6.563 is local/unmerged on `codex/browser-tab-grouping`, including v561/562.
+- v24.6.563 on `codex/browser-tab-grouping` includes v561/562; its associated PR
+  records current CI/review/merge status.
   Captured ad path aliases now clean up; Sourcer closes ready background profile
   tabs before detail review, preserving viewed/changed/loading/user tabs. Fixes
   the independent review's Stop-during-window-lookup race; re-review is clean.
