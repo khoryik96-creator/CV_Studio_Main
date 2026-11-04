@@ -7,6 +7,26 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.556 full-ad queue recovery (unmerged)**
+on `codex/job-read-queue-recovery`, including the unmerged v555 visuals below.
+- Full-ad reads inspect a committed, exact-job document while Chrome still loads
+  unrelated resources. Immediate DOM injection and bounded same-document retries
+  handle transient frame/context changes. Pending navigation, access checks,
+  identity/connection/ownership checks and stricter HR employer readiness remain.
+- Outer page-load timeout now carries HR_AD_TIMEOUT. The frontend also recognizes
+  the exact legacy no-code loading error, allowing the existing one-time public
+  fallback and per-ad failure handling to continue the remaining queue.
+- Exact-URL, non-deleted saved ads with explicit complete-content flags and
+  nonempty bodies count as ready and reuse rich content without reopening LinkedIn.
+  Saved-content labels distinguish this from fresh capture; no saved fields change.
+- Validation: 96 JavaScript fixtures, five version checks, syntax, whitespace and
+  repository consistency pass. Fictional Chromium checks read content before the
+  load event, reuse saved rich content and continue after a legacy loading timeout.
+  Existing search/activity/card/background flows pass. See
+  `cv_studio_v24_6_556_job_queue_recovery_qa_report.md`. Live owner LinkedIn DOM
+  remains unverified. Update both app and companion for the worker improvement.
+  No push, merge, installed update or live provider action.
+
 **Local work: v24.6.555 job-search activity visuals (unmerged)**
 on `codex/job-search-running-indicator`, from merged v24.6.554 / PR298.
 - While the main LinkedIn search runs, the results list is dimmed/grayscaled and

@@ -24,5 +24,19 @@ function fullFixture(){
   const access=fullFixture();await access.arm();access.state.access=true;
   assert.equal((await access.rpc('jobFromLink',{url})).error_code,'HR_ACCESS_REQUIRED');assert.equal(access.state.fullReads,1);
   assert(!access.tabs.has(11));
+  const partial=fullFixture();await partial.arm();const immediate=[];
+  partial.state.onCreated=tab=>{tab.status='loading';};
+  const base=partial.state.onScript;partial.state.onScript=args=>{if(args.files || args.args?.[0]===url)immediate.push(args.injectImmediately);return base(args);};
+  assert.equal((await partial.rpc('jobFromLink',{url})).result?.description,'Complete full ad','a committed document with ready ad content need not wait for Chrome load completion');
+  assert.equal(partial.state.fullReads,1);assert(immediate.length>=2 && immediate.every(value=>value===true));assert(!partial.tabs.has(11));
+  const pending=fullFixture();await pending.arm();pending.state.onCreated=tab=>{tab.status='loading';tab.pendingUrl=url;};
+  assert.equal((await pending.rpc('jobFromLink',{url})).error_code,'HR_AD_TIMEOUT','navigation timeout is an isolated ad failure, not a fatal companion error');assert.equal(pending.state.fullReads,0,'a pending navigation is not observed as a ready document');
+  const metadata=fullFixture();await metadata.arm();metadata.state.onCreated=tab=>{tab.status='loading';};
+  assert.equal((await metadata.rpc('jobFromLink',{url,company_only:true})).error_code,'HR_AD_TIMEOUT');assert.equal(metadata.state.fullReads,0,'HR employer capture retains complete-document readiness');
+  for(const phase of ['files','read']){
+    const transient=fullFixture();await transient.arm();let changed=false;const original=transient.state.onScript;
+    transient.state.onScript=args=>{if(!changed && (phase==='files'?args.files:args.args?.[0]===url)){changed=true;throw Error('Execution context was destroyed');}return original(args);};
+    assert.equal((await transient.rpc('jobFromLink',{url})).result?.description,'Complete full ad','a transient '+phase+' observation waits/reinjects on the same URL');assert.equal(transient.state.created.length,1);
+  }
   console.log('Full-ad worker: delayed header/description readiness, bounded timeout, capability, access-stop and owned-tab cleanup passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

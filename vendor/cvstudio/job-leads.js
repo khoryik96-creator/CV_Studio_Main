@@ -812,7 +812,7 @@
     el('Preview').hidden=!row;
     el('PreviewTitle').textContent = row?.role || '';
     el('PreviewCompany').textContent = row?.company || '';
-    el('PreviewMeta').textContent = row ? [row.location,saved ? 'Saved ad content' : row.full ? 'Captured ad content' : 'Search summary · Read full ad for the description',row.description_truncated ? 'Excerpt' : ''].filter(Boolean).join(' · ') : '';
+    el('PreviewMeta').textContent = row ? [row.location,saved || row.fullOrigin==='saved' ? 'Saved ad content' : row.full ? 'Captured ad content' : 'Search summary · Read full ad for the description',row.description_truncated ? 'Excerpt' : ''].filter(Boolean).join(' · ') : '';
     content(el('PreviewContent'),row?.description || '',row?.description_rich);
     drawHR(row ? savedJob(row.url) : null);
   }
@@ -866,7 +866,7 @@
       const meta = node('div','','job-ad-card-meta');
       if (row.location) meta.append(node('p',row.location,'job-ad-location'));
       const state = row.full ? 'ready' : row.fullState === 'reading' ? 'loading' : row.fullError ? 'error' : 'summary';
-      meta.append(node('span',row.full ? 'Full ad captured' : state === 'loading' ? 'Loading full ad…' : state === 'error' ? 'Could not load full ad' : 'Search summary only','job-ad-state is-' + state));
+      meta.append(node('span',row.full ? row.fullOrigin==='saved' ? 'Saved full ad' : 'Full ad captured' : state === 'loading' ? 'Loading full ad…' : state === 'error' ? 'Could not load full ad' : 'Search summary only','job-ad-state is-' + state));
       card.append(meta);
       if (row.fullError && !row.full) card.append(node('p',row.fullError,'job-ad-card-error'));
       const link = node('a','Open on LinkedIn'); link.href = row.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'job-ad-source';
@@ -1283,12 +1283,18 @@
     }
     return true;
   }
+  function savedFullContent(row) {
+    const saved=savedJob(row.url);
+    if(!saved || saved.deleted || saved.description_truncated!==false || !saved.description?.trim())return null;
+    return {...row,description:saved.description,description_rich:saved.description_rich || [],
+      description_truncated:false,full:true,fullOrigin:'saved',fullState:'ready',fullError:''};
+  }
   function rememberJobs(snapshot) {
     for (const row of window.cvStudioJobSearch.rows(snapshot)) {
       if (discovered.some(item => item.url === row.url) || discovered.length >= 600) continue;
-      discovered.push({...row,description_truncated:true,description_rich:[],full:false});
+      discovered.push(savedFullContent(row) || {...row,description_truncated:true,description_rich:[],full:false});
     }
-    drawDiscovery();
+    drawDiscovery();backgroundAdStatus('');
   }
   function checkDiscovery() { if (discoveryStopped) throw Error('Stopped.'); }
   const pauseDiscovery = () => new Promise(resolve => setTimeout(resolve,350));
@@ -1343,7 +1349,7 @@
     return {...row,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
       date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
       description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
-      full:true,fullState:'ready',fullError:''};
+      full:true,fullOrigin:'captured',fullState:'ready',fullError:''};
   }
   async function readFullContent(row, operation, read = rpc, queue = null) {
     const check = () => {
@@ -1354,6 +1360,9 @@
       check(); fullAd(row,data); return data;
     } catch (browserError) {
       check();
+      // Older companions omitted the code on this exact, fixed loading error.
+      // Treat that known ad timeout consistently without guessing at other errors.
+      if(!browserError.companionCode && browserError.message==='The LinkedIn ad did not finish loading. Open it in your browser, wait for the page to load, then try again.')browserError.companionCode='HR_AD_TIMEOUT';
       // A second, independent parser can read public ads even when LinkedIn's
       // signed-in layout is unknown. Never fall back around an access check or
       // a disconnected/busy companion, and never replay either read.
@@ -1392,7 +1401,10 @@
     await queue.done;
   }
   function startBackgroundAds() {
-    if (busy || discovering || backgroundAds || !discovered.some(row => !row.full)) return;
+    if (busy || discovering || backgroundAds) return;
+    for(const row of discovered){if(!row.full){const saved=savedFullContent(row);if(saved)Object.assign(row,saved);}}
+    drawDiscovery();backgroundAdStatus('');
+    if(!discovered.some(row=>!row.full))return;
     const queue = {stopped:false,operation:'',message:''}; backgroundAds = queue;
     backgroundAdStatus('Checking the browser companion…');
     queue.done = Promise.resolve().then(async () => {
@@ -1405,6 +1417,8 @@
           while (busy && !queue.stopped) await pauseDiscovery();
           if (queue.stopped || !discovered.includes(row)) break;
           if (row.full) continue;
+          const saved=savedFullContent(row);
+          if(saved){Object.assign(row,saved);backgroundAdStatus('Loading descriptions in the background…');drawDiscovery();continue;}
           queue.operation = hex(); row.fullState = 'reading'; row.fullError = '';
           backgroundAdStatus('Loading descriptions in the background…'); drawDiscovery();
           try {

@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.556 is local/unmerged on `codex/job-read-queue-recovery`, including v555
+  below. Full-ad reads inspect committed content before full browser completion;
+  pending/access/identity/HR checks remain. Typed and exact legacy loading timeouts
+  allow per-ad fallback and queue continuation. Explicitly complete saved ads are
+  reused by exact URL without browser reads or durable writes. All 96 JavaScript
+  fixtures, five version checks and fictional Chromium recovery checks pass.
+
 - v24.6.555 is local/unmerged on `codex/job-search-running-indicator`, from
   merged554/PR298. Search results dim during discovery, with an orange pulsing
   progress highlight; background loading has a separate indicator with usable

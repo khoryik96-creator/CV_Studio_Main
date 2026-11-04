@@ -576,7 +576,7 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
     if(jobCapture?.cancelled)throw safeError('The job ad read was stopped.','HR_STOPPED');
     if(linkedinAccessPage(tab.url) || linkedinAccessPage(tab.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in its browser tab before scanning again.','HR_ACCESS_REQUIRED');
     if (connection !== bound || bound.run || jobURL(tab.url) !== expected || tab.pendingUrl && jobURL(tab.pendingUrl) !== expected) throw safeError('The selected job changed. Open its LinkedIn tab and try again.');
-    return tab.status==='complete';
+    return tab.status==='complete' || !companyOnly && tab.status==='loading' && !tab.pendingUrl;
   };
   let injected=false, previousCompany='',hadCompany=false;
   // A complete browser load can precede LinkedIn's React detail panel. Wait on
@@ -584,10 +584,15 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
   const limit=48;
   for (let attempt=0;attempt<limit;attempt++) {
     if (!verify(await chrome.tabs.get(id))) { injected=false;previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue; }
-    if (!injected) { await jobScript({target:{tabId:id}, files:['reader.js']},jobReaderStartError);injected=true; }
+    if (!injected) {
+      const boot=await jobScript({target:{tabId:id},files:['reader.js'],injectImmediately:!companyOnly},jobReaderStartError,true);
+      if(boot[0]?.cvstudioTransient){previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue;}
+      injected=true;
+    }
     if (!verify(await chrome.tabs.get(id))) { injected=false;previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue; }
-    const [injection] = await jobScript({target:{tabId:id},
+    const [injection] = await jobScript({target:{tabId:id},injectImmediately:!companyOnly,
       func: (url,companyOnly) => {
+        if(typeof globalThis.SourcerReader?.readJob!=='function')return {loading:true};
         try { return globalThis.SourcerReader.readJob(url,companyOnly); }
         catch (error) {
           if (error.cvstudioJobLoading) return {loading:true,unavailable:globalThis.SourcerReader.jobUnavailable()};
@@ -595,7 +600,8 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
           // A fixed reason names which LinkedIn signal stopped the read; no page text leaves the tab.
           return /sign in|verification|restriction/i.test(message) ? {jobError:'access',reason:/sign in/i.test(message)?'signin':/verification/i.test(message)?'captcha':'notice'} : {jobError:'layout'};
         }
-      }, args:[expected,companyOnly]},jobReaderReadError);
+      }, args:[expected,companyOnly]},jobReaderReadError,true);
+    if(injection?.cvstudioTransient){injected=false;previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue;}
     const result=injection?.result;
     if (!verify(await chrome.tabs.get(id))) { injected=false;previousCompany='';if(attempt+1<limit)await new Promise(resolve=>setTimeout(resolve,350));continue; }
     if(result?.unavailable)throw safeError('LinkedIn says this job ad is unavailable. Its previous saved details were kept.','HR_AD_UNAVAILABLE');
@@ -939,10 +945,10 @@ async function handle(message, sender) {
         if(linkedinAccessPage(current.url) || linkedinAccessPage(current.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in its browser tab before scanning again.','HR_ACCESS_REQUIRED');
         const starting=created===tab.id && current.status==='loading' && (!current.url || current.url==='about:blank') && (!current.pendingUrl || current.pendingUrl===expected);
         if (jobURL(current.url) !== expected && !starting) throw safeError('The job left its expected LinkedIn page. Check the ad before trying again.');
-        if (current.status === 'complete') return await readJobTab(bound, tab.id, expected,args.company_only===true);
+        if (current.status === 'complete' || args.company_only!==true && jobURL(current.url)===expected && !current.pendingUrl) return await readJobTab(bound, tab.id, expected,args.company_only===true);
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      throw safeError('The LinkedIn ad did not finish loading. Open it in your browser, wait for the page to load, then try again.');
+      throw safeError('The LinkedIn ad did not finish loading. Open it in your browser, wait for the page to load, then try again.','HR_AD_TIMEOUT');
     } finally {
       if (created !== null) {
         await closeOwned(created, expected);
