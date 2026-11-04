@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 ORIGIN='http://127.0.0.1:5077'
 URL='https://www.linkedin.com/jobs/view/4456899159/'
 posting={'@type':'JobPosting','identifier':{'value':'4456899159'},'url':URL,'datePosted':'2026-11-01T23:30:00-04:00','title':'Fictional Systems Engineer','hiringOrganization':{'name':'Fictional Employer'},'description':'<img src="https://fictional-resource.invalid/pixel"><iframe src="https://fictional-resource.invalid/frame"></iframe><p><strong>Complete fictional duties.</strong></p><ul><li>Maintain systems.</li></ul>'}
-html='<main><h1>Fictional job view</h1></main><script type="application/ld+json">'+json.dumps(posting).replace('<','\\u003c')+'</script>'
+html='<link rel="canonical" href="'+URL+'"><main><h1>Fictional job view</h1></main><script type="application/ld+json">'+json.dumps(posting).replace('<','\\u003c')+'</script>'
 source=Path('tests/browser/job_ads_background.py').read_text()
 job_mock=source.split("MOCK=r'''",1)[1].split("'''",1)[0].replace('Array.from({length:25}','Array.from({length:3}')
 sourcer_mock=r'''(()=>{const source={id:3,url:'https://www.linkedin.com/search/results/people/',title:'Fictional People search'};window.addEventListener('message',event=>{const m=event.data;if(event.source!==window||m?.type!=='CVSTUDIO_LINKEDIN_REQUEST'||m.scope!=='profiles')return;let result;if(m.action==='tabs')result=[source];else if(m.action==='openPeopleSearch')result=source;else if(m.action==='jobStatus')result={connected:true,profile_browsing_revision:1,concurrent_scans_revision:1,people_results_revision:1,people_country_revision:1,people_country_ready_revision:1};else if(['begin','end','navigate'].includes(m.action))result=true;else if(m.action==='read')result={profiles:[],signature:'empty',empty:true,hasNext:false,paginationKnown:true};else return;window.postMessage({type:'CVSTUDIO_LINKEDIN_RESPONSE',id:m.id,channel:m.channel,result},location.origin);});})();'''
@@ -33,7 +33,7 @@ with sync_playwright() as p:
     assert page.evaluate('(url)=>{try{SourcerReader.readJob(url);return false;}catch(e){return true;}}',URL.rstrip('/'))
     page.locator('h1').evaluate('(node)=>node.textContent="Fictional job view"')
     assert page.evaluate('(url)=>{try{SourcerReader.readJob(url,true);return false;}catch(e){return !!e.cvstudioJobLoading;}}',URL.rstrip('/')),'HR company-only reads retain their DOM employer checks'
-    for patch in [{'identifier':{'value':'999'}},{'url':'https://www.linkedin.com/jobs/view/999/'},{'description':''}]:
+    for patch in [{'identifier':{'value':'https://www.linkedin.com/jobs/view/999'},'url':None},{'identifier':{'value':'urn:li:jobPosting:999'},'url':None},{'identifier':{'value':'999'}},{'url':'https://www.linkedin.com/jobs/view/999/'},{'description':''}]:
         page.locator('script[type="application/ld+json"]').evaluate('(node,value)=>node.textContent=JSON.stringify(value)',{**posting,**patch})
         assert page.evaluate('(url)=>{try{SourcerReader.readJob(url);return false;}catch(e){return !!e.cvstudioJobLoading;}}',URL.rstrip('/'))
     page.locator('script[type="application/ld+json"]').evaluate('(node,value)=>node.textContent=JSON.stringify(value)',{'@graph':[posting,{**posting,'title':'Conflicting role'}]})
@@ -102,7 +102,22 @@ with sync_playwright() as p:
           badge(page,feature)
         if not failed:
           page.evaluate('(feature)=>switchTab(feature)',feature);assert page.evaluate('()=>BROWSER_ACTIVITY_DONE_COUNT')==0
+          page.evaluate("(feature)=>{let token=markTabRunning(feature);markTabDone(feature,token,{forceBrowser:true});token=markTabRunning('format');markTabDone('format',token);}",feature)
+          clear={'jobleads':'#jobLeadsSearchClear','linkedinsourcer':'#liSourcerClear','emailverifier':'#emailVerifierClear'}[feature]
+          page.locator(clear).click()
+          assert not page.evaluate('(feature)=>!!BROWSER_ACTIVITY_DONE_BY_TAB[feature] || !!BROWSER_ACTIVITY_FAIL_BY_TAB[feature]',feature),'Clear must remove its stale browser notification'
+          assert page.evaluate('()=>BROWSER_ACTIVITY_DONE_BY_TAB.format')==1,'Clear must preserve another module completion'
         assert not errors,errors
         ctx.close()
+    # Clearing a still-loading queue must not leave a late Done badge.
+    ctx=browser.new_context();page=ctx.new_page()
+    ctx.route('**/*',lambda route:route.continue_() if route.request.url.startswith(ORIGIN+'/') else route.abort())
+    page.add_init_script(job_mock);page.goto(ORIGIN+'/?module=jobleads');page.locator('#jobLeadsList tr').first.wait_for()
+    page.locator('#jobLeadsSearchQuery').fill('Fictional');page.locator('#jobLeadsSearchStart').click();page.wait_for_function('()=>window.jobFixture.reads.length===1')
+    page.evaluate("()=>{const token=markTabRunning('format');markTabDone('format',token);}")
+    page.locator('#jobLeadsSearchClear').click();page.wait_for_function('()=>!document.getElementById("jobLeadsSearchResults").children.length')
+    assert not page.evaluate('()=>!!BROWSER_ACTIVITY_DONE_BY_TAB.jobleads || !!BROWSER_ACTIVITY_FAIL_BY_TAB.jobleads')
+    assert page.evaluate('()=>BROWSER_ACTIVITY_DONE_BY_TAB.format')==1
+    ctx.close()
     browser.close()
 print('Chromium: verified embedded full-ad recovery and strict identity/ambiguity/HR/captcha guards; all three modules show focused browser title/favicon Done or Failed; Job Leads waits for background completion; acknowledgement clears Done. No live provider calls.')

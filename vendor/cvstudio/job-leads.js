@@ -1723,6 +1723,7 @@
         await stopBackgroundAds(); discoveryFailed=false; backgroundFailed=false; hrFailedUrl=''; discovered = []; discoveryPicked.clear(); discoveryPage = 0;
         previewUrl = ''; previewCapture = null; previewDismissed = true;
         backgroundAdStatus(''); searchStatus('Search results cleared. Your saved ads are kept.');
+        if(typeof clearTabActivityNotifications==='function')clearTabActivityNotifications('jobleads');
       } finally { lock(false); drawDiscovery(); }
     });
     el('SearchPrevious').addEventListener('click',() => navigateResults(-1));

@@ -223,7 +223,16 @@
     const id=expectedURL.split('/').at(-1),found=[];
     for(const posting of postings){
       const identity=posting.identifier?.value ?? posting.identifier;
-      const postingID=['string','number'].includes(typeof identity)?String(identity):'';
+      let postingID=['string','number'].includes(typeof identity)?String(identity).trim():'';
+      let identityURL='';const identityURN=postingID.match(/^urn:li:jobPosting:([0-9]{1,24})$/i);
+      try {
+        const reference=new URL(postingID);
+        if(reference.protocol==='https:' && ['linkedin.com','www.linkedin.com','my.linkedin.com','sg.linkedin.com'].includes(reference.hostname) && !reference.username && !reference.password && !reference.port){
+          reference.hostname='www.linkedin.com';identityURL=jobLink(reference.href);
+        }
+      } catch {}
+      if(identityURL)postingID=identityURL.split('/').at(-1);else if(identityURN)postingID=identityURN[1];
+      else if(/^[A-Za-z][A-Za-z0-9+.-]*:/.test(postingID))continue;
       const postingURL=jobLink(posting.url);
       if(typeof posting.url==='string' && posting.url.trim() && postingURL!==expectedURL || /^\d+$/.test(postingID) && postingID!==id)continue;
       if(postingURL!==expectedURL && postingID!==id && !(identities.includes(expectedURL) && postings.length===1))continue;

@@ -127,6 +127,15 @@ def parse_public_job(html, expected_url, *, _trusted_guest=False):
         identity = posting.get('identifier')
         identity = identity.get('value') if isinstance(identity, dict) else identity
         identity = str(identity) if isinstance(identity, (str, int)) and not isinstance(identity, bool) else ''
+        identity = identity.strip()
+        identity_url = job_url(identity)
+        identity_urn = re.fullmatch(r'urn:li:jobPosting:([0-9]{1,24})', identity, re.I)
+        if identity_url:
+            identity = identity_url.rsplit('/', 1)[-1]
+        elif identity_urn:
+            identity = identity_urn.group(1)
+        elif re.match(r'^[A-Za-z][A-Za-z0-9+.-]*:', identity):
+            continue
         posting_url = job_url(posting.get('url'))
         if posting_url and posting_url != expected or identity.isdigit() and identity != expected_id:
             continue

@@ -363,7 +363,7 @@
     const url = URL.createObjectURL(new Blob([CVLinkedinCore.csv(results)], {type: 'text/csv;charset=utf-8'}));
     const link = document.createElement('a'); link.href = url; link.download = 'linkedin-candidates.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 3000);
   };
-  window.clearLinkedinSourcer = function() { if (!busy) { searchFailed = false; results = []; draw(); } };
+  window.clearLinkedinSourcer = function() { if (!busy) { searchFailed = false; results = []; draw(); if(typeof clearTabActivityNotifications==='function')clearTabActivityNotifications('linkedinsourcer'); } };
   window.addEventListener('pagehide', () => {
     abort?.abort();
     if (run && !run.stopped) fetch('/linkedin-sourcer', {method: 'POST', keepalive: true,

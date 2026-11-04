@@ -205,7 +205,7 @@
     el('Start').addEventListener('click',()=>start());
     el('Recheck').addEventListener('click',()=>start(true));
     el('Stop').addEventListener('click',() => { stopping = true; el('Message').textContent = 'Stopping after the current email check…'; render(); });
-    el('Clear').addEventListener('click',() => { if (running || importing) return; rows=[]; el('Input').value=''; el('Filter').value=''; el('Search').value=''; el('Message').textContent=''; render(); });
+    el('Clear').addEventListener('click',() => { if (running || importing) return; rows=[]; el('Input').value=''; el('Filter').value=''; el('Search').value=''; el('Message').textContent=''; render(); if(typeof clearTabActivityNotifications==='function')clearTabActivityNotifications('emailverifier'); });
     el('Filter').addEventListener('change',render); el('Search').addEventListener('input',render);
     el('Import').addEventListener('click',() => el('File').click());
     el('File').addEventListener('change',async () => {

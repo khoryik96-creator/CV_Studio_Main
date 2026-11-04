@@ -79,6 +79,12 @@ function markTabFailed(tab, token, opts) {
   notifyBrowserActivityFailed(tab, !!opts.forceBrowser);
 }
 function clearTabRunState(tab) { TAB_ACTIVE_RUNS[tab] = {}; TAB_RUN_COUNTS[tab] = 0; setTabRunState(tab, 'idle'); }
+function clearTabActivityNotifications(tab) {
+  if (!_tabRunCount(tab)) clearTabRunState(tab);
+  ackBrowserActivityForTab(tab);
+  ackBrowserActivityFailedForTab(tab);
+}
+
 
 // Browser tab completion badge. Browser tabs cannot be physically recoloured,
 // so this updates the page title and favicon with a green count for completed

@@ -7,6 +7,20 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current source: v24.6.565 full-ad recovery and browser completion indicators**
+on `codex/full-ad-recovery-browser-badges`, from merged v563 / PR300; includes v564 below.
+The associated pull request records current CI, review and merge status.
+- Local review reproduced and corrected two issues. URL/LinkedIn-URN JobPosting
+  identifiers are now normalized and checked as IDs in both readers; an explicit
+  conflicting reference cannot be overridden by a canonical page URL.
+- Clear now acknowledges only that module's completion/failure notification and
+  idle tab state, preserving another module's notifications or active work. Job
+  Leads applies this after its background queue stops, avoiding a late Done badge.
+- Regressions failed on prior source, then passed. All 98 JavaScript fixtures,
+  134 focused Python checks, repository consistency and Chromium recovery/badge
+  workflows pass. See `cv_studio_v24_6_565_review_qa_report.md` for validation. No live LinkedIn/provider
+  action or installed-app update. Both app and companion updates are required.
+
 **Local work: v24.6.564 full-ad recovery and browser completion badges (unmerged)**
 on `codex/full-ad-recovery-browser-badges`, from merged v563 / PR300.
 - Companion recovery can read a standalone job's verified embedded JobPosting

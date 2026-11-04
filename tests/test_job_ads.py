@@ -300,3 +300,14 @@ def test_deadline_expiry_between_primary_and_guest_prevents_an_extra_request():
     get = mock.Mock(return_value=SlowReply())
     with pytest.raises(JobLeadsError): PublicLinkedInJobs(get=get, clock=lambda:now[0]).read(URL)
     assert get.call_count == 1
+
+
+@pytest.mark.parametrize('identity', ['https://www.linkedin.com/jobs/view/999', 'urn:li:jobPosting:999'])
+def test_explicit_job_url_or_urn_identifier_cannot_be_overridden_by_canonical(identity):
+    with pytest.raises(JobLeadsError):
+        parse_public_job(html({**POSTING, 'identifier':{'value':identity}}), URL)
+
+
+@pytest.mark.parametrize('identity', [URL, 'urn:li:jobPosting:1234567890'])
+def test_matching_job_url_or_urn_identifiers_are_read(identity):
+    assert parse_public_job(html({**POSTING, 'identifier':{'value':identity}}), URL)['role'] == POSTING['title']
