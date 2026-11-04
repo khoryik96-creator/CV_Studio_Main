@@ -17,7 +17,7 @@ with sync_playwright() as p:
             r.fulfill(json={'ok':True,'companies':[
                 {'company':'Nov 2026','matched_role':'Software Engineer (with Salaries)','job_url':'','source_url':SEARCH,'job_url_quality':'needs_verification'},
                 {'company':'Fictional Systems','matched_role':'Software Engineer','country':'Malaysia','job_url':AD,'job_portal':'JobStreet','job_fit_percent':85}
-            ],'people':[],'summary':{'candidate_title':'Software Engineer','search_provider_used':'tavily'},'usage':{},'cost':0})
+            ],'people':[],'summary':{'candidate_title':'Software Engineer','search_provider_used':'tavily','job_source_counts':[{'source':'JobStreet','count':1},{'source':'LinkedIn Jobs','count':0}]},'usage':{},'cost':0})
         elif r.request.url.startswith(ORIGIN+'/'):r.continue_()
         else:r.abort()
     page.route('**/*',route)
@@ -33,6 +33,8 @@ with sync_playwright() as p:
     page.wait_for_function("()=>document.getElementById('leadSearchStatus').textContent.includes('1 job ad(s) found · Tavily')")
     assert requests[0]['search_provider']=={'provider':'tavily','api_key':'fictional'}
     assert page.locator('#leadKpiCompanies').inner_text()=='1'
+    assert 'Ads by source:' in page.locator('#leadSummaryBox').inner_text()
+    assert 'LinkedIn Jobs: 0' in page.locator('#leadSummaryBox').inner_text()
     page.locator('#leadSubCompanies').click()
     assert page.locator('#leadCompaniesBox .lead-company-card').count()==1
     assert page.locator('#leadCompaniesBox a').get_attribute('href')==AD

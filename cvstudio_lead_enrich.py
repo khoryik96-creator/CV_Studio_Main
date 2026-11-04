@@ -381,11 +381,11 @@ def _lead_source_allowed_by_selection(url, portal, job_sources):
     if "monster" in portal_l or "foundit" in portal_l or "monster" in url_l or "foundit" in url_l:
         return sel_has("monster", "foundit")
     if "company career" in portal_l or "ats" in portal_l:
-        return sel_has("company", "career")
+        return sel_has("company", "career", "other public", "other portal")
 
     known_ats = ("greenhouse.io", "lever.co", "ashbyhq.com", "workdayjobs", "myworkdayjobs", "smartrecruiters.com", "workable.com", "jobvite.com", "icims.com", "successfactors", "oraclecloud.com", "brassring.com")
     if any(h in url_l for h in known_ats):
-        return sel_has("company", "career")
+        return sel_has("company", "career", "other public", "other portal")
 
     # Unknown public job boards should only pass when the user selected Other
     # Portals. This prevents a JobStreet-only run from showing unrelated boards.
@@ -1973,6 +1973,28 @@ def _lead_guess_role_company_from_search_result(title, snippet, title_angles=Non
     return clean_role(role), _lead_clean_company_guess(company)
 
 
+def _lead_source_bucket(row, job_sources):
+    return next((source for source in job_sources if _lead_source_allowed_by_selection(
+        row.get("job_url"), row.get("job_portal"), [source])), row.get("job_portal") or "Other")
+
+
+def _lead_balance_source_leads(rows, job_sources, max_n):
+    """Take one qualifying ad per selected source before taking its next ad."""
+    groups = {}
+    for row in rows:
+        source = _lead_source_bucket(row, job_sources)
+        groups.setdefault(source, []).append(row)
+    selected = []
+    while groups and len(selected) < max_n:
+        for source in list(groups):
+            selected.append(groups[source].pop(0))
+            if not groups[source]:
+                del groups[source]
+            if len(selected) >= max_n:
+                break
+    return selected
+
+
 def _lead_provider_results_to_leads(provider_results, regions, job_sources, title_angles, target_role="", job_filters=None, max_n=12):
     """Deterministically convert search-provider results into provisional job leads.
 
@@ -2071,8 +2093,6 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
         if not _lead_company_matches_title_angles(c, title_angles):
             continue
         leads.append(c)
-        if len(leads) >= int(max_n or 12):
-            break
     parsed = {
         "summary": {
             "candidate_title": target_role or "Candidate",
@@ -2093,6 +2113,12 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
     parsed, location_warning = _lead_filter_by_regions(parsed, regions)
     parsed = _lead_normalize_company_fit_freshness(parsed)
     parsed, filter_warning = _lead_apply_basic_job_filters(parsed, job_filters or {})
+    parsed["companies"] = _lead_balance_source_leads(parsed.get("companies") or [], job_sources or [], int(max_n or 12))
+    parsed["summary"]["job_source_counts"] = [
+        {"source": source, "count": sum(_lead_source_bucket(c, job_sources or []) == source
+                                        for c in parsed["companies"])}
+        for source in dict.fromkeys(job_sources or [])
+    ]
     warning = ""
     if location_warning:
         warning = location_warning
@@ -2294,23 +2320,22 @@ def _lead_search_provider_queries(job_sources, title_angles, regions, target_rol
     if target_role and target_role not in titles:
         titles.insert(0, str(target_role).strip())
     titles = titles[:4] or [str(target_role or "job").strip()]
-    srcs = [str(s).strip() for s in (job_sources or []) if str(s).strip()][:4] or ["jobs"]
+    srcs = list(dict.fromkeys(str(s).strip() for s in (job_sources or []) if str(s).strip()))[:12] or ["jobs"]
     regs = [str(r).strip() for r in (regions or []) if str(r).strip()][:3] or [""]
     include = _lead_filter_query_terms(job_filters or {})
     exclude = _lead_exclude_query_terms(job_filters or {})
     queries = []
-    for src in srcs:
-        hint = _lead_portal_domain_hint(src)
-        # Prefer individual postings over the portal category pages that dominate
-        # broad title searches. This does not add requests or change query budgets.
-        if "linkedin" in src.lower():
-            hint = "site:linkedin.com/jobs/view/"
-        elif "jobstreet" in src.lower():
-            hint = "site:jobstreet.com/job/"
-        for reg in regs:
-            for title in titles:
-                q = f'{hint} "{title}" {reg} job {include} {exclude}'.strip()
-                q = re.sub(r"\s+", " ", q)
+    # Cover every selected source with the primary role/location before using
+    # the remaining budget for title or region variations.
+    for reg in regs:
+        for title in titles:
+            for src in srcs:
+                hint = _lead_portal_domain_hint(src)
+                if "linkedin" in src.lower():
+                    hint = "site:linkedin.com/jobs/view/"
+                elif "jobstreet" in src.lower():
+                    hint = "site:jobstreet.com/job/"
+                q = re.sub(r"\s+", " ", f'{hint} "{title}" {reg} job {include} {exclude}'.strip())
                 if q not in queries:
                     queries.append(q)
                 if len(queries) >= max_queries:

@@ -7,6 +7,21 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current work: v24.6.567 Lead Finder selected-portal coverage**
+on `codex/leadfinder-clear-search-results`, extends v566 in PR302 (unmerged).
+- Removed the first-four-source cutoff. Initial queries cover selected portals
+  before title/region variations; the result threshold cannot end that first pass.
+- Quick/Standard reserve at least one query per selected source, within the
+  existing overall 12-query ceiling. More selected portals can consume more
+  search credits than the former 5/8-query modes. Selections above five sources
+  run their coverage with at most three concurrent requests, in stable query order.
+- Location/keyword filters run before portal-balanced lead capping. Other Portals
+  also admits unknown job/career pages, consistent with the source filter's contract.
+  Summary counts show qualifying ads per source without double-counting overlap.
+- See `cv_studio_v24_6_567_portal_coverage_qa_report.md`. All provider calls in tests
+  are fictional; no real key, live search, AI spend or installed update. PR302
+  records current head review/CI status and is not merged yet.
+
 **Current work: v24.6.566 Lead Finder clarity and individual job-ad links**
 on `codex/leadfinder-clear-search-results`, from merged v565 / PR301.
 - Reproduced the Nov 2026 / Software Engineer (with Salaries) listing becoming a

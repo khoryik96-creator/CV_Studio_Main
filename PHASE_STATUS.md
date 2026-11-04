@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.567 extends v566 in PR302 (unmerged): selected-portal-first query
+  scheduling, minimum per-source coverage within 12 queries, bounded concurrent
+  coverage for larger selections, and balanced ads after relevance filters.
+  Other Portals no longer discards unknown job/career pages. More selected
+  sources can use more provider credits in Quick/Standard. No live provider calls.
+
 - v24.6.566 on `codex/leadfinder-clear-search-results`, from merged565 / PR301:
   simpler Lead Finder form, visible search provider, and individual-ad-only
   results/snapshots. Removes generated Google verification searches from job ads.
