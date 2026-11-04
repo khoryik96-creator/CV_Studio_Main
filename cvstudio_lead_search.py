@@ -123,13 +123,16 @@ def _lead_search_tavily(api_key, query, max_results=6, timeout=18):
 def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
     """Search SerpAPI for job results.
 
-    Prefer SerpAPI's Google Jobs engine because organic Google search often
-    returns generic JobStreet/LinkedIn listing pages. Google Jobs results carry
-    structured title/company/location fields and apply_options links, which are
-    much more likely to become usable Job Leads.
+    Preserve selected-site constraints through organic search. Unscoped queries
+    prefer structured Google Jobs results and retain their organic fallback.
     """
+    # Google Jobs does not preserve site: operators. Use scoped organic search
+    # for those queries so different selected portals do not become repeated
+    # identical paid Google Jobs requests.
+    if re.search(r"\bsite:", str(query or ""), re.I):
+        return _lead_search_serpapi_organic(api_key, query, max_results, timeout)
     out = []
-    # 1) Structured Google Jobs results first.
+    # Unscoped queries can still use structured Google Jobs results first.
     try:
         google_jobs_query = _lead_google_jobs_query(query)
         params_jobs = urllib.parse.urlencode({
@@ -200,8 +203,13 @@ def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
         # Fall back to organic below. The caller captures provider warnings per query.
         pass
 
-    # 2) Organic fallback. This is less reliable and may return listing pages;
-    # downstream direct-job filtering will remove those.
+    return _lead_search_serpapi_organic(api_key, query, max_results, timeout)
+
+
+def _lead_search_serpapi_organic(api_key, query, max_results=8, timeout=18):
+    """Preserve portal constraints in a Google Search request."""
+    out = []
+    # Search results still pass the downstream individual-ad URL filter.
     params = urllib.parse.urlencode({
         "engine": "google",
         "q": query,

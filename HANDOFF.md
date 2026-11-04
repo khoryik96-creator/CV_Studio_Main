@@ -7,6 +7,17 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current work: v24.6.568 selected-portal review correction**
+on `codex/leadfinder-clear-search-results`, extends v566/v567 in PR302 (unmerged).
+- Review found that SerpAPI stripped site restrictions before Google Jobs, making
+  source-first queries repeat the same paid search. Site-constrained queries now
+  use Google Search directly with their original constraints; unscoped queries
+  retain structured Google Jobs and its existing organic fallback.
+- The regression checks actual outgoing engine/query parameters and one request
+  per site-scoped query. All 99 focused Python/version checks pass. No live
+  provider requests or credentials. See `cv_studio_v24_6_568_portal_review_qa_report.md`
+  and PR302 for the current review/CI state. Not merged or installed yet.
+
 **Current work: v24.6.567 Lead Finder selected-portal coverage**
 on `codex/leadfinder-clear-search-results`, extends v566 in PR302 (unmerged).
 - Removed the first-four-source cutoff. Initial queries cover selected portals

@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.568 extends the selected-portal work in PR302 (unmerged): SerpAPI
+  site-constrained queries preserve their constraints through organic search
+  rather than becoming duplicate Google Jobs queries. Unscoped searches retain
+  their structured Google Jobs path. See the v568 review QA report.
+
 - v24.6.567 extends v566 in PR302 (unmerged): selected-portal-first query
   scheduling, minimum per-source coverage within 12 queries, bounded concurrent
   coverage for larger selections, and balanced ads after relevance filters.
