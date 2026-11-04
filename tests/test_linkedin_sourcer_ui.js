@@ -1,6 +1,6 @@
 const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
 class Element {
-  constructor(tag='div'){Object.assign(this,{tagName:tag,value:'',textContent:'',children:[],events:{},checked:false,disabled:false,open:false})}
+  constructor(tag='div'){const classes=new Set();this.classList={toggle:(name,on)=>on?classes.add(name):classes.delete(name),contains:name=>classes.has(name)};Object.assign(this,{tagName:tag,value:'',textContent:'',children:[],events:{},checked:false,disabled:false,open:false})}
   addEventListener(type,fn){(this.events[type]??=[]).push(fn)}
   append(...items){this.children.push(...items)} appendChild(item){this.append(item);return item}
   replaceChildren(...items){this.children=items} focus(){this.focused=true}
@@ -146,10 +146,13 @@ function fixture(reuse=true){
   assert.equal(f.calls.filter(call=>call.action==='navigate').length,0,'default preserves the open search filters');
   const planning=fixture();await planning.init();planning.el('Brief').value='SAP finance';planning.el('Consent').checked=true;planning.state.holdPlan=true;
   const planningRun=planning.start();await new Promise(resolve=>setImmediate(resolve));assert(planning.state.planReply);
+  assert(planning.el('Panel').classList.contains('is-running'));assert(!planning.el('Panel').classList.contains('has-error'));
   assert(planning.calls.some(c=>c.action==='begin'),'worker ownership must be reserved before the paid plan is pending');
-  planning.state.planReply();await planningRun;assert.equal(planning.calls.filter(c=>c.action==='begin').length,1,'reservation does not reset budgets after planning');
+  planning.state.planReply();await planningRun;assert(!planning.el('Panel').classList.contains('is-running'));assert(!planning.el('Panel').classList.contains('has-error'));assert.equal(planning.calls.filter(c=>c.action==='begin').length,1,'reservation does not reset budgets after planning');
   const noReservation=fixture();await noReservation.init();noReservation.el('Brief').value='SAP finance';noReservation.el('Consent').checked=true;noReservation.state.failBegin=true;await noReservation.start();
+  assert(noReservation.el('Panel').classList.contains('has-error'));assert(!noReservation.el('Panel').classList.contains('is-running'));
   assert.equal(noReservation.requests.filter(r=>r.action==='plan').length,0,'failed reservation sends no paid plan');
+  noReservation.state.failBegin=false;await noReservation.start();assert(!noReservation.el('Panel').classList.contains('has-error'),'a new successful run clears failure');
   const stopReservation=fixture();await stopReservation.init();stopReservation.el('Brief').value='SAP finance';stopReservation.el('Consent').checked=true;stopReservation.state.holdBegin=true;
   const reservedRun=stopReservation.start();await new Promise(resolve=>setImmediate(resolve));assert(stopReservation.state.beginReply);await stopReservation.stop();stopReservation.state.beginReply();await reservedRun;
   assert.equal(stopReservation.requests.filter(r=>r.action==='plan').length,0,'Stop during reservation sends no paid plan');assert(stopReservation.calls.some(c=>c.action==='end'),'a late reservation acknowledgement is cleaned up');
@@ -193,6 +196,7 @@ function fixture(reuse=true){
   assert.equal(new URL(location.calls.find(c=>c.action==='navigate').args.url).searchParams.get('keywords'),'SAP');assert.equal(location.el('Count').textContent,1);
   const stopCountry=fixture(false);await stopCountry.init();stopCountry.state.planCountry='Malaysia';stopCountry.state.holdCountry=true;stopCountry.el('Brief').value='SAP FICO in Malaysia';stopCountry.el('Consent').checked=true;
   const countryRun=stopCountry.start();for(let i=0;i<30&&!stopCountry.state.countryReply;i++)await new Promise(resolve=>setTimeout(resolve,0));assert(stopCountry.state.countryReply);await stopCountry.stop();stopCountry.state.countryReply();await countryRun;
+  assert(!stopCountry.el('Panel').classList.contains('is-running'));assert(!stopCountry.el('Panel').classList.contains('has-error'),'normal Stop is not a failure');
   assert.equal(stopCountry.requests.filter(r=>r.action==='review').length,0,'Stop during native location selection sends no scoring request');
   const opening=fixture(false);await opening.init();opening.state.holdOpen=true;opening.el('Brief').value='SAP finance';opening.el('Consent').checked=true;const openingRun=opening.start();
   await new Promise(resolve=>setTimeout(resolve,0));assert(opening.state.held);await opening.stop();opening.state.held();await openingRun;

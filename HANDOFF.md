@@ -7,6 +7,20 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.558 Sourcer activity and failure highlight (unmerged)**
+on `codex/job-read-queue-recovery`, including v555–v557 below.
+- The entire LinkedIn Sourcer control card has an orange border, warm fill and
+  gentle pulse throughout a search and its cleanup. Success/normal Stop restore
+  its default appearance. A failed search instead leaves a static red outline
+  and tint beside the existing error message. Start or Clear resets failure.
+- Reduced motion keeps orange static. Stop stays usable; consent, browser reads,
+  provider calls/accounting and candidate retention are unchanged.
+- Sourcer UI, candidate-folder and assessment fixtures, five version tests,
+  syntax, whitespace and repository consistency pass. Fictional Chromium checks
+  whole-panel activity, success/Stop/failure, Clear, reduced motion and mobile.
+  See `cv_studio_v24_6_558_sourcer_activity_qa_report.md`. No live provider action,
+  push, merge or installed update.
+
 **Local work: v24.6.557 HR panel activity highlight (unmerged)**
 on `codex/job-read-queue-recovery`, including unmerged v555/v556 below.
 - The single-ad HR people panel gets an orange border, warm fill and gentle pulse

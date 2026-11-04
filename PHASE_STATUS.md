@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.558 is local/unmerged on `codex/job-read-queue-recovery`, including v555–557.
+  The whole Sourcer control card pulses orange while running and shows a static
+  red highlight after failure. Success/Stop clear activity; Start/Clear reset red.
+  Reduced motion, affected Sourcer fixtures, five version tests and fictional
+  Chromium activity/failure/mobile checks pass. No provider behavior change.
+
 - v24.6.557 is local/unmerged on `codex/job-read-queue-recovery`, including v555/556.
   The single-ad HR panel has an orange pulsing outline and warm background while
   scanning/stopping; completion/failure/Stop clear it. Reduced motion is static.
