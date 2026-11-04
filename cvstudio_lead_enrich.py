@@ -2121,6 +2121,8 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
     parsed, location_warning = _lead_filter_by_regions(parsed, regions)
     parsed = _lead_normalize_company_fit_freshness(parsed)
     parsed, filter_warning = _lead_apply_basic_job_filters(parsed, job_filters or {})
+    # Normalize/deduplicate aliases before they consume a lead slot or count.
+    parsed, direct_warning = _lead_keep_only_direct_job_leads(parsed)
     parsed["companies"] = _lead_balance_source_leads(parsed.get("companies") or [], job_sources or [], int(max_n or 12))
     parsed["summary"]["job_source_counts"] = [
         {"source": source, "count": sum(_lead_source_bucket(c, job_sources or []) == source
@@ -2132,6 +2134,8 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
         warning = location_warning
     if filter_warning:
         warning = (warning + " " + filter_warning).strip() if warning else filter_warning
+    if direct_warning:
+        warning = (warning + " " + direct_warning).strip()
     return parsed, warning
 
 

@@ -174,3 +174,15 @@ def test_google_careers_individual_posts_survive_search_engine_filter(url):
 ])
 def test_google_career_listings_and_search_pages_are_not_individual_ads(url):
     assert not _lead_is_direct_job_url(url)
+
+
+def test_canonical_aliases_are_deduplicated_before_source_counts_and_lead_cap():
+    urls = ['https://www.linkedin.com/jobs/view/1234567890',
+            'https://www.linkedin.com/jobs/collections/recommended/?currentJobId=1234567890',
+            'https://www.linkedin.com/jobs/view/1234567891',
+            'https://www.linkedin.com/jobs/view/1234567892']
+    rows = [{'url':url,'title':'Software Engineer - Fictional Systems','snippet':'Software Engineer Malaysia','location':'Malaysia'} for url in urls]
+    out,_=_lead_provider_results_to_leads(rows,['Malaysia'],['LinkedIn Jobs'],['Software Engineer'],'Software Engineer',max_n=3)
+    out,_=_lead_keep_only_direct_job_leads(out)
+    assert [c['job_url'] for c in out['companies']] == [urls[0],urls[2],urls[3]]
+    assert out['summary']['job_source_counts'] == [{'source':'LinkedIn Jobs','count':3}]
