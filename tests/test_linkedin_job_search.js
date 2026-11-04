@@ -25,6 +25,7 @@ function fixture(options={}){
       if(method==='scrollJobSearch'){state.scroll++;return [{result:true}]}
       state.reads++;return [{result:{url:tabs.get(args.target.tabId).url,jobs:[row],signature:row.url,hasNext:true,paginationKnown:true,atBottom:true}}];
     }},runtime:{getManifest:()=>({version:'24.6.461'}),onMessage:{addListener:fn=>hooks.message=fn}}};
+  options.configureChrome?.(chrome,state,tabs);
   const identity=require('./linkedin_companion_identity_fixture')(chrome);
   const boot=()=>{hooks={};vm.runInContext(options.workerSource || worker,vm.createContext({chrome,URL,Map,Set,Date,console,setTimeout:(fn,ms,...args)=>setTimeout(fn,state.fastWait&&[350,500].includes(ms)?0:ms,...args),clearTimeout,crypto:identity.crypto,TextEncoder}));};boot();
   const sender=()=>({tab:{id:1},documentId:state.document,url:tabs.get(1).url});

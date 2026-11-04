@@ -7,6 +7,27 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.562 browser tab grouping (unmerged)**
+on `codex/browser-tab-grouping`, including unmerged v561 below.
+- The companion groups the authenticated CV Studio tab and new browser tabs in a
+  blue CV Studio group. Central creation covers job/company searches, full ads,
+  Sourcer profiles, HR people searches and employment-detail tabs. New scan tabs
+  open in their app's window. Existing selected user search tabs are not adopted.
+- Created-navigation-target and opener events cover normal/noopener links and
+  popups opened from CV Studio or its tab lineage, including external Outlook
+  destinations, without requesting destination host access or reading page text.
+  Groups stay window-scoped; popup windows that cannot group remain usable.
+  Existing groups chosen by the user keep their names/colors/collapsed state.
+- Group metadata is bounded numeric tab/root IDs in Chrome session storage.
+  Grouping is asynchronous and never delays scan ownership/Stop/cleanup, grants
+  scan authority or activates/closes tabs. API/storage failures remain cosmetic.
+  All 97 JavaScript fixtures, 19 version/Sourcer tests and consistency checks pass.
+- Adds tabGroups and webNavigation permissions. Apply/reload the companion update;
+  the browser may require enabling its new permissions. See
+  `cv_studio_v24_6_562_tab_groups_qa_report.md`. Native extension loading is blocked
+  by this environment's administrator, so actual native tab-strip behavior remains
+  unverified here. No live provider action, push, merge or installed-app update.
+
 **Local work: v24.6.561 module lock preferences (unmerged)**
 on `codex/module-lock-preferences`, from merged v24.6.560 / PR299.
 - CV Summary is permanently available without a code or storage flag, including
