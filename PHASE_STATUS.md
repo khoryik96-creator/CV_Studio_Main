@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.566 on `codex/leadfinder-clear-search-results`, from merged565 / PR301:
+  simpler Lead Finder form, visible search provider, and individual-ad-only
+  results/snapshots. Removes generated Google verification searches from job ads.
+  Posting-focused queries use existing budgets; no extra provider calls.
+  See the v566 QA report and associated PR for checks/review state.
+
 - v24.6.565 on `codex/full-ad-recovery-browser-badges` includes v564 below; its PR
   records CI/review/merge state. Local review fixed conflicting URL/URN identifiers
   accepted under canonical metadata and stale browser notifications after Clear.

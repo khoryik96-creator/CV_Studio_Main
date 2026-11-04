@@ -42,6 +42,8 @@ def _lead_is_direct_job_url(url):
     query = (u.query or "").lower()
     if not host or path in ("", "/"):
         return False
+    if re.search(r"(^|\.)(google\.[a-z.]+|bing\.com|yahoo\.com|duckduckgo\.com)$", u.hostname or "", re.I):
+        return False
     # Common portal direct-ad patterns.
     if "linkedin.com" in host:
         params = urllib.parse.parse_qs(query, keep_blank_values=True)
@@ -1596,60 +1598,31 @@ def _lead_reviewable_job_lead(c):
 
 
 def _lead_keep_only_direct_job_leads(parsed):
-    """Keep direct job leads, and downgrade useful non-direct leads to Needs Verification.
-
-    Earlier v21.6x builds deleted every paid AI/provider lead whose URL was not a
-    strict direct-job permalink. That was too harsh for JobStreet/LinkedIn/Google
-    search because they often expose listing/source URLs while the paid response
-    still contains employer + role evidence. We now keep those as reviewable job
-    leads instead of silently returning 0, while still hiding generic fallback
-    search links and source-only portal pages.
-    """
+    """Keep individual job ads; search, listing and verification links are not ads."""
     if not isinstance(parsed, dict):
         return parsed, ""
     companies = parsed.get("companies") or []
     if not isinstance(companies, list):
         parsed["companies"] = []
         return parsed, ""
-    kept = []
-    direct_count = 0
-    review_count = 0
+    kept, seen = [], set()
     removed = 0
-    seen = set()
-    for c in companies:
-        if not isinstance(c, dict):
+    for row in companies:
+        if not isinstance(row, dict):
             removed += 1
             continue
-        c = _lead_normalize_company_urls(c)
-        structured_ok = str(c.get("job_url_quality") or "") == "structured_google_job" and re.match(r"^https?://", str(c.get("job_url") or ""), re.I) and not _lead_is_generic_portal_category_url(c.get("job_url"), c.get("company"))
-        if _lead_is_direct_job_url(c.get("job_url")) or structured_ok:
-            c["lead_kind"] = "extracted_job_lead"
-            direct_count += 1
-        elif _lead_reviewable_job_lead(c):
-            c["lead_kind"] = "job_lead_needs_verification"
-            c["job_url"] = ""
-            c["job_url_quality"] = "needs_verification"
-            note = str(c.get("source_note") or "").strip()
-            msg = "Needs verification: no direct job-ad permalink was available, but the paid search output contained employer + role evidence. Review the source before people search/outreach."
-            c["source_note"] = (note + " " + msg).strip() if note and msg not in note else (note or msg)
-            review_count += 1
-        else:
+        c = _lead_normalize_company_urls(row)
+        if not _lead_is_direct_job_url(c.get("job_url")):
             removed += 1
             continue
-        key = "|".join(str(c.get(k) or "").strip().lower() for k in ("company", "matched_role", "job_portal", "job_url", "source_url"))
+        c["lead_kind"] = "extracted_job_lead"
+        key = str(c["job_url"]).strip().lower().rstrip("/")
         if key in seen:
             continue
         seen.add(key)
         kept.append(c)
     parsed["companies"] = kept
-    notes = []
-    if review_count:
-        notes.append(f"Kept {review_count} paid-search job lead(s) as Needs Verification instead of discarding them for missing direct job permalinks.")
-    if removed:
-        notes.append(f"Hidden {removed} unusable generic/source-only result(s).")
-    if notes:
-        return parsed, " ".join(notes)
-    return parsed, ""
+    return parsed, (f"Skipped {removed} result(s) without an individual job-ad link." if removed else "")
 
 
 def _lead_normalize_company_fit_freshness(parsed):
@@ -2020,6 +1993,8 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
         if not (url or title or snippet):
             continue
         direct = _lead_is_direct_job_url(url)
+        if not direct:
+            continue
         structured_job_raw = bool(r.get("structured_job_result") and str(r.get("company_name") or "").strip() and title and re.match(r"^https?://", url, re.I))
         try:
             _parsed_url = urllib.parse.urlparse(url)
@@ -2086,7 +2061,7 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
             "company_url": "",
             "job_fit_percent": max(0, min(100, fit)),
             "match_score": max(0, min(100, fit)),
-            "why_matched": "Matched from search-provider result using the candidate role/title angles and selected region. This is broad review mode: even partial/low stack-fit leads can be kept so the recruiter decides. Review the source before outreach.",
+            "why_matched": "Matched the target role and selected location in the search result.",
             "source_url": url,
             "source_note": (("Structured Google Jobs result. " if structured_job else "") + (snippet[:420] or title[:420] or "Search provider result"))[:520],
             "date_found": today,
@@ -2299,9 +2274,11 @@ def _lead_cleanup_urls_by_selected_sources(parsed, job_sources):
                     existing_note = str(c.get("source_note") or "").strip()
                     c["source_note"] = (existing_note + " " + gen_note).strip() if existing_note and gen_note not in existing_note else (existing_note or gen_note)
             changed += 1
-    if changed:
-        return parsed, f"Cleaned {changed} cross-source URL(s) that belonged to unselected job portals."
-    return parsed, ""
+    parsed, direct_note = _lead_keep_only_direct_job_leads(parsed)
+    notes = [f"Skipped {changed} result(s) from unselected job sites."] if changed else []
+    if direct_note:
+        notes.append(direct_note)
+    return parsed, " ".join(notes)
 
 
 def _lead_fake_anthropic_response(obj):
@@ -2324,6 +2301,12 @@ def _lead_search_provider_queries(job_sources, title_angles, regions, target_rol
     queries = []
     for src in srcs:
         hint = _lead_portal_domain_hint(src)
+        # Prefer individual postings over the portal category pages that dominate
+        # broad title searches. This does not add requests or change query budgets.
+        if "linkedin" in src.lower():
+            hint = "site:linkedin.com/jobs/view/"
+        elif "jobstreet" in src.lower():
+            hint = "site:jobstreet.com/job/"
         for reg in regs:
             for title in titles:
                 q = f'{hint} "{title}" {reg} job {include} {exclude}'.strip()

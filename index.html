@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CV Studio</title>
 <link rel="icon" type="image/png" href="cv_studio_logo.png?v=24.6.79-ui"/>
-<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.565">
-<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.565"></script>
+<link rel="stylesheet" href="/vendor/cvstudio/app.css?v=v24.6.566">
+<script src="/vendor/cvstudio/lazy-loader.js?v=v24.6.566"></script>
 <script>
 /* CV Studio Doctor — built-in diagnostic recorder.
  * Records JS errors, unhandled rejections, failed/slow network calls and
@@ -254,7 +254,7 @@
 <div class="app">
   <div class="header" style="position:relative;">
     <div>
-      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.565 (Offline) by The 郭 Lab</span></h1>
+      <h1>CV Studio <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px;">v24.6.566 (Offline) by The 郭 Lab</span></h1>
 
     </div>
     <div class="header-tools">
@@ -358,7 +358,7 @@
             <button class="kbtn" onclick="saveSearchProvider()" style="font-size:12px;">Save</button>
             <button class="kbtn" id="btnSearchProviderTest" onclick="testSearchProvider()" style="font-size:12px;">Test</button>
           </div>
-          <div style="font-size:11px;color:var(--text3);line-height:1.35;">This is not an AI provider. Tavily/SerpAPI fetch real URL snippets; Lead Finder AI cleans them into job leads. DeepSeek needs one for live Lead Finder searches.</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.35;">Used for Lead Finder job searches. Required with DeepSeek.</div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:6px;min-width:0;">
@@ -2476,19 +2476,15 @@
     <div class="lead-main">
       <div class="lead-card">
         <div class="lead-card-head">
-          <h2>Candidate Lead Finder</h2>
-          <span style="font-size:11px;color:var(--text3);font-weight:600;">Job portal first / public business contact mode</span>
+          <h2>Lead Finder</h2>
         </div>
         <div class="lead-card-body">
           <div class="lead-stepper" aria-label="Lead Finder workflow">
-            <div class="lead-step active" id="leadStepCompanies"><div class="t">1. Find job leads</div><div class="d">Portal-first job search.</div></div>
-            <div class="lead-step waiting" id="leadStepPeople"><div class="t">2. Find people</div><div class="d">Public HR / hiring manager discovery.</div></div>
-            <div class="lead-step waiting" id="leadStepEmails"><div class="t">3. Find emails</div><div class="d">Public business emails only.</div></div>
+            <div class="lead-step active" id="leadStepCompanies"><div class="t">1. Find job leads</div></div>
+            <div class="lead-step waiting" id="leadStepPeople"><div class="t">2. Find people</div></div>
+            <div class="lead-step waiting" id="leadStepEmails"><div class="t">3. Find emails</div></div>
           </div>
 
-          <div class="lead-smart-tip">
-            <strong>Recommended flow:</strong> start with Light depth and 1–3 portals, review the job leads, then run People and Email only for the useful job leads.
-          </div>
 
           <div>
             <div class="lead-label">Candidate CV</div>
@@ -2510,8 +2506,7 @@
           </div>
 
           <div>
-            <div class="lead-label">Country / region of leads</div>
-            <div class="lead-note compact-help" style="margin-bottom:8px;"></div>
+            <div class="lead-label">Countries</div>
             <div class="lead-pill-row" id="leadRegionPills">
               <button type="button" class="lead-pill active" data-region="Malaysia" onclick="toggleLeadPill(this)">Malaysia</button>
               <button type="button" class="lead-pill" data-region="Singapore" onclick="toggleLeadPill(this)">Singapore</button>
@@ -2523,14 +2518,14 @@
               <button type="button" class="lead-pill" data-region="APAC" onclick="toggleLeadPill(this)">APAC</button>
             </div>
             <div style="margin-top:10px;">
-              <div class="lead-label" style="margin-bottom:5px;">Additional countries <span style="font-weight:500;color:var(--text3);text-transform:none;letter-spacing:0;">optional, comma separated</span></div>
+              <div class="lead-label" style="margin-bottom:5px;">Additional countries <span style="font-weight:500;color:var(--text3);text-transform:none;letter-spacing:0;">comma separated</span></div>
               <input id="leadExtraCountries" class="lead-input" placeholder="" oninput="leadUpdateRegionPreview()" />
               <div class="char-count" id="leadRegionPreview">Selected: Malaysia</div>
             </div>
           </div>
 
           <div>
-            <div class="lead-label">Job lead sources / portals</div>
+            <div class="lead-label">Job sites</div>
             <div class="lead-pill-row" id="leadSourcePills">
               <button type="button" class="lead-pill active" data-source="JobStreet" onclick="toggleLeadPill(this)">JobStreet</button>
               <button type="button" class="lead-pill active" data-source="LinkedIn Jobs public search results" onclick="toggleLeadPill(this)">LinkedIn Jobs</button>
@@ -2547,47 +2542,50 @@
           </div>
 
           <div>
-            <div class="lead-label">Relevant role for candidate</div>
+            <div class="lead-label">Target role (optional)</div>
             <input id="leadTargetRole" class="lead-input" placeholder="" />
           </div>
 
+          <details class="lead-options">
+            <summary>More options</summary>
+            <div style="display:grid;gap:14px;margin-top:14px;">
           <div>
-            <div class="lead-label">Candidate context</div>
+            <div class="lead-label">Notes (optional)</div>
             <textarea id="leadContext" class="lead-textarea" placeholder=""></textarea>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div>
-              <div class="lead-label">Industry focus</div>
+              <div class="lead-label">Industry (optional)</div>
               <input id="leadIndustries" class="lead-input" placeholder="" />
             </div>
             <div>
               <div class="lead-label">Search depth</div>
               <select id="leadDepth" class="lead-select">
-                <option value="light" selected>Light — recommended / faster</option>
-                <option value="standard">Standard — balanced</option>
-                <option value="deep">Deep — more leads</option>
+                <option value="light" selected>Quick</option>
+                <option value="standard">Standard</option>
+                <option value="deep">Thorough</option>
               </select>
             </div>
           </div>
 
           <label class="lead-quick-toggle" style="margin-top:2px;">
             <input type="checkbox" id="leadAiTitleExpansion" />
-            AI title expansion — reads this CV to suggest extra title angles for niche/uncommon roles (small extra cost, ~$0.01–0.02/search; free on cache hit)
+            Suggest related job titles with AI (extra AI cost)
           </label>
           <div id="leadTitleCacheInfo" style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:8px;">
-            <span id="leadTitleCacheStatsText">Title angle cache: —</span>
+            <span id="leadTitleCacheStatsText">Saved title suggestions: —</span>
             <a href="#" onclick="leadClearTitleCache();return false;" style="color:var(--text3);text-decoration:underline;">Clear cache</a>
           </div>
 
           <label class="lead-quick-toggle" style="margin-top:2px;">
             <input type="checkbox" id="leadAllowProviderRefine" />
-            Allow AI refine when search provider finds 0 usable leads — extra Claude call to try classifying raw results (extra cost, only used if search provider is configured)
+            Use AI to review search results when no ads are found (extra AI cost)
           </label>
 
 
           <div style="border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:10px 12px;">
-            <div class="lead-label" style="margin-bottom:8px;">Optional relevance filters</div>
+            <div class="lead-label" style="margin-bottom:8px;">Filters</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
               <div>
                 <div class="lead-label">Must-have keywords</div>
@@ -2598,11 +2596,11 @@
                 <input id="leadExcludeKeywords" class="lead-input" placeholder="" />
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
               <div>
                 <div class="lead-label">Seniority</div>
                 <select id="leadSeniorityFilter" class="lead-select">
-                  <option value="">Auto / Any</option>
+                  <option value="">Any level</option>
                   <option value="Fresh Graduate / Entry Level">Fresh Graduate / Entry Level</option>
                   <option value="Junior / Executive">Junior / Executive</option>
                   <option value="Senior / Specialist">Senior / Specialist</option>
@@ -2611,9 +2609,9 @@
                 </select>
               </div>
               <div>
-                <div class="lead-label">Freshness</div>
+                <div class="lead-label">Date posted</div>
                 <select id="leadFreshnessFilter" class="lead-select">
-                  <option value="">Any freshness</option>
+                  <option value="">Any date</option>
                   <option value="7">Posted ≤7 days</option>
                   <option value="14">Posted ≤14 days</option>
                   <option value="30">Posted ≤30 days</option>
@@ -2641,25 +2639,24 @@
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
               <div>
-                <div class="lead-label">Company / industry include</div>
+                <div class="lead-label">Include companies or industries</div>
                 <input id="leadCompanyInclude" class="lead-input" placeholder="" />
               </div>
               <div>
-                <div class="lead-label">Company / industry exclude</div>
+                <div class="lead-label">Exclude companies or industries</div>
                 <input id="leadCompanyExclude" class="lead-input" placeholder="" />
               </div>
             </div>
-            <div class="lead-note compact-help" style="margin-top:8px;background:var(--surface);"></div>
           </div>
 
-          <div class="lead-note">
-            This tab follows a job-led flow: search selected-country job portals/job ads first, keep only leads based in the selected country/region or remote roles clearly open to that country/region, then use public web/profile results to identify likely HR or hiring managers. It avoids logged-in scraping and private/personal email guessing.<br>
-            <strong>Lead caps:</strong> Light targets up to 8 job leads, Standard up to 15, Deep up to 25. People search can target up to 8 selected job leads and return up to 24 public people leads.
-          </div>
+
+            </div>
+          </details>
 
           <div class="lead-action-row">
-            <button class="primary" id="btnLeadSearch" onclick="runLeadSearch()">Find Leads</button>
+            <button class="primary" id="btnLeadSearch" onclick="runLeadSearch()">Find job ads</button>
             <button class="sec" onclick="clearLeadFinder()">Clear</button>
+            <span id="leadSearchProvider" class="lead-chip" role="status"></span>
             <span id="leadSearchStatus" class="lead-status"></span>
           </div>
         </div>
@@ -2670,30 +2667,31 @@
           <h2>Results</h2>
           <div class="lead-subtabs">
             <button class="lead-subtab active" id="leadSubSummary" onclick="switchLeadSubtab('summary')">Summary</button>
-            <button class="lead-subtab" id="leadSubCompanies" onclick="switchLeadSubtab('companies')">Job Leads</button>
-            <button class="lead-subtab" id="leadSubPeople" onclick="switchLeadSubtab('people')">People Leads</button>
+            <button class="lead-subtab" id="leadSubCompanies" onclick="switchLeadSubtab('companies')">Job ads</button>
+            <button class="lead-subtab" id="leadSubPeople" onclick="switchLeadSubtab('people')">People</button>
             <button class="lead-subtab" id="leadSubExport" onclick="switchLeadSubtab('export')">Export</button>
           </div>
         </div>
         <div class="lead-card-body">
           <div class="lead-kpi-grid">
-            <div class="lead-kpi"><div class="n" id="leadKpiCompanies">0</div><div class="l">Job Leads</div></div>
+            <div class="lead-kpi"><div class="n" id="leadKpiCompanies">0</div><div class="l">Job ads</div></div>
             <div class="lead-kpi"><div class="n" id="leadKpiPeople">0</div><div class="l">People</div></div>
             <div class="lead-kpi"><div class="n" id="leadKpiEmails">0</div><div class="l">Emails</div></div>
-            <div class="lead-kpi"><div class="n" id="leadKpiAvg">0%</div><div class="l">Avg Match</div></div>
-            <div class="lead-kpi"><div class="n" id="leadKpiFresh">0</div><div class="l">Fresh ≤14d</div></div>
+            <div class="lead-kpi"><div class="n" id="leadKpiAvg">0%</div><div class="l">Match</div></div>
+            <div class="lead-kpi"><div class="n" id="leadKpiFresh">0</div><div class="l">Posted ≤14d</div></div>
             <div class="lead-kpi"><div class="n" id="leadKpiCost">$0.0000</div><div class="l" id="leadKpiCostMYR">RM 0.00</div></div>
           </div>
 
           <div class="lead-panel active" id="leadPanelSummary">
             <div id="leadSummaryBox" class="lead-empty">
-              Lead results will appear here.
+              No results yet.
             </div>
           </div>
 
           <div class="lead-panel" id="leadPanelCompanies">
             <div class="lead-toolbar">
               <div class="lead-tools-left">
+                <label for="leadCompanyFilter">Search ads</label>
                 <input id="leadCompanyFilter" class="lead-input lead-filter-input" placeholder="" oninput="renderLeadCompanies()" />
                 <select id="leadCompanySort" class="lead-select lead-mini-select" onchange="renderLeadCompanies()">
                   <option value="fit">Best fit first</option>
@@ -2708,25 +2706,22 @@
                 <span class="lead-selected-chip" id="leadSelectedCountChip">0 selected</span>
                 <button class="sec" onclick="leadSelectShownCompanies()">Select Shown</button>
                 <button class="sec" onclick="leadClearSelectedCompanies()">Clear Selected</button>
-                <button class="primary" id="btnLeadPeopleSearchSelected" onclick="runLeadPeopleSearch('selected')" style="font-size:12px;padding:7px 12px;">👥 Find People for Selected</button>
-                <button class="primary" id="btnLeadPeopleSearchShown" onclick="runLeadPeopleSearch(true)" style="font-size:12px;padding:7px 12px;">👥 Find People for Shown</button>
+                <button class="primary" id="btnLeadPeopleSearchSelected" onclick="runLeadPeopleSearch('selected')" style="font-size:12px;padding:7px 12px;">👥 Find people for selected</button>
+                <button class="primary" id="btnLeadPeopleSearchShown" onclick="runLeadPeopleSearch(true)" style="font-size:12px;padding:7px 12px;">👥 Find people for shown</button>
                 <button class="sec" onclick="copyLeadCompanies()">Copy Job Leads</button>
                 <button class="sec" onclick="downloadLeadCsv('companies')">⬇ CSV</button>
               </div>
             </div>
             <span class="lead-status" id="leadCompanyStatus"></span>
-            <div class="lead-selection-note">Tip: tick the job leads you want, then use <strong>Find People for Selected</strong> to search only those job leads.</div>
-            <div id="leadCompaniesBox" class="lead-empty">Job leads will appear here.</div>
+            <div id="leadCompaniesBox" class="lead-empty">No job ads yet.</div>
           </div>
 
           <div class="lead-panel" id="leadPanelPeople">
-            <div class="lead-note" style="margin-bottom:10px;">
-              <strong>People search title bank:</strong> uses common HR/TA titles plus role-specific hiring-manager titles inferred from the uploaded CV and selected job leads. It now supports generalist roles too: HR → HR Director / Head of HR; Finance → Financial Controller / CFO; Marketing → Head of Marketing / Brand Manager; Operations → Head of Operations / COO; SAP FICO → Head of SAP / SAP Solution Architect; Data → Head of Data Engineering. Select 1–8 strong job leads first for better results.
-            </div>
             <div class="lead-toolbar">
               <div class="lead-tools-left">
                 <button class="primary" id="btnLeadPeopleSearch" onclick="runLeadPeopleSearch()" style="font-size:12px;padding:7px 14px;">👥 Find People</button>
-                <button class="primary" id="btnLeadEmailSearch" onclick="runLeadEmailSearch()" style="font-size:12px;padding:7px 14px;">✉ Find Public Business Emails</button>
+                <button class="primary" id="btnLeadEmailSearch" onclick="runLeadEmailSearch()" style="font-size:12px;padding:7px 14px;">✉ Find business emails</button>
+                <label for="leadPeopleFilter">Search people</label>
                 <input id="leadPeopleFilter" class="lead-input lead-filter-input" placeholder="" oninput="renderLeadPeople()" />
                 <select id="leadPeopleSort" class="lead-select lead-mini-select" onchange="renderLeadPeople()">
                   <option value="email">Emails first</option>
@@ -2741,13 +2736,10 @@
               </div>
             </div>
             <span class="lead-status" id="leadPeopleStatus"></span>
-            <div id="leadPeopleBox" class="lead-empty">People leads will appear here and are saved in this tab.</div>
+            <div id="leadPeopleBox" class="lead-empty">No people yet.</div>
           </div>
 
           <div class="lead-panel" id="leadPanelExport">
-            <div class="lead-note" style="margin-bottom:12px;">
-              Export keeps source URLs, match scores, email confidence, and verification status so every lead can be reviewed before outreach.
-            </div>
             <div class="lead-action-row">
               <button class="primary" onclick="downloadLeadCsv('companies')">⬇ Export Job Leads CSV</button>
               <button class="primary" onclick="downloadLeadCsv('people')">⬇ Export People Leads CSV</button>
@@ -2763,42 +2755,42 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="/vendor/cvstudio/api-transport.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/page-nav.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/create-profile.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/company-profile.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/appearance.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/docx-export.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/the-owl.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/job-leads.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/settings.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/tab-status.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/cv-format.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/locks.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/ppc.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/batch-format.js?v=v24.6.565"></script>
+<script src="/vendor/cvstudio/api-transport.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/page-nav.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/jobadder-upload.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/create-profile.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/ai-proxy.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/hyppies-export.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/blind-jd.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/company-profile.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/fcv-upload.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/appearance.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/cv-scoring.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/docx-export.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/the-owl.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/ai-crawler.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer-core.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/linkedin-sourcer.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/job-leads-jobadder.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/job-leads-apollo.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/people-dashboards.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/job-search-walk.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/job-leads-clients.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/job-leads.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/email-verifier.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/candidate-summary.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/settings.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/runtime-core.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/tab-status.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/ai-keys.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/ai-routing.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/cv-format.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/locks.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/screening-notes.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/ppc.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/page-tabs.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/lead-finder.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/batch-format.js?v=v24.6.566"></script>
 <script>
 
 document.addEventListener('DOMContentLoaded', initPageNavPin);
@@ -2816,10 +2808,10 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script src="/vendor/cvstudio/input-file.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/setup-file.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/stats.js?v=v24.6.565"></script>
-<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.565"></script>
+<script src="/vendor/cvstudio/input-file.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/setup-file.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/stats.js?v=v24.6.566"></script>
+<script src="/vendor/cvstudio/server-heartbeat.js?v=v24.6.566"></script>
 <script>
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}

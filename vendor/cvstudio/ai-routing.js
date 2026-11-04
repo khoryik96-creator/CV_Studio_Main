@@ -303,6 +303,7 @@ async function saveSearchProvider() {
     showToast((e && e.message) || 'Could not save the search provider key', 'err');
     return false;
   }
+  if (typeof leadUpdateSearchProvider === 'function') leadUpdateSearchProvider();
   if (provider !== 'none' && !key) showToast('Search provider saved, but API key is blank', 'err');
   else showToast(provider === 'none' ? 'Search provider disabled — using AI web search' : 'Search provider saved', 'ok');
   return true;

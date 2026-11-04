@@ -7,6 +7,23 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current work: v24.6.566 Lead Finder clarity and individual job-ad links**
+on `codex/leadfinder-clear-search-results`, from merged v565 / PR301.
+- Reproduced the Nov 2026 / Software Engineer (with Salaries) listing becoming a
+  Google verification search. Individual job-ad URLs are now required in the
+  provider extractor, final cleanup, browser responses and reloaded snapshots.
+  Listing/search-only results no longer become job ads, KPIs or people targets.
+- LinkedIn/JobStreet search queries now target posting paths with the existing
+  request budgets. No extra search, extraction or AI calls were added.
+- Removed long static explanations and generic hints; extra controls are under
+  More options. Provider selection appears beside Find job ads and in completion
+  status. Match/search details are collapsed; active settings/AI cost choices stay.
+- All 99 JavaScript fixtures, 90 focused Python/version checks and Chromium
+  form/search/result checks pass, along with repository consistency.
+  See `cv_studio_v24_6_566_leadfinder_qa_report.md`. No live Tavily/AI requests,
+  credential use or installed-app update. Results remain heuristic direct links,
+  not live verification of posting availability. The PR records CI/review state.
+
 **Current source: v24.6.565 full-ad recovery and browser completion indicators**
 on `codex/full-ad-recovery-browser-badges`, from merged v563 / PR300; includes v564 below.
 The associated pull request records current CI, review and merge status.
