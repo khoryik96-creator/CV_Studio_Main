@@ -766,7 +766,7 @@
     el('SearchResults').setAttribute('aria-busy',String(discovering));
     el('SearchStatus').classList.toggle('is-running',discovering);
     el('BackgroundStatus').classList.toggle('is-running',!!backgroundAds);
-    const adsFailed = backgroundFailed || discovered.some(row => row.fullError && !row.full);
+    const adsFailed = discovered.some(row => !row.full && (backgroundFailed || row.fullError));
     el('SearchPanel').classList.toggle('has-error',!discovering && !backgroundAds && (discoveryFailed || adsFailed));
     el('BackgroundStatus').classList.toggle('has-error',!discovering && !backgroundAds && adsFailed);
     for (const name of ['SearchStart','SearchRefresh','SearchMode','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchFolder','SearchClear']) el(name).disabled = busy;
@@ -1138,6 +1138,7 @@
       outcome.stopQueue=true;outcome.message+=' The companion did not confirm cleanup. Reconnect it before scanning again.';notify(outcome.message);
     }
     if(retryCompanyURL && !cleanupFailed && !hrStopped){notify('Rechecking the updated employer link before starting the search…');return scanHR(row,{country,keywords,pages,companyURL:'',expectedRedirectURL:retryCompanyURL},notify,showPeople,recovery+1);}
+    if (outcome.state==='saved' && !outcome.stopQueue && hrFailedUrl===row.url) hrFailedUrl='';
     return outcome;
   }
   function bulkHRControls() {
@@ -1249,6 +1250,7 @@
             if (editing?.id === row.id) editing={...editing,revision:response.record.revision,hr:response.record.hr};
             item.node.dataset.state='saved';item.node.textContent=item.title+` · ${shared.matches} HR matches copied from ${shared.title} (same company${shared.scannedAt ? ', scanned ' + savedLabel(shared.scannedAt) : ''}, no extra scan)`;
             if (savedJob(previewUrl)?.id===row.id) drawPreview(); // the new revision redraws its saved HR
+            if (hrFailedUrl===row.url) hrFailedUrl='';
             bulkHR.saved++;
           } catch(error) {
             // Like a scanned save: a conflict keeps the ad; any other failure

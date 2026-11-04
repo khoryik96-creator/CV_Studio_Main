@@ -7,6 +7,21 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current source: v24.6.560 search recovery and activity highlights**
+on `codex/job-read-queue-recovery`, from merged v24.6.554 / PR298.
+The associated pull request records current CI, review and merge status.
+- Includes v555–v559 below: faster committed-document full-ad reads, per-ad queue
+  recovery and saved full-content reuse; orange running indicators and red failure
+  outlines for Job Leads, HR scans and LinkedIn Sourcer, with reduced motion.
+- Local code review reproduced and fixed two stale red highlights: manual capture
+  of all ads now clears failed background preflight; a successful scanned/copied
+  bulk HR result clears a previous individual failure for the same ad. Regressions
+  failed on the previous source and pass with the corrections. Saved data, provider
+  calls and scan ownership/cleanup decisions are unchanged.
+- See `cv_studio_v24_6_560_review_qa_report.md` for combined verification. No live
+  LinkedIn/provider operation or installed update. The owner needs both the app and
+  companion updates for the full-ad reader improvement.
+
 **Local work: v24.6.559 Job Leads/HR failure highlights (unmerged)**
 on `codex/job-read-queue-recovery`, including v555–v558 below.
 - Failed job discovery gives the search panel the same static red border/tint as

@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.560 on `codex/job-read-queue-recovery` includes v555–559; the associated PR
+  records CI/review/merge status. Code review fixed two reproduced stale failure
+  outlines after manual full-ad recovery and bulk HR recovery. Includes all search
+  queue/readiness/cache and running/failure visuals below. Both app and companion
+  updates are needed for the browser-reader improvement.
+
 - v24.6.559 is local/unmerged on `codex/job-read-queue-recovery`, including v555–558.
   Job search/full-ad failure and single/bulk HR failure areas get static red
   outlines/tints. Relevant retry/new search/Clear resets them; normal Stop stays

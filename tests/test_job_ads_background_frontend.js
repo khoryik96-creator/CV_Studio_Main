@@ -49,6 +49,15 @@ async function search(f){await f.init();f.state.backgroundCapable=true;await f.e
   await failed.el('BackgroundStart').click();assert.equal(reads(failed).length,4,'resume retries only unfinished ads');
   assert.match(failed.el('BackgroundStatus').textContent,/3 of 3/);assert(!failed.el('SearchPanel').classList.contains('has-error'));assert(!failed.el('BackgroundStatus').classList.contains('has-error'));
 
+  const preflight=fixture();let statuses=0;
+  preflight.state.onRPC=(message,reply)=>{if(message.action==='jobStatus' && ++statuses===2){reply({connected:false});return true;}return false;};
+  await search(preflight);await until(()=>preflight.el('BackgroundStop').hidden);
+  assert(preflight.el('SearchPanel').classList.contains('has-error'),'a failed background preflight requires attention');
+  for(let index=0;index<3;index++)await cards(preflight)[index].querySelectorAll('button').find(button=>button.textContent==='Read full ad').click();
+  assert.match(preflight.el('BackgroundStatus').textContent,/3 of 3 full ads ready/);
+  assert(!preflight.el('SearchPanel').classList.contains('has-error'),'manual recovery of all content clears the stale preflight error');
+  assert(!preflight.el('BackgroundStatus').classList.contains('has-error'));
+
   for(const action of ['stop','clear','foreground','foreground-status','new-search','pagehide']){
     const g=fixture();let replyRead,operation;
     g.state.onRPC=(message,reply)=>{
