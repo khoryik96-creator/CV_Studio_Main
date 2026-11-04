@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.557 is local/unmerged on `codex/job-read-queue-recovery`, including v555/556.
+  The single-ad HR panel has an orange pulsing outline and warm background while
+  scanning/stopping; completion/failure/Stop clear it. Reduced motion is static.
+  HR/bulk fixtures, five version checks and fictional Chromium visuals pass.
+
 - v24.6.556 is local/unmerged on `codex/job-read-queue-recovery`, including v555
   below. Full-ad reads inspect committed content before full browser completion;
   pending/access/identity/HR checks remain. Typed and exact legacy loading timeouts

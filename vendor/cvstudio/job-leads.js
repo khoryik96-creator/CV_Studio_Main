@@ -796,6 +796,7 @@
     el('HRStart').disabled = busy || !saved || saved.deleted;
     for (const name of ['HRCountryMode','HRCountry','HRKeywords','HRPages','HRCompanyURL']) el(name).disabled = busy;
     el('HRStop').disabled = !hrRunning || hrStopped;
+    el('HR').classList.toggle('is-running',hrRunning && !bulkHR?.running);
     bulkHRControls();
     el('BackgroundStart').hidden = !discovered.some(row => !row.full);
     el('BackgroundStart').disabled = busy || discovering || !!backgroundAds;

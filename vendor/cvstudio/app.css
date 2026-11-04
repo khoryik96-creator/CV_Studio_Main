@@ -1607,7 +1607,8 @@ body.cv-caret-guard #jobLeadsEmailEditor[contenteditable="true"], body.cv-caret-
 #jobLeadsSearchResults { transition:opacity .2s ease,filter .2s ease; }
 #jobLeadsSearchResults[aria-busy="true"] { opacity:.55;filter:grayscale(1);cursor:progress; }
 #jobLeadsSearchResults[aria-busy="true"] .job-leads-discovery-card, #jobLeadsSearchResults[aria-busy="true"] .job-ad-card-title { cursor:progress; }
-@media(prefers-reduced-motion:reduce) { .job-leads-search-status.is-running, #jobLeadsBackgroundStatus.is-running { animation:none;box-shadow:0 0 0 2px rgba(232,137,25,.12); } #jobLeadsSearchResults { transition:none; } }
+#jobLeadsHR.is-running { border-color:#e9a546;background:#fff8ed;animation:job-search-activity 1.8s ease-in-out infinite; }
+@media(prefers-reduced-motion:reduce) { .job-leads-search-status.is-running, #jobLeadsBackgroundStatus.is-running, #jobLeadsHR.is-running { animation:none;box-shadow:0 0 0 2px rgba(232,137,25,.12); } #jobLeadsSearchResults { transition:none; } }
 #viewJobLeads p:empty:not([role="status"]),#jobLeadsSearchSelection[hidden],#jobLeadsCuration[hidden] { display:none; }
 #viewJobLeads p[role="status"]:empty { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
 .job-leads-setup { font-size:12px; }

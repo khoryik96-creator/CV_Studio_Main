@@ -7,6 +7,17 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.557 HR panel activity highlight (unmerged)**
+on `codex/job-read-queue-recovery`, including unmerged v555/v556 below.
+- The single-ad HR people panel gets an orange border, warm fill and gentle pulse
+  throughout its scan and stopping cleanup. Completion, Stop and failure clear it.
+  Other operations and bulk scans do not light up this single-ad panel.
+- Reduced motion keeps a static highlight. Stop remains enabled during scanning.
+  Existing HR and bulk-HR fixtures, five version tests, syntax, whitespace and
+  repository consistency pass. Fictional Chromium checks orange animation,
+  reduced motion, mobile wrapping and Stop/failure cleanup. No live provider action.
+  See `cv_studio_v24_6_557_hr_activity_qa_report.md`. Local, unmerged/uninstalled.
+
 **Local work: v24.6.556 full-ad queue recovery (unmerged)**
 on `codex/job-read-queue-recovery`, including the unmerged v555 visuals below.
 - Full-ad reads inspect a committed, exact-job document while Chrome still loads
