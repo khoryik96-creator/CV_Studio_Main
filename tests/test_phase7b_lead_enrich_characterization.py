@@ -506,7 +506,7 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
             app._lead_search_provider_queries(
                 ["LinkedIn"], ["SAP Consultant"], ["Malaysia"], "SAP Consultant", None, 4
             ),
-            ['site:linkedin.com/jobs "SAP Consultant" Malaysia job'],
+            ['site:linkedin.com/jobs/view/ "SAP Consultant" Malaysia job'],
         )
 
     def test_cleanup_urls_by_selected_sources_keeps_selected(self):
@@ -528,6 +528,23 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         # A concrete country still evaluates without raising.
         filtered, _ = app._lead_filter_by_regions(dict(parsed), ["Malaysia"])
         self.assertIsInstance(filtered, dict)
+
+    def test_search_route_uses_tavily_and_returns_only_selected_job_ads(self):
+        from unittest import mock
+        results = [
+            {"title":"Software Engineer (with Salaries) - Nov 2026 | JobStreet", "url":"https://my.jobstreet.com/software-engineer-jobs", "snippet":"Software Engineer jobs in Malaysia"},
+            {"title":"Software Engineer - Fictional Systems - JobStreet", "url":"https://my.jobstreet.com/job/87401944", "snippet":"Software Engineer at Fictional Systems in Malaysia", "location":"Malaysia"},
+        ]
+        payload = {"lead_lock_code":app._LEAD_FINDER_LOCK_CODE, "api_key":"fictional", "provider":"deepseek", "model":"deepseek-v4-flash", "cv_text":"Software Engineer in Malaysia. Python backend systems development and SQL. " * 3, "regions":["Malaysia"], "job_sources":["JobStreet"], "target_role":"Software Engineer", "search_provider":{"provider":"tavily", "api_key":"fictional-tavily"}}
+        with mock.patch.object(app, '_lead_search_tavily', return_value=results) as search, mock.patch.object(app, 'call_llm', side_effect=AssertionError('No extra AI call')):
+            client = app.app.test_client()
+            client.set_cookie(app._AI_SPEND_SESSION_COOKIE, app._AI_SPEND_SESSION_TOKEN)
+            response = client.post('/lead-finder/search', json=payload, headers={'Origin':'http://127.0.0.1:5000'})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        data = response.get_json()
+        self.assertTrue(search.called)
+        self.assertEqual(data['summary']['search_provider_used'], 'tavily')
+        self.assertEqual([c['job_url'] for c in data['companies']], ['https://my.jobstreet.com/job/87401944'])
 
 
 if __name__ == "__main__":

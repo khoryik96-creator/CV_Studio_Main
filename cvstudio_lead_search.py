@@ -26,6 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     import certifi
@@ -122,13 +123,16 @@ def _lead_search_tavily(api_key, query, max_results=6, timeout=18):
 def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
     """Search SerpAPI for job results.
 
-    Prefer SerpAPI's Google Jobs engine because organic Google search often
-    returns generic JobStreet/LinkedIn listing pages. Google Jobs results carry
-    structured title/company/location fields and apply_options links, which are
-    much more likely to become usable Job Leads.
+    Preserve selected-site constraints through organic search. Unscoped queries
+    prefer structured Google Jobs results and retain their organic fallback.
     """
+    # Google Jobs does not preserve site: operators. Use scoped organic search
+    # for those queries so different selected portals do not become repeated
+    # identical paid Google Jobs requests.
+    if re.search(r"\bsite:", str(query or ""), re.I):
+        return _lead_search_serpapi_organic(api_key, query, max_results, timeout)
     out = []
-    # 1) Structured Google Jobs results first.
+    # Unscoped queries can still use structured Google Jobs results first.
     try:
         google_jobs_query = _lead_google_jobs_query(query)
         params_jobs = urllib.parse.urlencode({
@@ -199,8 +203,13 @@ def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
         # Fall back to organic below. The caller captures provider warnings per query.
         pass
 
-    # 2) Organic fallback. This is less reliable and may return listing pages;
-    # downstream direct-job filtering will remove those.
+    return _lead_search_serpapi_organic(api_key, query, max_results, timeout)
+
+
+def _lead_search_serpapi_organic(api_key, query, max_results=8, timeout=18):
+    """Preserve portal constraints in a Google Search request."""
+    out = []
+    # Search results still pass the downstream individual-ad URL filter.
     params = urllib.parse.urlencode({
         "engine": "google",
         "q": query,
@@ -288,31 +297,42 @@ class LeadSearchOrchestrator:
         if not cfg.get("enabled"):
             return [], []
         max_queries = {"light": 5, "standard": 8, "deep": 12}.get(str(depth or "standard").lower(), 8)
+        selected_sources = list(dict.fromkeys(str(source).strip() for source in (job_sources or []) if str(source).strip()))[:12]
+        # Selecting a portal reserves its initial query, including in Quick mode.
+        # The existing largest query budget remains the hard upper bound.
+        max_queries = max(max_queries, len(selected_sources))
         per_query = {"light": 5, "standard": 7, "deep": 8}.get(str(depth or "standard").lower(), 7)
         queries = self._search_provider_queries(job_sources, title_angles, regions, target_role, job_filters, max_queries=max_queries)
         results = []
         warnings = []
         seen = set()
-        for q in queries:
-            try:
-                if cfg["provider"] == "tavily":
-                    batch = self._search_tavily(cfg["api_key"], q, max_results=per_query, timeout=16)
-                elif cfg["provider"] == "serpapi":
-                    batch = self._search_serpapi(cfg["api_key"], q, max_results=per_query, timeout=16)
-                else:
-                    batch = []
-                for item in batch:
-                    url = str(item.get("url") or "").strip()
-                    title = str(item.get("title") or "").strip()
-                    key = (url or title).lower().rstrip("/")
-                    if not key or key in seen:
-                        continue
-                    seen.add(key)
-                    results.append(item)
-            except Exception as e:
-                warnings.append(f"{cfg['provider']} query failed: {str(e)[:160]}")
-            if len(results) >= {"light": 24, "standard": 40, "deep": 60}.get(str(depth or "standard").lower(), 40):
-                break
+        coverage_queries = min(len(selected_sources), len(queries))
+        def fetch_query(query):
+            if cfg["provider"] == "tavily":
+                return self._search_tavily(cfg["api_key"], query, max_results=per_query, timeout=16)
+            if cfg["provider"] == "serpapi":
+                return self._search_serpapi(cfg["api_key"], query, max_results=per_query, timeout=16)
+            return []
+
+        # Large source selections run at most three coverage requests at once.
+        # Read results in query order so response timing cannot change priority.
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            coverage = {i: pool.submit(fetch_query, query) for i, query in enumerate(queries[:coverage_queries])} if coverage_queries > 5 else {}
+            for query_index, q in enumerate(queries):
+                try:
+                    batch = coverage[query_index].result() if query_index in coverage else fetch_query(q)
+                    for item in batch:
+                        url = str(item.get("url") or "").strip()
+                        title = str(item.get("title") or "").strip()
+                        key = (url or title).lower().rstrip("/")
+                        if not key or key in seen:
+                            continue
+                        seen.add(key)
+                        results.append(item)
+                except Exception as e:
+                    warnings.append(f"{cfg['provider']} query failed: {str(e)[:160]}")
+                if query_index + 1 >= coverage_queries and len(results) >= {"light": 24, "standard": 40, "deep": 60}.get(str(depth or "standard").lower(), 40):
+                    break
         return results, warnings
 
     def call_with_optional_web(self, api_key, payload, warning_prefix="", graceful_json=None, provider="anthropic"):

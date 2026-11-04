@@ -89,6 +89,22 @@ class TavilyNormaliserTests(unittest.TestCase):
 
 
 class SerpapiNormaliserTests(unittest.TestCase):
+    def test_selected_portal_queries_preserve_sites_without_duplicate_jobs_search(self):
+        import urllib.parse
+        queries = ['site:jobstreet.com/job/ "Software Engineer" Malaysia job',
+                   'site:linkedin.com/jobs/view/ "Software Engineer" Malaysia job',
+                   'site:indeed.com "Software Engineer" Malaysia job']
+        raw = {"organic_results":[{"title":"Software Engineer", "link":"https://fictional.example/jobs/software-engineer"}]}
+        with mock.patch.object(ls, '_lead_fetch_json_url', return_value=raw) as fetch:
+            for query in queries:
+                result = ls._lead_search_serpapi('fictional', query)
+                self.assertEqual(result[0]['query'], query)
+        self.assertEqual(fetch.call_count, 3)
+        effective = [urllib.parse.parse_qs(urllib.parse.urlparse(call.args[0]).query) for call in fetch.call_args_list]
+        self.assertEqual([q['engine'] for q in effective], [['google']]*3)
+        self.assertEqual([q['q'][0] for q in effective], queries)
+        self.assertEqual(len({q['q'][0] for q in effective}), 3)
+
     def test_structured_google_jobs_result_preferred(self):
         jobs = {
             "jobs_results": [

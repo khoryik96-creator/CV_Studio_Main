@@ -35,6 +35,14 @@ function leadUniqueList(items) {
   return out;
 }
 
+function leadUpdateSearchProvider() {
+  var node = document.getElementById('leadSearchProvider');
+  if (!node) return;
+  var cfg = getSearchProviderConfig();
+  var names = {tavily:'Tavily', serpapi:'SerpAPI'};
+  node.textContent = names[cfg.provider] ? ('Search: ' + names[cfg.provider] + (cfg.api_key ? '' : ' · key needed')) : 'Search: AI web search';
+}
+
 function leadGetRegions() {
   var picked = Array.from(document.querySelectorAll('#leadRegionPills .lead-pill.active')).map(function(b){ return b.getAttribute('data-region'); });
   var extraEl = document.getElementById('leadExtraCountries');
@@ -319,7 +327,7 @@ function leadToggleCompanySelection(id, checked) {
 
 function leadSelectShownCompanies() {
   var rows = leadRealCompanyRows(leadGetCompanyViewRows());
-  if (!rows.length) { showToast('No extracted job leads to select. Fallback search links cannot be used for people search.', 'err'); return; }
+  if (!rows.length) { showToast('No job ads to select.', 'err'); return; }
   rows.forEach(function(c, i){ _leadSelectedCompanyIds[leadCompanyId(c, i)] = true; });
   renderLeadCompanies();
   showToast(rows.length + ' extracted job leads selected', 'ok');
@@ -422,7 +430,7 @@ function normalizeLeadData(data) {
   data = data || {};
   var companies = Array.isArray(data.companies) ? data.companies : [];
   var people = Array.isArray(data.people) ? data.people : [];
-  companies = companies.filter(function(c){ return String((c && c.lead_kind) || '').toLowerCase() !== 'fallback_search_link'; });
+  companies = companies.filter(function(c){ return !leadIsFallbackCompanyLead(c) && leadIsDirectJobUrl(c && c.job_url); });
   companies = companies.map(function(c, i){
     c = c || {};
     c.id = c.id || leadMakeId('co', i);
@@ -490,10 +498,11 @@ async function runLeadSearch() {
   btn.disabled = true;
   status.className = 'lead-status';
   var sp = getSearchProviderConfig();
-  status.textContent = 'Phase 1: searching selected-country job portals/job ads for job leads only' + ((sp.provider && sp.provider !== 'none' && sp.api_key) ? ' via ' + sp.provider + ' search provider.' : ' via AI web search.') + ' People discovery runs separately so the request does not keep timing out.';
+  leadUpdateSearchProvider();
+  status.textContent = 'Searching job ads' + ((sp.provider && sp.provider !== 'none' && sp.api_key) ? ' with ' + ({tavily:'Tavily',serpapi:'SerpAPI'}[sp.provider] || sp.provider) : ' with AI web search') + '…';
   switchLeadSubtab('summary');
   document.getElementById('leadSummaryBox').className = 'lead-empty';
-  document.getElementById('leadSummaryBox').innerHTML = 'Searching public job leads from selected portals and selected locations. This first step returns job leads quickly; use the People Leads tab to find HR/hiring managers after.';
+  document.getElementById('leadSummaryBox').textContent = 'Searching job ads…';
 
   try {
     var payload = {
@@ -540,7 +549,7 @@ async function runLeadSearch() {
     status.className = 'lead-status ok';
     var mix = leadLeadMixCounts(_leadCompanies);
     var costPart = ' Cost: ' + leadCostLabel(_leadCosts.search_usd) + ' / ' + leadMyrLabel(_leadCosts.search_usd);
-    status.textContent = 'Done — ' + mix.real + ' extracted job lead(s) found. Generic portal/search links are hidden. Next: select useful leads, then run Find People.' + costPart + (_leadLastWarning ? '\nNote: ' + _leadLastWarning : '');
+    status.textContent = mix.real ? (mix.real + ' job ad(s) found' + (d.summary?.search_provider_used ? ' · ' + ({tavily:'Tavily',serpapi:'SerpAPI'}[d.summary.search_provider_used] || d.summary.search_provider_used) : '') + '.' + costPart) : 'No individual job ads found. Try another role, country or job site.';
     if (_leadCosts.search_usd > 0 || responseHasPaidUsage(d)) statsRecord('Lead Finder Search' + (mix.real ? '' : ' (0 leads)'), 'lead', _leadCosts.search_usd || 0, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
     showToast(mix.real ? 'Lead Finder completed' : 'No extracted job leads returned', mix.real ? 'ok' : 'err');
     markTabDone('leadfinder', _tabRun);
@@ -548,7 +557,7 @@ async function runLeadSearch() {
     status.className = 'lead-status err';
     status.textContent = 'Error: ' + (e.message || e);
     document.getElementById('leadSummaryBox').className = 'lead-empty';
-    document.getElementById('leadSummaryBox').innerHTML = 'Lead search failed. This usually means the API/network timed out before job search returned. Try Light depth, fewer portals, or verify the Lead Finder API key supports web search.';
+    document.getElementById('leadSummaryBox').textContent = 'Search failed. ' + (e.message || 'Please try again.');
     showToast('Lead Finder error', 'err');
     markTabFailed('leadfinder', _tabRun);
   } finally {
@@ -718,6 +727,7 @@ async function runLeadEmailSearch() {
 function renderLeadFinder() {
   if (!leadFinderIsUnlocked()) { updateLeadFinderLockUI(); return; }
   setupLeadDropZone();
+  leadUpdateSearchProvider();
   leadUpdateRegionPreview();
   var leadMix = leadLeadMixCounts(_leadCompanies);
   var cCount = leadMix.total;
@@ -747,7 +757,7 @@ function renderLeadSummary() {
   if (!box) return;
   if (!_leadCompanies.length && !_leadPeople.length && !_leadSummary) {
     box.className = 'lead-empty';
-    box.innerHTML = 'Lead results will appear here.';
+    box.innerHTML = 'No results yet.';
     return;
   }
   box.className = '';
@@ -759,10 +769,7 @@ function renderLeadSummary() {
   var directCount = _leadCompanies.filter(function(c){ return leadSafeUrl(c.job_url) && leadIsDirectJobUrl(c.job_url); }).length;
   var avg = cCount ? Math.round(_leadCompanies.reduce(function(a,c){ return a + leadFitPercent(c); }, 0) / cCount) : 0;
   var title = s.candidate_title || s.target_profile || document.getElementById('leadTargetRole')?.value || 'Candidate market lead summary';
-  var topAction = '';
-  if (_leadCompanies.length && !_leadPeople.length) topAction = '<div class="lead-smart-tip" style="margin-bottom:10px;"><strong>Next best action:</strong> Tick the best extracted job leads, then click <button class="sec" onclick="switchLeadSubtab(\'companies\');" style="padding:4px 9px;font-size:11px;">Review Job Leads</button> or run <button class="sec" onclick="switchLeadSubtab(\'people\');runLeadPeopleSearch(\'selected\');" style="padding:4px 9px;font-size:11px;">Find People for Selected</button>.</div>';
-  else if (_leadPeople.length && !_leadPeople.some(function(p){ return !!p.email; })) topAction = '<div class="lead-smart-tip" style="margin-bottom:10px;"><strong>Next best action:</strong> People leads are ready. Click <button class="sec" onclick="switchLeadSubtab(\'people\');runLeadEmailSearch();" style="padding:4px 9px;font-size:11px;">Find Public Business Emails</button> only if you need public company-domain emails. No LinkedIn scraping.</div>';
-  var html = topAction + '<div class="lead-dashboard">';
+  var html = '<div class="lead-dashboard">';
   html += '<div class="lead-summary-card">';
   html += '<div class="lead-summary-title">' + esc(title) + '</div>';
   html += '<div class="lead-summary-meta">';
@@ -774,21 +781,12 @@ function renderLeadSummary() {
   html += '</div>';
   if (Array.isArray(s.core_skills) && s.core_skills.length) html += '<div class="lead-summary-section"><strong>Core skills:</strong><br>' + s.core_skills.slice(0,14).map(function(x){ return '<span class="lead-chip">' + esc(x) + '</span>'; }).join(' ') + '</div>';
   if (Array.isArray(s.target_roles) && s.target_roles.length) html += '<div class="lead-summary-section"><strong>Target roles:</strong><br>' + s.target_roles.slice(0,10).map(function(x){ return '<span class="lead-chip blue">' + esc(x) + '</span>'; }).join(' ') + '</div>';
+  if (Array.isArray(s.job_source_counts)) html += '<div class="lead-summary-section"><strong>Ads by source:</strong><br>' + s.job_source_counts.filter(function(source){ return source && typeof source.source === 'string'; }).map(function(source){ return '<span class="lead-chip">' + esc(source.source) + ': ' + (Number(source.count) || 0) + '</span>'; }).join(' ') + '</div>';
   var angles = Array.isArray(s.target_job_title_angles) ? s.target_job_title_angles : [];
-  if (angles.length) html += '<div class="lead-summary-section"><strong>Job title angles searched:</strong><br>' + angles.slice(0,16).map(function(x){ return '<span class="lead-chip">' + esc(x) + '</span>'; }).join(' ') + (angles.length > 16 ? '<span class="lead-chip">+' + (angles.length-16) + ' more</span>' : '') + '</div>';
+  if (angles.length) html += '<div class="lead-summary-section"><strong>Titles searched:</strong><br>' + angles.slice(0,16).map(function(x){ return '<span class="lead-chip">' + esc(x) + '</span>'; }).join(' ') + (angles.length > 16 ? '<span class="lead-chip">+' + (angles.length-16) + ' more</span>' : '') + '</div>';
   if (s.job_filters_used) { var jf=s.job_filters_used, fb=[]; ['must_have','exclude_keywords','seniority','max_days_open','work_setup','employment_type','company_include','company_exclude'].forEach(function(k){ if(jf[k]) fb.push('<span class="lead-chip warn">' + esc(k.replace(/_/g,' ')) + ': ' + esc(jf[k]) + '</span>'); }); if(fb.length) html += '<div class="lead-summary-section"><strong>Relevance filters used:</strong><br>' + fb.join(' ') + '</div>'; }
-  if (s.location_filter || s.source_strategy) html += '<div class="lead-summary-section">' + (s.location_filter ? '<strong>Location:</strong> ' + esc(s.location_filter) + '<br>' : '') + (s.source_strategy ? '<strong>Strategy:</strong> ' + esc(s.source_strategy) : '') + '</div>';
-  html += '</div>';
-  html += '<div class="lead-summary-card">';
-  html += '<div class="lead-mini-grid">';
-  html += '<div class="lead-mini-stat"><div class="v">' + (leadMix ? leadMix.real : cCount) + '</div><div class="k">Extracted Leads</div></div>';
-  html += '<div class="lead-mini-stat"><div class="v">' + pCount + '</div><div class="k">People Leads</div></div>';
-  html += '<div class="lead-mini-stat"><div class="v">' + avg + '%</div><div class="k">Avg Job Fit</div></div>';
-  html += '<div class="lead-mini-stat"><div class="v">' + directCount + '</div><div class="k">Direct Job Links</div></div>';
-  html += '</div>';
-  leadRefreshTotalCost();
   html += '<div class="lead-summary-section"><strong>Cost indicator:</strong> ' + esc(leadCostLabel(_leadCosts.total_usd)) + ' / ' + esc(leadMyrLabel(_leadCosts.total_usd)) + '<br><span style="color:var(--text3);">Company: ' + esc(leadCostLabel(_leadCosts.search_usd)) + ' · People: ' + esc(leadCostLabel(_leadCosts.people_usd)) + ' · Email: ' + esc(leadCostLabel(_leadCosts.email_usd)) + '</span></div>';
-  if (_leadLastWarning) html += '<div class="lead-summary-section"><span class="lead-chip warn">⚠ Note</span><br>' + esc(_leadLastWarning) + '</div>';
+  if (_leadLastWarning) html += '<details class="lead-summary-section"><summary>Search details</summary>' + esc(_leadLastWarning) + '</details>';
   html += '</div>';
   html += '</div>';
   if (_leadCompanies.length) {
@@ -809,10 +807,10 @@ function renderLeadCompanies() {
   if (!box) return;
   var st = document.getElementById('leadCompanyStatus');
   leadPruneSelectedCompanies();
-  if (!_leadCompanies.length) { if(st) st.textContent=''; leadUpdateSelectedChip(); box.className='lead-empty'; box.innerHTML='Job leads will appear here.'; return; }
+  if (!_leadCompanies.length) { if(st) st.textContent=''; leadUpdateSelectedChip(); box.className='lead-empty'; box.innerHTML='No job ads yet.'; return; }
   var viewRows = leadGetCompanyViewRows();
   var selectedCount = leadSelectedCompanyCount();
-  if (!viewRows.length) { if(st) st.textContent='0 of ' + _leadCompanies.length + ' job leads shown · ' + selectedCount + ' selected'; leadUpdateSelectedChip(); box.className='lead-empty'; box.innerHTML='No job leads match the current filter. Clear the search/filter controls above to see all leads.'; return; }
+  if (!viewRows.length) { if(st) st.textContent='0 of ' + _leadCompanies.length + ' job leads shown · ' + selectedCount + ' selected'; leadUpdateSelectedChip(); box.className='lead-empty'; box.innerHTML='No matching job ads.'; return; }
   var mix = leadLeadMixCounts(viewRows);
   if(st) st.textContent = viewRows.length + ' of ' + _leadCompanies.length + ' extracted leads shown · ' + selectedCount + ' selected';
   box.className = 'lead-result-list';
@@ -831,16 +829,16 @@ function renderLeadCompanies() {
     html += '<div class="lead-card-main">';
     html += '<div class="lead-card-title">' + esc(c.company || 'Unknown company') + '</div>';
     html += '<div class="lead-card-sub">' + esc(c.country || c.region || '') + (c.industry ? ' · ' + esc(c.industry) : '') + '</div>';
-    html += '<div class="lead-summary-meta" style="margin-bottom:0;">' + leadPortalBadgeHtml(c.job_portal || '') + (isFallbackSearch ? '<span class="lead-chip warn">Fallback search link</span>' : '') + (needsVerify ? '<span class="lead-chip warn">Needs verification</span>' : '') + '<span class="lead-score">' + esc(fit) + '% fit</span><span class="lead-chip ' + leadFitReviewLabel(fit).cls + '">' + esc(leadFitReviewLabel(fit).text) + '</span><span class="lead-fresh' + leadFreshClass(c.days_open) + '">' + esc(fresh || 'Unknown') + '</span><span class="lead-chip">' + daysText + '</span>' + (jobDirect ? '<span class="lead-chip green">Direct job ad</span>' : (needsVerify ? '<span class="lead-chip warn">Review source</span>' : '<span class="lead-chip warn">No direct job ad URL</span>')) + '</div>';
+    html += '<div class="lead-summary-meta" style="margin-bottom:0;">' + leadPortalBadgeHtml(c.job_portal || '') + (isFallbackSearch ? '<span class="lead-chip warn">Fallback search link</span>' : '') + (needsVerify ? '<span class="lead-chip warn">Needs verification</span>' : '') + '<span class="lead-score">' + esc(fit) + '% fit</span>' + (leadHasDaysOpen(c.days_open) ? '<span class="lead-fresh' + leadFreshClass(c.days_open) + '">' + esc(fresh) + '</span>' : '') + '</div>';
     html += '</div>';
     html += '<div class="lead-card-actions">' + leadJobActionHtml(c) + '</div>';
     html += '</div>';
-    html += '<div class="lead-card-bodyline"><strong>' + esc(c.matched_role || 'Matched role') + '</strong>' + (c.hiring_signal ? '<br>' + esc(c.hiring_signal) : '') + '</div>';
-    if (c.why_matched) html += '<div class="lead-card-bodyline"><strong>Why matched:</strong> ' + esc(c.why_matched) + '</div>';
+    html += '<div class="lead-card-bodyline"><strong>' + esc(c.matched_role || 'Matched role') + '</strong>' + '</div>';
+    if (c.why_matched || c.source_note) html += '<details class="lead-card-bodyline"><summary>Match details</summary>' + (c.why_matched ? '<div>' + esc(c.why_matched) + '</div>' : '') + (c.source_note ? '<div>' + esc(c.source_note) + '</div>' : '') + '</details>';
     html += '<div class="lead-card-footer">';
     if (isFallbackSearch) html += '<span class="lead-card-check" style="color:var(--text3);">Fallback link — open/review manually before people search</span>';
     else html += '<label class="lead-card-check"><input type="checkbox" class="lead-check" ' + (checked ? 'checked ' : '') + 'onclick="leadToggleCompanySelection(\'' + escJsAttr(cid) + '\', this.checked); renderLeadCompanies();" /> Select for people search</label>';
-    html += '<span style="color:var(--text3);font-size:11px;">Posted: ' + esc(c.date_posted || 'Unknown') + (c.source_note ? ' · ' + esc(c.source_note).slice(0,120) : '') + '</span>';
+    html += '<span style="color:var(--text3);font-size:11px;">Posted: ' + esc(c.date_posted || 'Unknown') + '</span>';
     html += '</div>';
     html += '</div>';
   });
@@ -852,7 +850,7 @@ function renderLeadPeople() {
   var box = document.getElementById('leadPeopleBox');
   if (!box) return;
   var stp = document.getElementById('leadPeopleStatus');
-  if (!_leadPeople.length) { if(stp && stp.getAttribute('data-busy') !== '1') stp.textContent=''; box.className='lead-empty'; box.innerHTML='People leads will appear here and are saved in this tab.'; return; }
+  if (!_leadPeople.length) { if(stp && stp.getAttribute('data-busy') !== '1') stp.textContent=''; box.className='lead-empty'; box.innerHTML='No people yet.'; return; }
   var viewRows = leadGetPeopleViewRows();
   if (!viewRows.length) { if(stp && stp.getAttribute('data-busy') !== '1') stp.textContent='0 of ' + _leadPeople.length + ' people leads shown'; box.className='lead-empty tight'; box.innerHTML='No people leads match the current filter. Clear the search/filter controls above to see all leads.'; return; }
   if(stp && !/^People search done|Email search done|Searching|Error:/i.test(stp.textContent || '')) stp.textContent = viewRows.length + ' of ' + _leadPeople.length + ' people leads shown';
@@ -915,6 +913,7 @@ function leadIsDirectJobUrl(url) {
   var path = (a.pathname || '').toLowerCase();
   var q = (a.search || '').toLowerCase();
   if (!host || path === '' || path === '/') return false;
+  if (/(^|\.)(google\.[a-z.]+|bing\.com|yahoo\.com|duckduckgo\.com)$/.test(host)) return false;
   if (host.indexOf('linkedin.com') >= 0) return path.indexOf('/jobs/view') >= 0 || (path.indexOf('/jobs/collections/recommended') >= 0 && /(^|[?&])currentjobid=\d+/.test(q));
   if (host.indexOf('jobstreet') >= 0 || host.indexOf('jobsdb') >= 0) {
     if (/(\/career-advice|\/career-guide|\/careers-advice|\/salary-guide|\/salary-guides|\/salary-report|\/salary-centre|\/salary-center|\/career-resources|\/resources\/|\/trends\/|\/blog\/|\/articles\/|\/news\/|\/insights\/|\/help\/|\/faq)/.test(path)) return false;
@@ -936,18 +935,17 @@ function leadIsDirectJobUrl(url) {
   if (/(jobid|job_id|job=|reqid|req_id|requisition|gh_jid|currentjobid)=/.test(q)) return true;
   if (/(\/job\/|\/jobs\/|\/career\/|\/careers\/|\/vacancy\/|\/vacancies\/|\/position\/|\/positions\/|\/opening\/|\/openings\/|\/role\/|\/roles\/)/.test(path)) {
     var leaf = path.replace(/\/+$/,'').split('/').pop();
-    return leaf && leaf.length >= 5 && !/^(jobs?|careers?|vacancies|positions|openings|search|listings?)$/.test(leaf);
+    if (!leaf || /^(jobs?|careers?|vacancies|positions|openings|search|listings?)$/.test(leaf)) return false;
+    var tail = path.match(/\/(?:jobs?|careers?|vacanc(?:y|ies)|positions?|openings?|roles?)\/(.+)$/);
+    return !!tail && (tail[1].replace(/[^a-z0-9]+/g,'').length >= 5 || tail[1].split('/').filter(Boolean).length >= 2 || /\/(?:job|vacancy|position|opening|role)\/[^/]+/.test(path));
   }
   return false;
 }
 
 function leadJobActionHtml(c) {
   var job = leadSafeUrl(c && c.job_url);
-  var src = leadSafeUrl(c && (c.source_url || c.company_url || c.job_url));
-  if (job && leadIsDirectJobUrl(job)) return '<a class="lead-link-btn" href="' + escAttr(job) + '" target="_blank" rel="noopener">↗ Open Job Ad</a>';
-  if (src && leadIsNeedsVerificationLead(c)) return '<a class="lead-link-btn secondary" href="' + escAttr(src) + '" target="_blank" rel="noopener">↗ Verify Source</a>';
-  if (src) return '<a class="lead-link-btn secondary" href="' + escAttr(src) + '" target="_blank" rel="noopener">↗ Source / Search</a>';
-  return '<span class="lead-link-btn disabled">No direct link</span>';
+  if (job && leadIsDirectJobUrl(job)) return '<a class="lead-link-btn" href="' + escAttr(job) + '" target="_blank" rel="noopener">↗ Open job ad</a>';
+  return '<span class="lead-link-btn disabled">No job-ad link</span>';
 }
 
 function leadInitials(name) {

@@ -4,6 +4,23 @@
 
 ## Release state
 
+- v24.6.568 extends the selected-portal work in PR302 (unmerged): SerpAPI
+  site-constrained queries preserve their constraints through organic search
+  rather than becoming duplicate Google Jobs queries. Unscoped searches retain
+  their structured Google Jobs path. See the v568 review QA report.
+
+- v24.6.567 extends v566 in PR302 (unmerged): selected-portal-first query
+  scheduling, minimum per-source coverage within 12 queries, bounded concurrent
+  coverage for larger selections, and balanced ads after relevance filters.
+  Other Portals no longer discards unknown job/career pages. More selected
+  sources can use more provider credits in Quick/Standard. No live provider calls.
+
+- v24.6.566 on `codex/leadfinder-clear-search-results`, from merged565 / PR301:
+  simpler Lead Finder form, visible search provider, and individual-ad-only
+  results/snapshots. Removes generated Google verification searches from job ads.
+  Posting-focused queries use existing budgets; no extra provider calls.
+  See the v566 QA report and associated PR for checks/review state.
+
 - v24.6.565 on `codex/full-ad-recovery-browser-badges` includes v564 below; its PR
   records CI/review/merge state. Local review fixed conflicting URL/URN identifiers
   accepted under canonical metadata and stale browser notifications after Clear.

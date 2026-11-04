@@ -1,0 +1,21 @@
+'use strict';
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const nodes=new Map();
+const node=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',value:''});return nodes.get(id);};
+const context=vm.createContext({URL,Date,console,document:{getElementById:node},getSearchProviderConfig:()=>({provider:'tavily',api_key:'fictional'}),esc:s=>String(s),showToast(){}});
+vm.runInContext(fs.readFileSync('vendor/cvstudio/lead-finder.js','utf8'),context);
+const search='https://www.google.com/search?q=%22Nov%202026%22%20%22Software%20Engineer%20%28with%20Salaries%29%22%20site%3Amy.jobstreet.com';
+const ad='https://my.jobstreet.com/job/87401944';
+const rows=[{job_url:search,job_url_quality:'structured_google_job'},{job_url:'',source_url:search,lead_kind:'job_lead_needs_verification'},{job_url:'https://my.jobstreet.com/software-engineer-jobs'},{id:'real',job_url:ad,company:'Fictional Systems',matched_role:'Software Engineer'}];
+assert.deepEqual(Array.from(context.normalizeLeadData({companies:rows}).companies,c=>c.id),['real']);
+for(const url of [search,'https://www.google.com/search?q=jobid=123','https://www.bing.com/jobs/view/123'])assert.equal(context.leadIsDirectJobUrl(url),false);
+assert.match(context.leadJobActionHtml(rows.at(-1)),/Open job ad/);
+assert.equal(context.normalizeLeadData({companies:[{job_url:'https://fictional.example/careers/backend/123'}]}).companies.length,1);
+assert.doesNotMatch(context.leadJobActionHtml(rows[1]),/href=|Verify Source|Source \/ Search/);
+context.leadUpdateSearchProvider();assert.equal(node('leadSearchProvider').textContent,'Search: Tavily');
+// Existing saved snapshots must obey the same direct-ad rule on reload.
+context.localStorage={getItem:()=>JSON.stringify({companies:rows,people:[]})};
+context.leadRefreshTotalCost=()=>{};context.renderLeadFinder=()=>{};
+context.loadLeadSnapshot();
+assert.deepEqual(Array.from(context._leadCompanies,c=>c.id),['real']);
+console.log('Lead Finder: search/listing links excluded from results and saved snapshots; direct ads and Tavily indicator retained.');
