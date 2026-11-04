@@ -7,6 +7,65 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current source: v24.6.563 captured-tab cleanup, grouping and module locks**
+on `codex/browser-tab-grouping`, from merged v560 / PR299, including v561/v562 below.
+The associated pull request records current CI, review and merge status.
+- Successful full-ad reads now retain cleanup ownership across same-job path-only
+  trailing-slash/SEO redirects. Previously the reader accepted these aliases but
+  cleanup could leave the captured tab open. Query/hash/other-job changes still
+  relinquish ownership; activated/viewed and pre-existing user tabs are protected.
+- Current Sourcer reads request close_after_read. Ready, nonempty profile captures
+  close/release their own background tab before AI detail review and return
+  profile_tab_released, so the next profile opens a fresh tab. Loading reads keep
+  polling; viewed tabs are released without closing. Legacy app/companion pairs
+  retain their previous reuse/End behavior. Search result sources stay available.
+- A transient native close failure keeps exact cleanup ownership for the next
+  normal cleanup attempt. No provider call, authorization or replay rule changes.
+- Independent review found one P2: an awaited app-window lookup could open a tab
+  after End/Stop. A per-session binding/run/capture guard now rechecks immediately
+  before creation. The original repro now creates zero tabs after completed End;
+  jobReadCancel during that lookup is covered too. Independent re-review found
+  no additional actionable issues. See `cv_studio_v24_6_563_capture_cleanup_qa_report.md`.
+- All 98 JavaScript fixtures, nineteen version/Sourcer Python checks, syntax,
+  whitespace and repository consistency pass. No live provider action,
+  installed update or native browser-extension verification.
+
+**Local work: v24.6.562 browser tab grouping (unmerged)**
+on `codex/browser-tab-grouping`, including unmerged v561 below.
+- The companion groups the authenticated CV Studio tab and new browser tabs in a
+  blue CV Studio group. Central creation covers job/company searches, full ads,
+  Sourcer profiles, HR people searches and employment-detail tabs. New scan tabs
+  open in their app's window. Existing selected user search tabs are not adopted.
+- Created-navigation-target and opener events cover normal/noopener links and
+  popups opened from CV Studio or its tab lineage, including external Outlook
+  destinations, without requesting destination host access or reading page text.
+  Groups stay window-scoped; popup windows that cannot group remain usable.
+  Existing groups chosen by the user keep their names/colors/collapsed state.
+- Group metadata is bounded numeric tab/root IDs in Chrome session storage.
+  Grouping is asynchronous and never delays scan ownership/Stop/cleanup, grants
+  scan authority or activates/closes tabs. API/storage failures remain cosmetic.
+  All 97 JavaScript fixtures, 19 version/Sourcer tests and consistency checks pass.
+- Adds tabGroups and webNavigation permissions. Apply/reload the companion update;
+  the browser may require enabling its new permissions. See
+  `cv_studio_v24_6_562_tab_groups_qa_report.md`. Native extension loading is blocked
+  by this environment's administrator, so actual native tab-strip behavior remains
+  unverified here. No live provider action, push, merge or installed-app update.
+
+**Local work: v24.6.561 module lock preferences (unmerged)**
+on `codex/module-lock-preferences`, from merged v24.6.560 / PR299.
+- CV Summary is permanently available without a code or storage flag, including
+  after restarts/upgrades. Its compatibility unlock functions now return true and
+  its static/dynamic tab labels show CV Summary immediately.
+- LinkedIn Sourcer uses code 1212 through the existing version-scoped tab-lock
+  persistence, with a named lock icon. Navigation/deep links and direct Start
+  enforce the tab lock; locked initialization performs no companion/provider work.
+  Shared companion setup/update functions used by Job Leads remain available.
+- The owner corrected the request before implementation: Lead Finder keeps all
+  existing frontend/backend guards and code 1571. CV Scoring and AI Crawler stay.
+- See `cv_studio_v24_6_561_module_locks_qa_report.md`. No backend/route/storage
+  schema changes, live provider action, push, merge or installation. All 96 JS
+  fixtures, five version checks and fictional Chromium lock checks pass.
+
 **Current source: v24.6.560 search recovery and activity highlights**
 on `codex/job-read-queue-recovery`, from merged v24.6.554 / PR298.
 The associated pull request records current CI, review and merge status.

@@ -2,6 +2,58 @@
 // bounded scan implementation below is instantiated once for each module.
 const nativeChrome=chrome, sessions=new Map(), tabLeases=new Map(), inFlight=new Map();
 let updatePending=false;
+
+// Cosmetic tab provenance only: this never grants scan/read/cleanup authority.
+// Group only authenticated app tabs and tabs actually opened from that lineage.
+function createAppTabGrouping() {
+  const enabled=typeof nativeChrome.tabs.group==='function' && typeof nativeChrome.tabGroups?.update==='function';
+  const key='cvstudioTabFamiliesV1',families=new Map();
+  let work=Promise.resolve();
+  const ready=enabled ? nativeChrome.storage.session.get(key).then(data=>{
+    const rows=data[key];
+    if(Array.isArray(rows))for(const entry of rows.slice(-2048)){
+      if(Array.isArray(entry) && entry.length===2 && entry.every(id=>Number.isInteger(id) && id>=0))families.set(...entry);
+    }
+  }).catch(()=>{}) : Promise.resolve();
+  const enqueue=task=>{const result=work.catch(()=>{}).then(task);work=result;return result.catch(()=>{});};
+  const save=async()=>{
+    while(families.size>2048)families.delete(families.keys().next().value);
+    try{await nativeChrome.storage.session.set({[key]:[...families]});}catch{/* Grouping must not fail a scan. */}
+  };
+  async function rootFor(sourceId) {
+    await ready;await work.catch(()=>{});
+    for(const session of sessions.values())if(session.binding()?.tabId===sourceId)return sourceId;
+    return families.get(sourceId);
+  }
+  function add(tabId,rootId,sourceId=rootId) {
+    if(!enabled)return Promise.resolve();
+    return enqueue(async()=>{
+      await ready;
+      const tab=await nativeChrome.tabs.get(tabId);
+      families.set(tabId,rootId);await save();
+      let anchor;
+      for(const id of [...new Set([rootId,sourceId])]){
+        try{const candidate=await nativeChrome.tabs.get(id);if(candidate.windowId===tab.windowId){anchor=candidate;break;}}catch{}
+      }
+      // Groups are window-scoped. Keep popups/new windows in their own window.
+      if(Number.isInteger(anchor?.groupId) && anchor.groupId>=0){
+        if(tab.groupId!==anchor.groupId)await nativeChrome.tabs.group({tabIds:[tab.id],groupId:anchor.groupId});
+      }else{
+        const tabIds=[...new Set([...(anchor?[anchor.id]:[]),tab.id])];
+        const groupId=await nativeChrome.tabs.group({tabIds,createProperties:{windowId:tab.windowId}});
+        await nativeChrome.tabGroups.update(groupId,{title:'CV Studio',color:'blue'});
+      }
+    });
+  }
+  async function opened(tabId,sourceId) {
+    if(!enabled || !Number.isInteger(tabId) || !Number.isInteger(sourceId))return;
+    const rootId=await rootFor(sourceId);
+    if(Number.isInteger(rootId))await add(tabId,rootId,sourceId);
+  }
+  return {add,opened,forget:id=>enabled?enqueue(async()=>{await ready;families.delete(id);await save();}):Promise.resolve()};
+}
+const appTabGroups=createAppTabGrouping();
+
 function sessionError(message) { const error=Error(message);error.cvstudioSafe=true;return error; }
 function otherOwns(scope,id) {
   return tabLeases.has(id) && tabLeases.get(id)!==scope ||
@@ -18,7 +70,16 @@ function sessionChrome(scope) {
   return {...nativeChrome,tabs:{...nativeChrome.tabs,
     get:async id=>{assertSessionTab(scope,id);return nativeChrome.tabs.get(id);},
     query:async args=>(await nativeChrome.tabs.query(args)).filter(tab=>!otherOwns(scope,tab.id)),
-    create:async args=>{const tab=await nativeChrome.tabs.create(args);assertSessionTab(scope,tab.id);tabLeases.set(tab.id,scope);return tab;},
+    create:async args=>{
+      const session=sessions.get(scope),checkCreation=session.creationGuard();
+      const rootId=session.binding()?.tabId;
+      let windowId;try{windowId=(await nativeChrome.tabs.get(rootId)).windowId;}catch{}
+      checkCreation();
+      const tab=await nativeChrome.tabs.create({...args,...(Number.isInteger(windowId)?{windowId}:{})});
+      assertSessionTab(scope,tab.id);tabLeases.set(tab.id,scope);
+      if(Number.isInteger(rootId))void appTabGroups.add(tab.id,rootId);
+      return tab;
+    },
     update:async(id,args)=>{assertSessionTab(scope,id);return nativeChrome.tabs.update(id,args);},
     remove:async id=>{assertSessionTab(scope,id);return nativeChrome.tabs.remove(id);}
   },scripting:{...nativeChrome.scripting,executeScript:async args=>{
@@ -421,6 +482,9 @@ function live(bound, run) {
   if (stateFailed || connection !== bound || run && bound.run !== run) throw Error('The companion connection changed.');
 }
 function sameOwnedPage(value, expected) {
+  // Job reads accept LinkedIn's canonical/title paths; retain cleanup authority
+  // across those path-only aliases, without accepting query/hash changes.
+  if (jobURL(expected)===expected && typeof value==='string' && !/[?#]/.test(value) && jobURL(value)===expected) return true;
   // LinkedIn may add a single trailing slash while loading an observed profile.
   // Do not equate query/hash changes, another identity or arbitrary redirects.
   return value === expected || typeof value==='string' && (!!profile(expected) || !!hrExperienceURL(expected)) && !/[?#]/.test(expected) && value.replace(/\/$/,'')===expected.replace(/\/$/,'');
@@ -442,13 +506,18 @@ function protectViewed(id) {
   viewed.set(id,owned.get(id));owned.delete(id);return true;
 }
 async function closeOwned(id, expected) {
+  let retry=false;
   try {
     const tab = await chrome.tabs.get(id);
-    if (owned.get(id) === expected && !tab.active && (sameOwnedPage(tab.url, expected) || expectedLoading(tab, expected)) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) await chrome.tabs.remove(id);
+    if (owned.get(id) === expected && !tab.active && (sameOwnedPage(tab.url, expected) || expectedLoading(tab, expected)) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) {
+      try { await chrome.tabs.remove(id); }
+      catch { retry=true; } // Retain exact ownership for the next normal cleanup.
+    }
   } catch {}
-  if (owned.get(id) === expected) owned.delete(id);
+  if (!retry && owned.get(id) === expected) owned.delete(id);
   if (viewed.get(id) === expected) viewed.delete(id);
 }
+
 async function closeHROwnedTabs() {
   // The app may already be gone before its pagehide message can arrive. Exact
   // ownership/current-or-pending URL checks still protect user-taken-over tabs.
@@ -1369,11 +1438,20 @@ async function handle(message, sender) {
     }
     if (args.method === 'readSearch' && !Array.isArray(result.profiles)) throw safeError(readerError);
     if (args.method === 'readSearch') { connection.allowed = new Set((result?.profiles || []).map(row => row.url).filter(profile).slice(0,40)); await persist(); }
+    if (args.method==='readProfile' && args.close_after_read===true && !result.loading && typeof result.text==='string' && result.text.trim()) {
+      const expected=owned.get(tab.id) || viewed.get(tab.id);
+      await closeOwned(tab.id,expected);await persist();live(bound,args.run_id);
+      return {...result,profile_tab_released:true};
+    }
     return result;
   }
   throw Error('Unsupported browser action.');
 }
 return {ready,handle,pickJob,pair,connectApp,removed,updated,activated,publicError,
+  creationGuard:()=>{
+    const bound=connection,run=bound?.run,capture=jobCapture;
+    return ()=>{if(stateFailed || connection!==bound || connection?.run!==run || jobCapture!==capture || capture?.cancelled)throw safeError('The browser action was stopped before opening its tab.');};
+  },
   binding:()=>connection, busy:()=>!!connection?.run || !!jobCapture,
   hasOwned:()=>!!owned.size,
   owns:id=>!!connection?.run && connection.source===id || owned.has(id) || viewed.has(id)};
@@ -1392,6 +1470,7 @@ function connectSessions(sender) {
       if(session.busy() && (bound?.tabId!==sender.tab?.id || bound?.documentId!==sender.documentId))throw sessionError('Finish the companion action in the other CV Studio tab first.');
     }
     for(const session of sessions.values())await session.connectApp(sender);
+    void appTabGroups.add(sender.tab.id,sender.tab.id);
   };
   const result=bindingWrites.catch(()=>{}).then(work);bindingWrites=result;return result;
 }
@@ -1399,12 +1478,24 @@ nativeChrome.action.onClicked.addListener(async tab=>{
   await allReady;
   if(updatePending || [...sessions.values()].some(session=>session.busy())){await nativeChrome.action.setBadgeText({text:'ON'});return;}
   for(const session of sessions.values())await session.pair(tab);
+  if([...sessions.values()].some(session=>session.binding()?.tabId===tab.id))void appTabGroups.add(tab.id,tab.id);
 });
 for(const [event,method] of [['onRemoved','removed'],['onUpdated','updated'],['onActivated','activated']]){
-  nativeChrome.tabs[event].addListener((...args)=>Promise.all([...sessions].map(async([scope,session])=>{
-    await session[method](...args);releaseLeases(scope);
-  })));
+  nativeChrome.tabs[event].addListener((...args)=>{
+    if(event==='onRemoved')appTabGroups.forget(args[0]);
+    return Promise.all([...sessions].map(async([scope,session])=>{
+      await session[method](...args);releaseLeases(scope);
+    }));
+  });
 }
+// openerTabId handles ordinary tabs; webNavigation also identifies noopener links
+// and window.open popups without inspecting destination page content.
+nativeChrome.tabs.onCreated?.addListener(tab=>{
+  allReady.then(()=>appTabGroups.opened(tab.id,tab.openerTabId)).catch(()=>{});
+});
+nativeChrome.webNavigation?.onCreatedNavigationTarget.addListener(details=>{
+  allReady.then(()=>appTabGroups.opened(details.tabId,details.sourceTabId)).catch(()=>{});
+});
 const leadActions=new Set(['hrDate','hrBegin','hrRead','hrNext','hrJoined','hrJoinedClose','jobRead','jobFromLink','jobCompanyID','jobReadCancel','jobTabs','jobSearchTabs','jobSearchBegin']);
 function messageScope(message) {
   if(message.scope!==undefined){

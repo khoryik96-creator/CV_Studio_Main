@@ -4,6 +4,25 @@
 
 ## Release state
 
+- v24.6.563 on `codex/browser-tab-grouping` includes v561/562; its associated PR
+  records current CI/review/merge status.
+  Captured ad path aliases now clean up; Sourcer closes ready background profile
+  tabs before detail review, preserving viewed/changed/loading/user tabs. Fixes
+  the independent review's Stop-during-window-lookup race; re-review is clean.
+  See its QA report for tests. Both app and companion updates are required.
+
+- v24.6.562 is local/unmerged on `codex/browser-tab-grouping`, including v561.
+  The companion groups new scan tabs and CV Studio-opened links with their app,
+  including HR searches/profile/employment tabs. Uses tabGroups/webNavigation;
+  cosmetic grouping is independent of scan authority/cleanup. New permissions
+  need the companion update. Native extension testing is blocked by local admin
+  policy; automated grouping/scan fixtures provide validation.
+
+- v24.6.561 is local/unmerged on `codex/module-lock-preferences`, from merged560 /
+  PR299. CV Summary opens permanently; Sourcer uses version-scoped code1212 with
+  tab-entry/direct-Start guards. Lead Finder retains its current lock/code1571
+  per the owner's correction. Provider consent/shared companion setup stay.
+
 - v24.6.560 on `codex/job-read-queue-recovery` includes v555–559; the associated PR
   records CI/review/merge status. Code review fixed two reproduced stale failure
   outlines after manual full-ad recovery and bulk HR recovery. Includes all search

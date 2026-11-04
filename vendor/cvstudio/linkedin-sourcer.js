@@ -180,7 +180,7 @@
       for (let attempt = 0; attempt < (['setCountry','readProfile'].includes(method) ? 90 : 30); attempt++) {
         if (abort?.signal.aborted) throw Error('Stopped.');
         let value;
-        try {value = await rpc('read', {run_id: run.id, tab_id: id, method, values});}
+        try {value = await rpc('read', {run_id: run.id, tab_id: id, method, values,close_after_read:method==='readProfile'});}
         catch(error) {
           // A fixed reader failure for this detail page does not invalidate
           // its already assessed search card. Never suppress access, changed
@@ -288,7 +288,7 @@
   });
   el('Source').addEventListener('change',() => { if (!busy) window.refreshLinkedinSourcerTabs(); });
   window.initLinkedinSourcer = async function() {
-    if (!el('Brief') || busy) return;
+    if (!linkedinSourcerIsUnlocked() || !el('Brief') || busy) return;
     window.refreshLinkedinSourcerTabs();
     await refreshFolders();
     try {
@@ -301,6 +301,7 @@
   };
   window.startLinkedinSourcer = async function() {
     if (busy || folderBusy || companionUpdating) return;
+    if (!requireLinkedinSourcerUnlocked()) return;
     guideIssue = ''; guideTried = true;
     const options = {brief: el('Brief').value.trim(), mode: el('Mode').value, max_pages: Number(el('Pages').value),
       max_calls: Number(el('Calls').value), confirm_paid: el('Consent').checked, use_open_search: el('OpenSearch').checked, folder:el('Folder').value,

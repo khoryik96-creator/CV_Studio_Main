@@ -51,6 +51,7 @@ function fixture(reuse=true){
     sessionStorage:{getItem:()=>saved,setItem:()=>{}},crypto:{randomUUID:()=>String(++serial).padStart(32,'0')},
     setTimeout:(fn,ms)=>{if(state.manualDeadlines && ms>=6000){const id=++deadlineId;deadlines.set(id,{fn,ms});return id;}return setTimeout(fn,[500,1000,1500,2000].includes(ms)?0:ms)},clearTimeout:id=>{deadlines.delete(id);clearTimeout(id)},AbortController,URL,URLSearchParams,Blob,
     markTabRunning:()=>1,finishTabRun:()=>{},responseHasPaidUsage:()=>false,
+    linkedinSourcerIsUnlocked:()=>!state.locked,requireLinkedinSourcerUnlocked:()=>!state.locked,
     navigator:{clipboard:{writeText:async text=>{if(state.clipboardFail)throw Error('Unavailable');state.copied=text;}}},
     fetch:async(url,options)=>{if(url==='/linkedin-sourcer?action=companion_setup'){state.setupCalls=(state.setupCalls||0)+1;if(state.holdSetup)return new Promise(resolve=>state.setupReply=resolve);return {ok:true,json:async()=>state.holdSetupBody?new Promise(resolve=>state.setupBodyReply=resolve):({folder:'Bundled companion folder',version:'24.6.480'})};}assert.equal(url,'/linkedin-sourcer');const body=options?.body?JSON.parse(options.body):null;
       if(body?.action==='candidate_folders'){folderRequests.push(body);return {ok:true,json:async()=>({folders:[...state.folders]})};}
@@ -68,6 +69,8 @@ function fixture(reuse=true){
     start:()=>window.startLinkedinSourcer(),stop:()=>window.stopLinkedinSourcer()};
 }
 (async()=>{
+  const locked=fixture();locked.state.locked=true;await locked.init();locked.el('Brief').value='SAP finance';locked.el('Consent').checked=true;await locked.start();
+  assert.equal(locked.calls.length,0,'a locked Sourcer cannot connect or open browser tabs');assert.equal(locked.requests.length,0,'a locked Sourcer cannot start paid work');
   for(const stage of ['holdSetup','holdSetupBody']){
     const stalled=fixture();stalled.state.manualDeadlines=true;stalled.state[stage]=true;
     const note=new Element(),button={disabled:false,parentElement:{querySelector:()=>note}};
