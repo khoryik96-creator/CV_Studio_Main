@@ -762,6 +762,9 @@
     else closePreview();
   }
   function discoveryControls() {
+    el('SearchResults').setAttribute('aria-busy',String(discovering));
+    el('SearchStatus').classList.toggle('is-running',discovering);
+    el('BackgroundStatus').classList.toggle('is-running',!!backgroundAds);
     for (const name of ['SearchStart','SearchRefresh','SearchMode','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchFolder','SearchClear']) el(name).disabled = busy;
     el('SearchStop').disabled = !discovering || discoveryStopped;
     el('SearchStop').hidden = !discovering;
@@ -1384,13 +1387,14 @@
   async function stopBackgroundAds(message = 'Stopped. Resume loading whenever you are ready.') {
     const queue = backgroundAds;
     if (!queue) return;
-    queue.stopped = true; queue.message = message; queue.publicController?.abort(); discoveryControls();
+    queue.stopped = true; queue.message = message; queue.publicController?.abort(); backgroundAdStatus('Stopping full-ad loading…'); discoveryControls();
     if (queue.operation) await rpc('jobReadCancel',{operation_id:queue.operation}).catch(() => {});
     await queue.done;
   }
   function startBackgroundAds() {
     if (busy || discovering || backgroundAds || !discovered.some(row => !row.full)) return;
     const queue = {stopped:false,operation:'',message:''}; backgroundAds = queue;
+    backgroundAdStatus('Checking the browser companion…');
     queue.done = Promise.resolve().then(async () => {
       try {
         const status = await sendRPC('jobStatus',{},1500);

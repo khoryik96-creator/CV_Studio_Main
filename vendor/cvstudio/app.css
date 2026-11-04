@@ -1601,6 +1601,13 @@ body.cv-caret-guard #jobLeadsEmailEditor[contenteditable="true"], body.cv-caret-
 .job-leads-discovery button { min-height:30px;padding:6px 10px; }
 .job-leads-discovery .job-leads-actions { gap:7px; }
 .job-leads-search-status { font-size:12px;line-height:1.4;margin:0; }
+.job-leads-search-status.is-running, #jobLeadsBackgroundStatus.is-running { display:flex;align-items:center;gap:8px;width:fit-content;max-width:100%;min-width:0;padding:8px 12px;border:1px solid #e9a546;border-radius:8px;background:#fff4e2;color:#8a460b;font-size:12px;line-height:1.5;overflow-wrap:anywhere;animation:job-search-activity 1.8s ease-in-out infinite; }
+.job-leads-search-status.is-running::before, #jobLeadsBackgroundStatus.is-running::before { content:'';flex:none;width:7px;height:7px;border-radius:50%;background:#e88919; }
+@keyframes job-search-activity { 0%,100% { box-shadow:0 0 0 0 rgba(232,137,25,.08); } 50% { box-shadow:0 0 0 4px rgba(232,137,25,.2); } }
+#jobLeadsSearchResults { transition:opacity .2s ease,filter .2s ease; }
+#jobLeadsSearchResults[aria-busy="true"] { opacity:.55;filter:grayscale(1);cursor:progress; }
+#jobLeadsSearchResults[aria-busy="true"] .job-leads-discovery-card, #jobLeadsSearchResults[aria-busy="true"] .job-ad-card-title { cursor:progress; }
+@media(prefers-reduced-motion:reduce) { .job-leads-search-status.is-running, #jobLeadsBackgroundStatus.is-running { animation:none;box-shadow:0 0 0 2px rgba(232,137,25,.12); } #jobLeadsSearchResults { transition:none; } }
 #viewJobLeads p:empty:not([role="status"]),#jobLeadsSearchSelection[hidden],#jobLeadsCuration[hidden] { display:none; }
 #viewJobLeads p[role="status"]:empty { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
 .job-leads-setup { font-size:12px; }

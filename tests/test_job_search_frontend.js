@@ -186,6 +186,7 @@ if(require.main===module)(async()=>{
   f.el('url').value='https://www.linkedin.com/jobs/view/7777777777';f.el('company').value='Unsaved company';f.el('role').value='Unsaved role';
   f.el('notes').value='Keep unsaved notes';f.el('contact').value='Unsaved Contact';f.el('notes').handlers.input();
   await f.el('SearchStart').click();assert.match(f.el('SearchCount').textContent,/3 found/);
+  assert.equal(f.el('SearchResults')['aria-busy'],'false');assert(!f.el('SearchStatus').classList.contains('is-running'));
   assert.equal(f.el('PreviewTitle').textContent,'Finance Manager');
   await f.el('SearchResults').children[2].click();
   assert(f.el('PreviewContent').querySelectorAll('#text').some(node=>node.textContent===c.description));
@@ -224,7 +225,7 @@ if(require.main===module)(async()=>{
   }
   const stopped=fixture();await stopped.init();stopped.state.hold=true;const running=stopped.el('SearchStart').click();
   for(let attempt=0;attempt<50&&!stopped.state.held;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
-  assert(stopped.state.held);await stopped.el('SearchStop').click();stopped.state.held();await running;
+  assert(stopped.state.held);assert.equal(stopped.el('SearchResults')['aria-busy'],'true');assert(stopped.el('SearchStatus').classList.contains('is-running'));assert(!stopped.el('SearchStop').disabled);await stopped.el('SearchStop').click();stopped.state.held();await running;assert.equal(stopped.el('SearchResults')['aria-busy'],'false');assert(!stopped.el('SearchStatus').classList.contains('is-running'));
   assert.match(stopped.el('SearchStatus').textContent,/Stopped/);assert.match(stopped.el('SearchCount').textContent,/2 found/);
   assert.equal(stopped.requests.length,0,'stop never saves results');assert.equal(stopped.el('SearchStart').disabled,false);
   const many=fixture();await many.init();many.state.many=true;many.state.totalPages=15;many.el('SearchPages').value='15';await many.el('SearchStart').click();

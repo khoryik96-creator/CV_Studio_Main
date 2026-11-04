@@ -7,7 +7,23 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
-**Source checkpoint: v24.6.554 public-read rate-limit recovery**
+**Local work: v24.6.555 job-search activity visuals (unmerged)**
+on `codex/job-search-running-indicator`, from merged v24.6.554 / PR298.
+- While the main LinkedIn search runs, the results list is dimmed/grayscaled and
+  marked aria-busy. The progress message has an orange border, dot, warm fill and
+  gentle pulse; Stop remains outside the dimmed area and stays accessible.
+- Background description loading has its own orange activity indicator while
+  results stay fully usable. Checking/stopping messages are visible immediately;
+  busy visuals clear after completion, Stop cleanup or errors. Reduced-motion
+  preference keeps a static orange highlight without animation/transitions.
+- Validation: all 95 frontend fixtures, five version checks, syntax, whitespace
+  and repository consistency pass. Chromium checks active search with 50 streamed
+  ads, enabled Stop, completion/Stop/failure reset, unlocked background capture,
+  reduced motion and mobile wrapping. Existing card/capture and rate-limit
+  workflows pass. See `tests/browser/job_search_activity.py`; preview screenshots
+  are under `/tmp/cvstudio555`. No live provider action, push or merge.
+
+**Previous checkpoint: v24.6.554 public-read rate-limit recovery (merged PR298)**
 on `codex/job-public-rate-limit-recovery`, from merged v24.6.553 / PR297.
 The associated pull request records current CI, review and merge status.
 - A public fallback HTTP 429 no longer stops the entire background queue. Public

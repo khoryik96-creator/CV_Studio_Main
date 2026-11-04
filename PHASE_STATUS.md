@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.555 is local/unmerged on `codex/job-search-running-indicator`, from
+  merged554/PR298. Search results dim during discovery, with an orange pulsing
+  progress highlight; background loading has a separate indicator with usable
+  results. All completion/Stop/error paths clear the visuals, and reduced motion
+  uses a static highlight. All 95 frontend fixtures, five version checks and
+  Chromium activity/mobile/capture/rate-limit workflows pass.
+
 - v24.6.554 is on `codex/job-public-rate-limit-recovery`, from merged553/PR297.
   Its pull request records current CI, review and merge status. Public 429s pause public HTTP traffic while companion reads
   continue, with a shared backend cooldown and frontend status/retry handling.
