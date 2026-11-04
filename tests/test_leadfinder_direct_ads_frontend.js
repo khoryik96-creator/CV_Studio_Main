@@ -12,6 +12,14 @@ for(const url of [search,'https://www.google.com/search?q=jobid=123','https://ww
 assert.match(context.leadJobActionHtml(rows.at(-1)),/Open job ad/);
 assert.equal(context.normalizeLeadData({companies:[{job_url:'https://fictional.example/careers/backend/123'}]}).companies.length,1);
 assert.doesNotMatch(context.leadJobActionHtml(rows[1]),/href=|Verify Source|Source \/ Search/);
+for (const url of ['https://www.google.com/about/careers/applications/jobs/results/123456789-software-engineer/','https://google.com/about/careers/applications/jobs/results/123456789','https://careers.google.com/jobs/results/123456789-software-engineer/']) {
+  const kept=context.normalizeLeadData({companies:[{job_url:url,company:'Google'}]}).companies;
+  assert.equal(kept.length,1,'Keep individual Google employer ads');
+  assert.match(context.leadJobActionHtml(kept[0]),/Open job ad/);
+}
+for (const url of ['https://www.google.com/about/careers/applications/jobs/results/?q=engineer','https://careers.google.com/jobs/results/?q=engineer','https://www.google.com/search?q=jobs&jobid=123456789','https://www.google.com/jobs/view/123456789','https://www.google.com/about/careers/applications/jobs/results/not-an-id/']) {
+  assert.equal(context.leadIsDirectJobUrl(url),false,'Keep Google listings/search pages excluded');
+}
 context.leadUpdateSearchProvider();assert.equal(node('leadSearchProvider').textContent,'Search: Tavily');
 // Existing saved snapshots must obey the same direct-ad rule on reload.
 context.localStorage={getItem:()=>JSON.stringify({companies:rows,people:[]})};

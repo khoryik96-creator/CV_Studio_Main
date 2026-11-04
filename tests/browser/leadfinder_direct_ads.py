@@ -40,6 +40,10 @@ with sync_playwright() as p:
     assert page.locator('#leadCompaniesBox a').get_attribute('href')==AD
     assert 'Nov 2026' not in page.locator('#leadCompaniesBox').inner_text()
     page.locator('#viewLeadFinder').screenshot(path='/workspace/outputs/leadfinder-results.png')
+    google='https://www.google.com/about/careers/applications/jobs/results/123456789-software-engineer/'
+    page.evaluate("(url)=>{_leadCompanies=normalizeLeadData({companies:[{job_url:url,company:'Google',matched_role:'Software Engineer'}]}).companies;_leadSummary={candidate_title:'Software Engineer'};renderLeadFinder();switchLeadSubtab('companies');}",google)
+    assert page.locator('#leadCompaniesBox .lead-company-card').count()==1
+    assert page.locator('#leadCompaniesBox a').get_attribute('href')==google
     page.set_viewport_size({'width':390,'height':844})
     page.locator('.lead-options > summary').click()
     assert page.locator('#leadMustHave').is_visible()

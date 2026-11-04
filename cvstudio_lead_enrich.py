@@ -43,7 +43,15 @@ def _lead_is_direct_job_url(url):
     if not host or path in ("", "/"):
         return False
     if re.search(r"(^|\.)(google\.[a-z.]+|bing\.com|yahoo\.com|duckduckgo\.com)$", u.hostname or "", re.I):
-        return False
+        # Google also hosts its own employer's postings. Admit only individual
+        # careers results with a numeric job id, never listings or web searches.
+        careers_prefix = {
+            "google.com": "/about/careers/applications/jobs/results/",
+            "www.google.com": "/about/careers/applications/jobs/results/",
+            "careers.google.com": "/jobs/results/",
+        }.get((u.hostname or "").lower())
+        return bool(careers_prefix and re.fullmatch(
+            re.escape(careers_prefix) + r"[0-9]{1,24}(?:-[a-z0-9-]+)?/?", path))
     # Common portal direct-ad patterns.
     if "linkedin.com" in host:
         params = urllib.parse.parse_qs(query, keep_blank_values=True)

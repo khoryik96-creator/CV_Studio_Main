@@ -7,6 +7,18 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current work: v24.6.569 fresh review of merged Lead Finder changes**
+on `codex/leadfinder-google-careers-review`, from merged v568 / PR302.
+- A fresh manual review reproduced one regression: the broad search-engine
+  exclusion rejected Google's own careers job ads in both backend and browser.
+  Three regression cases failed before correction.
+- The filter now admits only Google's known careers detail paths with numeric
+  job ids; Google web searches, career listings, malformed ids and other paths
+  stay excluded. Backend and browser rules match.
+- See `cv_studio_v24_6_569_fresh_review_qa_report.md`. No live provider/AI request,
+  actual Google job verification, credential use or installed update. The
+  corrective PR records fresh external review and CI status.
+
 **Current work: v24.6.568 selected-portal review correction**
 on `codex/leadfinder-clear-search-results`, extends v566/v567 in PR302 (unmerged).
 - Review found that SerpAPI stripped site restrictions before Google Jobs, making

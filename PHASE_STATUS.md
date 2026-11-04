@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.569 corrects a regression found in fresh review of merged568/PR302:
+  Google employer careers detail links are retained in backend/browser while
+  search/listing pages stay excluded. See the v569 fresh review QA report and
+  corrective PR for review/CI state. No live provider calls or installed update.
+
 - v24.6.568 extends the selected-portal work in PR302 (unmerged): SerpAPI
   site-constrained queries preserve their constraints through organic search
   rather than becoming duplicate Google Jobs queries. Unscoped searches retain

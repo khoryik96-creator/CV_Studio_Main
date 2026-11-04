@@ -152,3 +152,25 @@ def test_source_counts_do_not_double_count_other_portals_and_company_careers():
     out,_=_lead_provider_results_to_leads([{'title':'Software Engineer - Fictional Systems', 'url':'https://fictional.example/careers/software-engineer', 'snippet':'Software Engineer Malaysia','location':'Malaysia'}], ['Malaysia'], ['Company career pages','Other public job portals'], ['Software Engineer'], 'Software Engineer')
     assert len(out['companies']) == 1
     assert sum(row['count'] for row in out['summary']['job_source_counts']) == 1
+
+
+@pytest.mark.parametrize('url', [
+    'https://www.google.com/about/careers/applications/jobs/results/123456789-software-engineer/',
+    'https://google.com/about/careers/applications/jobs/results/123456789',
+    'https://careers.google.com/jobs/results/123456789-software-engineer/',
+])
+def test_google_careers_individual_posts_survive_search_engine_filter(url):
+    assert _lead_is_direct_job_url(url)
+    out,_=_lead_keep_only_direct_job_leads({'companies':[row(url, company='Google',job_portal='Company Careers')]})
+    assert [c['job_url'] for c in out['companies']] == [url]
+
+
+@pytest.mark.parametrize('url', [
+    'https://www.google.com/about/careers/applications/jobs/results/?q=engineer',
+    'https://careers.google.com/jobs/results/?q=engineer',
+    'https://www.google.com/search?q=jobs&jobid=123456789',
+    'https://www.google.com/jobs/view/123456789',
+    'https://www.google.com/about/careers/applications/jobs/results/not-an-id/',
+])
+def test_google_career_listings_and_search_pages_are_not_individual_ads(url):
+    assert not _lead_is_direct_job_url(url)
