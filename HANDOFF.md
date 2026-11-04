@@ -7,6 +7,28 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.564 full-ad recovery and browser completion badges (unmerged)**
+on `codex/full-ad-recovery-browser-badges`, from merged v563 / PR300.
+- Companion recovery can read a standalone job's verified embedded JobPosting
+  when visible DOM markup is unsupported. Exact ID/URL, title, employer and body
+  are required; mismatches/ambiguity, visible access checks and HR company-only
+  reads retain their boundaries. Metadata is parsed in inert template content.
+  Modern detail components also work when main loses its workspace id.
+- The public reader makes one bounded job-specific guest-endpoint request only
+  after a normal 200 document lacks supported job/body markup. Access, unsafe
+  redirects, conflicting canonical identity, non-HTML/oversize, transport errors and 429 do not
+  trigger that fallback. Guest reads share existing timeout/size/cooldown limits.
+- Job Leads, Sourcer and Email Verifier now notify the browser title/favicon for
+  Done/Failed even while focused. Sourcer uses the shared notifier; discovery
+  hands activity to the full-ad queue before finishing, avoiding premature Done.
+  Manual reads are tracked too. Starting a fresh run acknowledges only that
+  module's earlier badge; other module notifications and nested runs are kept.
+- See `cv_studio_v24_6_564_ad_recovery_browser_badges_qa_report.md`. User example
+  4456899159 is tested with fictional markup, not live signed-in page contents.
+  Both app and companion updates are required. All 98 JavaScript fixtures, 130
+  backend/version checks and Chromium badge/recovery workflows pass. No push,
+  merge, installed update or live provider action.
+
 **Current source: v24.6.563 captured-tab cleanup, grouping and module locks**
 on `codex/browser-tab-grouping`, from merged v560 / PR299, including v561/v562 below.
 The associated pull request records current CI, review and merge status.

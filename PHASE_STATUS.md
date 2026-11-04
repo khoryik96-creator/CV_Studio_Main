@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.564 is local/unmerged on `codex/full-ad-recovery-browser-badges`, from
+  merged563/PR300. Adds verified embedded-ad and bounded public guest recovery;
+  all three requested modules show browser title/favicon Done/Failed. Job Leads
+  waits for full-ad loading, with per-module retry acknowledgement. Live owner
+  LinkedIn markup remains unverified; see the QA report. Both updates needed.
+
 - v24.6.563 on `codex/browser-tab-grouping` includes v561/562; its associated PR
   records current CI/review/merge status.
   Captured ad path aliases now clean up; Sourcer closes ready background profile

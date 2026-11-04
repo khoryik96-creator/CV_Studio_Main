@@ -33,7 +33,11 @@ function _tabRunCount(tab) {
   var runs = TAB_ACTIVE_RUNS[tab] || {};
   return Object.keys(runs).length;
 }
-function markTabRunning(tab) {
+function markTabRunning(tab, opts) {
+  if (opts && opts.acknowledgePrevious && !_tabRunCount(tab)) {
+    ackBrowserActivityForTab(tab);
+    ackBrowserActivityFailedForTab(tab);
+  }
   var token = (TAB_RUN_SEQ[tab] || 0) + 1;
   TAB_RUN_SEQ[tab] = token;
   if (!TAB_ACTIVE_RUNS[tab]) TAB_ACTIVE_RUNS[tab] = {};

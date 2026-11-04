@@ -315,7 +315,7 @@
     if(!['auto','standard'].includes(options.mode) && options.country_mode==='specific'){tell('Automatic country filters use LinkedIn People search. In Recruiter set Locations there and review the open search.');invalidGuide('Mode');return;}
     if (!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 || !Number.isInteger(options.max_calls) || options.max_calls < 1 || options.max_calls > 80) { el('Options').open = true; tell('Choose 1–15 pages and 1–80 API requests in Search options.'); invalidGuide(!Number.isInteger(options.max_pages) || options.max_pages < 1 || options.max_pages > 15 ? 'Pages' : 'Calls'); return; }
     searchFailed = false; busy = true; abort = new AbortController(); browserRun = ''; draw();
-    const activity = markTabRunning('linkedinsourcer');
+    const activity = markTabRunning('linkedinsourcer',{acknowledgePrevious:true});
     let failed = false;
     try {
       tell('Finding your open LinkedIn search…');
@@ -349,7 +349,7 @@
     catch (error) { failed = !abort.signal.aborted; tell(abort.signal.aborted ? 'Stopped. Your current list is kept.' : error.message); }
     finally {
       if (browserRun) { try { await rpc('end', {run_id: browserRun}); } catch {} browserRun = ''; }
-      searchFailed = failed; busy = false; abort = null; draw(); finishTabRun('linkedinsourcer', failed ? 'failed' : 'done', activity);
+      searchFailed = failed; busy = false; abort = null; draw(); if(failed) markTabFailed('linkedinsourcer',activity,{forceBrowser:true}); else markTabDone('linkedinsourcer',activity,{forceBrowser:true});
     }
   };
   window.stopLinkedinSourcer = async function() {

@@ -192,7 +192,64 @@
     const name = text(main.querySelector('h1, [data-test-profile-name]')).slice(0, 150);
     return {text: words, publicUrl: publicLink || '', name};
   }
+  function readStructuredJob(expectedURL) {
+    // Standalone job identity only. Search-page/recommended postings cannot
+    // authorize this recovery, and company-only HR reads still use the DOM.
+    if (typeof document.createElement!=='function' || jobLink(location.href)!==expectedURL || jobUnavailable()) return null;
+    const blocked=[...document.querySelectorAll('h1,h2,[role="heading"]')].filter(visible).some(node=>/^(?:sign in(?: to linkedin)?|security verification|verify your identity|temporarily restricted)$/i.test(text(node)));
+    if(blocked)return null;
+    const identities=[...document.querySelectorAll('link[rel="canonical"], meta[property="og:url"]')]
+      .map(node=>jobLink(node.getAttribute('href') || node.getAttribute('content'))).filter(Boolean);
+    if(identities.some(value=>value!==expectedURL))return null;
+    const postings=[];
+    const walk=(value,depth=0)=>{
+      if(depth>8 || !value || typeof value!=='object')return;
+      if(Array.isArray(value)){for(const item of value.slice(0,100))walk(item,depth+1);return;}
+      if(value['@type']==='JobPosting' || Array.isArray(value['@type']) && value['@type'].includes('JobPosting'))postings.push(value);
+      else walk(value['@graph'],depth+1);
+    };
+    for(const script of [...document.querySelectorAll('script[type="application/ld+json"]')].slice(0,16)){
+      const raw=script.textContent || '';if(raw.length>524288)continue;
+      try{walk(JSON.parse(raw));}catch{}
+    }
+    const clean=value=>{
+      // Template content is inert: metadata images/frames never trigger fetches.
+      const template=document.createElement('template');template.innerHTML=value;
+      const root=template.content;
+      for(const node of root.querySelectorAll('script,style,button,img,iframe,object,embed'))node.remove();
+      for(const node of root.querySelectorAll('br,p,li,div,h1,h2,h3,h4,section'))node.append(document.createTextNode('\n'));
+      return root.textContent.trim();
+    };
+    const id=expectedURL.split('/').at(-1),found=[];
+    for(const posting of postings){
+      const identity=posting.identifier?.value ?? posting.identifier;
+      const postingID=['string','number'].includes(typeof identity)?String(identity):'';
+      const postingURL=jobLink(posting.url);
+      if(typeof posting.url==='string' && posting.url.trim() && postingURL!==expectedURL || /^\d+$/.test(postingID) && postingID!==id)continue;
+      if(postingURL!==expectedURL && postingID!==id && !(identities.includes(expectedURL) && postings.length===1))continue;
+      if(typeof posting.title!=='string' || typeof posting.hiringOrganization?.name!=='string' || typeof posting.description!=='string')continue;
+      const role=compact(clean(posting.title)).slice(0,240),company=compact(clean(posting.hiringOrganization.name)).slice(0,200);
+      const description=clean(posting.description);if(!role || !company || !description)continue;
+      let datePosted='';const rawDate=posting.datePosted;
+      if(typeof rawDate==='string' && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(rawDate)){
+        const day=rawDate.slice(0,10),value=new Date(rawDate),calendar=new Date(day+'T00:00:00Z');
+        if(Number.isFinite(value.getTime()) && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10)===day && (rawDate.length===10 || Number(rawDate.slice(11,13))<24))datePosted=day;
+      }
+      const places=Array.isArray(posting.jobLocation)?posting.jobLocation:[posting.jobLocation];
+      const where=places.map(place=>{const a=place?.address;return a && typeof a==='object'?[a.addressLocality,a.addressRegion,typeof a.addressCountry==='string'?a.addressCountry:a.addressCountry?.name].filter(v=>typeof v==='string' && v.trim()).join(', '):'';}).filter(Boolean);
+      found.push({url:expectedURL,role,company,location:[...new Set(where)].join('; ').slice(0,240),date_posted:datePosted,
+        description:description.slice(0,20000),description_html:posting.description.length<=80000?posting.description:'',description_truncated:description.length>20000});
+    }
+    return found.length && new Set(found.map(row=>JSON.stringify([row.role,row.company,row.description]))).size===1?found[0]:null;
+  }
   function readJob(expectedURL, companyOnly=false) {
+    try { return readJobDOM(expectedURL,companyOnly); }
+    catch(error){
+      if(error.cvstudioJobLoading && !companyOnly){try{const result=readStructuredJob(expectedURL);if(result)return result;}catch{}}
+      throw error;
+    }
+  }
+  function readJobDOM(expectedURL, companyOnly=false) {
     companyOnly=companyOnly===true;
     // A recognized ad is read from its own detail panel. Its description can
     // legitimately mention fraud "unusual activity" or identity "security
@@ -285,7 +342,7 @@
     return /\b(?:this job is no longer available|job (?:is )?not (?:found|available)|page (?:was )?not found)\b/i.test(headings);
   }
   function readModernJob(url, companyOnly=false) {
-    const workspace = document.querySelector('main#workspace');
+    const workspace = document.querySelector('main#workspace') || document.querySelector('main');
     if (!workspace) return null;
     const id = url.split('/').at(-1);
     const abouts = [...workspace.querySelectorAll('[componentkey="JobDetails_AboutTheJob_' + id + '"]')].filter(visible);

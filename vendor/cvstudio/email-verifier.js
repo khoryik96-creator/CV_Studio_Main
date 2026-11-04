@@ -166,7 +166,7 @@
     const indexes=rows.map((row,index)=>index).filter(index=>!recheckOnly || canRecheck(rows[index]));
     if(!indexes.length) return;
     running = true; stopping = false;
-    const token = typeof markTabRunning === 'function' ? markTabRunning('emailverifier') : null;
+    const token = typeof markTabRunning === 'function' ? markTabRunning('emailverifier',{acknowledgePrevious:true}) : null;
     let failed = false;
     el('Message').textContent = list.duplicates ? list.duplicates + ' duplicate entries removed.' : 'Checking your list…';
     render();
@@ -196,7 +196,7 @@
       if (!failed) el('Message').textContent = stopping || leaving ? 'Stopped. Completed results are kept; remaining checks have not run.' : recheckOnly?'Deeper rechecks finished. Previous results remain in each explanation.':'Finished. ' + rows.length + ' emails checked' + (list.duplicates ? '; ' + list.duplicates + ' duplicates removed.' : '.');
     } finally {
       running = false; render();
-      if (token !== null) { if (failed && typeof markTabFailed === 'function') markTabFailed('emailverifier',token); else if (typeof markTabDone === 'function') markTabDone('emailverifier',token); }
+      if (token !== null) { if (failed && typeof markTabFailed === 'function') markTabFailed('emailverifier',token,{forceBrowser:true}); else if (typeof markTabDone === 'function') markTabDone('emailverifier',token,{forceBrowser:true}); }
     }
   }
   function init() {

@@ -1311,11 +1311,11 @@
   }
   function checkDiscovery() { if (discoveryStopped) throw Error('Stopped.'); }
   const pauseDiscovery = () => new Promise(resolve => setTimeout(resolve,350));
-  const beginScanActivity = () => typeof markTabRunning === 'function' ? markTabRunning('jobleads') : null;
+  const beginScanActivity = () => typeof markTabRunning === 'function' ? markTabRunning('jobleads',{acknowledgePrevious:true}) : null;
   function finishScanActivity(token, failed) {
     if (token === null) return;
-    if (failed && typeof markTabFailed === 'function') markTabFailed('jobleads',token);
-    else if (typeof markTabDone === 'function') markTabDone('jobleads',token);
+    if (failed && typeof markTabFailed === 'function') markTabFailed('jobleads',token,{forceBrowser:true});
+    else if (typeof markTabDone === 'function') markTabDone('jobleads',token,{forceBrowser:true});
   }
   async function startDiscovery() {
     if (busy) return;
@@ -1350,8 +1350,9 @@
     } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
       if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch { prefetch=false; } }
-      discoveryFailed=failed; discoveryRun = ''; discovering = false; lock(false); drawDiscovery();finishScanActivity(activity,failed);
+      discoveryFailed=failed; discoveryRun = ''; discovering = false; lock(false); drawDiscovery();
       if (prefetch && !failed && !discoveryStopped) startBackgroundAds();
+      finishScanActivity(activity,failed);
     }
   }
   function fullAd(row, data) {
@@ -1420,7 +1421,7 @@
     for(const row of discovered){if(!row.full){const saved=savedFullContent(row);if(saved)Object.assign(row,saved);}}
     drawDiscovery();backgroundAdStatus('');
     if(!discovered.some(row=>!row.full))return;
-    const queue = {stopped:false,operation:'',message:'',failed:false}; backgroundAds = queue;
+    const queue = {stopped:false,operation:'',message:'',failed:false,activity:beginScanActivity()}; backgroundAds = queue;
     backgroundAdStatus('Checking the browser companion…');
     queue.done = Promise.resolve().then(async () => {
       try {
@@ -1460,6 +1461,7 @@
       finally {
         if (backgroundAds === queue) { backgroundAds = null; backgroundFailed=queue.failed; }
         backgroundAdStatus(queue.message || 'Finished. You can retry ads that could not load.'); discoveryControls();
+        finishScanActivity(queue.activity,queue.failed || discovered.some(row=>row.fullError && !row.full));
       }
     });
     discoveryControls(); return queue.done;
@@ -1471,6 +1473,7 @@
     if (row.full || cached) {
       previewCapture = {...(cached || row)}; drawDiscovery(); return;
     }
+    const activity=beginScanActivity();let failed=false;
     lock(true); searchStatus('Reading the selected ad in Chrome…');
     try {
       const data = await readFullContent(row,hex());
@@ -1479,8 +1482,8 @@
       const found = discovered.find(value => value.url === row.url); if (found) Object.assign(found,previewCapture);
       backgroundAdStatus('');
       searchStatus(savedJob(row.url) ? 'Full ad captured for preview. To update the saved content, use Edit → Refresh content, then save.' : 'Full ad captured for review. Select it and Add selected to list when ready.');
-    } catch (error) { searchStatus(error.message + ' The previous content or search summary is still available.'); }
-    finally { lock(false); drawDiscovery(); }
+    } catch (error) { failed=true;searchStatus(error.message + ' The previous content or search summary is still available.'); }
+    finally { lock(false); drawDiscovery();finishScanActivity(activity,failed); }
   }
   async function addDiscovered(onlyUrl) {
     if (busy) return;
