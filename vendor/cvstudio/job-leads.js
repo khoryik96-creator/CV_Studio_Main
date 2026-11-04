@@ -19,10 +19,10 @@
   }
   let folderNames = [];
   let discovered = [], discoveryPage = 0, discoveryRenderedPage = -1, discovering = false, discoveryStopped = false, discoveryRun = '';
-  let backgroundAds = null, publicJobPausedUntil = 0;
+  let backgroundAds = null, publicJobPausedUntil = 0, discoveryFailed = false, backgroundFailed = false;
   const discoveryPicked = new Set();
   let previewUrl = '', previewCapture = null, previewSource = 'saved', previewDismissed = false;
-  let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false;
+  let hrRow = '', hrRun = '', hrCapture = '', hrStopped = false, hrRunning = false, hrFailedUrl = '';
   let bulkHR = null;
   // The HR queue resumes only its own unfinished run.
   const bulkCheckpointKeys={BulkHR:'cvstudio_job_leads_hr_queue_v1'};
@@ -725,6 +725,7 @@
     drawDiscovery();
   }
   function selectPreview(url, scroll = false, source = 'saved') {
+    if (previewUrl !== url) hrFailedUrl='';
     previewUrl = url; previewSource = source; previewDismissed = false;
     if (source === 'search') {
       const index = discovered.findIndex(row => row.url === url);
@@ -765,6 +766,9 @@
     el('SearchResults').setAttribute('aria-busy',String(discovering));
     el('SearchStatus').classList.toggle('is-running',discovering);
     el('BackgroundStatus').classList.toggle('is-running',!!backgroundAds);
+    const adsFailed = backgroundFailed || discovered.some(row => row.fullError && !row.full);
+    el('SearchPanel').classList.toggle('has-error',!discovering && !backgroundAds && (discoveryFailed || adsFailed));
+    el('BackgroundStatus').classList.toggle('has-error',!discovering && !backgroundAds && adsFailed);
     for (const name of ['SearchStart','SearchRefresh','SearchMode','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchFolder','SearchClear']) el(name).disabled = busy;
     el('SearchStop').disabled = !discovering || discoveryStopped;
     el('SearchStop').hidden = !discovering;
@@ -797,6 +801,7 @@
     for (const name of ['HRCountryMode','HRCountry','HRKeywords','HRPages','HRCompanyURL']) el(name).disabled = busy;
     el('HRStop').disabled = !hrRunning || hrStopped;
     el('HR').classList.toggle('is-running',hrRunning && !bulkHR?.running);
+    el('HR').classList.toggle('has-error',!hrRunning && !!hrFailedUrl && previewUrl === hrFailedUrl);
     bulkHRControls();
     el('BackgroundStart').hidden = !discovered.some(row => !row.full);
     el('BackgroundStart').disabled = busy || discovering || !!backgroundAds;
@@ -975,9 +980,12 @@
     let settings;try { settings=hrSettings('HR'); } catch(error) { el('HRMessage').textContent=error.message;nextGuide(true);return; }
     rememberHRPreferences();
     const activity=beginScanActivity();let outcome;
-    hrStopped=false; hrRunning=true; hrRun=''; lock(true);
+    hrFailedUrl=''; hrStopped=false; hrRunning=true; hrRun=''; lock(true);
     try { outcome=await scanHR(row,{...settings,companyURL:el('HRCompanyURL').value.trim()},value=>{el('HRMessage').textContent=value;},hrPeople); }
-    finally { hrRunning=false;lock(false);finishScanActivity(activity,!outcome || outcome.state==='failed' || outcome.stopQueue); }
+    finally {
+      const failed=!outcome || outcome.state==='failed' || outcome.stopQueue;
+      hrFailedUrl=failed ? row.url : ''; hrRunning=false;lock(false);finishScanActivity(activity,failed);
+    }
   }
   function previousHRCompany(row) {
     const h=row.hr;
@@ -1136,6 +1144,7 @@
     for (const name of ['CountryMode','Country','Pages','Keywords']) el('BulkHR'+name).disabled=busy;
     el('BulkHRStart').disabled=busy || !rows.some(row=>picked.has(row.id) && !row.deleted);
     el('BulkHRStop').disabled=!bulkHR?.running || bulkHR.ui!==jobAdsHRUI || hrStopped;
+    el('BulkHRProgress').classList.toggle('has-error',!!bulkHR && bulkHR.ui===jobAdsHRUI && !bulkHR.running && !!bulkHR.hasError);
     let resume=false;
     try { resume=bulkHRPlan(rows.filter(row=>picked.has(row.id) && !row.deleted),hrSettings('BulkHR')).resume; } catch {}
     el('BulkHRStart').textContent=resume?'Resume unfinished ads':'Scan selected ads';
@@ -1274,6 +1283,7 @@
       if (active) {active.node.dataset.state='failed';active.node.textContent=active.title+' · '+error.message;bulkHR.completed++;bulkHR.failed++;}
     }
     finally {
+      bulkHR.hasError=bulkHR.failed>0 || !!stoppedReason;
       bulkHR.running=false;hrRunning=false;
       const remaining=bulkHR.items.length-bulkHR.completed;
       for (const item of bulkHR.items) if (item.node.dataset.state==='waiting') item.node.textContent=item.title+' · Not started';
@@ -1313,6 +1323,7 @@
     if (!Number.isInteger(pages) || pages < 1 || pages > 15) { searchStatus('Choose 1 to 15 pages.'); guide('SearchPages',true,true); return; }
     if (!useOpen && (!query || query.length > 240 || where.length > 160 || /[\x00-\x1f]/.test(query + where))) { searchStatus('Enter job keywords and an optional location.'); guide(!query || query.length > 240 || /[\x00-\x1f]/.test(query) ? 'SearchQuery' : 'SearchLocation',true,true); return; }
     if (useOpen && !el('SearchSource').value) { searchStatus('Refresh search tabs and choose an open LinkedIn job search.'); guide('SearchRefresh',false,true); return; }
+    discoveryFailed=false; backgroundFailed=false;
     discovering = true; discoveryStopped = false; discoveryRun = '';
     const activity=beginScanActivity();let failed=false, prefetch=false;
     lock(true); searchStatus('Checking the browser companion…');
@@ -1337,7 +1348,7 @@
     } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
     finally {
       if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch { prefetch=false; } }
-      discoveryRun = ''; discovering = false; lock(false); drawDiscovery();finishScanActivity(activity,failed);
+      discoveryFailed=failed; discoveryRun = ''; discovering = false; lock(false); drawDiscovery();finishScanActivity(activity,failed);
       if (prefetch && !failed && !discoveryStopped) startBackgroundAds();
     }
   }
@@ -1403,10 +1414,11 @@
   }
   function startBackgroundAds() {
     if (busy || discovering || backgroundAds) return;
+    backgroundFailed=false;
     for(const row of discovered){if(!row.full){const saved=savedFullContent(row);if(saved)Object.assign(row,saved);}}
     drawDiscovery();backgroundAdStatus('');
     if(!discovered.some(row=>!row.full))return;
-    const queue = {stopped:false,operation:'',message:''}; backgroundAds = queue;
+    const queue = {stopped:false,operation:'',message:'',failed:false}; backgroundAds = queue;
     backgroundAdStatus('Checking the browser companion…');
     queue.done = Promise.resolve().then(async () => {
       try {
@@ -1442,9 +1454,9 @@
           // Pace sequential reads; never open a pool of LinkedIn tabs.
           if (!queue.stopped) await pauseDiscovery();
         }
-      } catch (error) { queue.message = error.message; }
+      } catch (error) { queue.message = error.message; queue.failed=!queue.stopped; }
       finally {
-        if (backgroundAds === queue) backgroundAds = null;
+        if (backgroundAds === queue) { backgroundAds = null; backgroundFailed=queue.failed; }
         backgroundAdStatus(queue.message || 'Finished. You can retry ads that could not load.'); discoveryControls();
       }
     });
@@ -1703,7 +1715,7 @@
       if (busy) return;
       lock(true);
       try {
-        await stopBackgroundAds(); discovered = []; discoveryPicked.clear(); discoveryPage = 0;
+        await stopBackgroundAds(); discoveryFailed=false; backgroundFailed=false; hrFailedUrl=''; discovered = []; discoveryPicked.clear(); discoveryPage = 0;
         previewUrl = ''; previewCapture = null; previewDismissed = true;
         backgroundAdStatus(''); searchStatus('Search results cleared. Your saved ads are kept.');
       } finally { lock(false); drawDiscovery(); }

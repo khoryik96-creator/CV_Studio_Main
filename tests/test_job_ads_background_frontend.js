@@ -45,8 +45,9 @@ async function search(f){await f.init();f.state.backgroundCapable=true;await f.e
   assert.equal(reads(failed).length,3,'one ad timeout does not block the remaining ads');
   assert.match(text(cards(failed)[0]),/Slow job details/);assert.match(text(cards(failed)[0]),/Search summary/);
   assert.match(failed.el('BackgroundStatus').textContent,/2 of 3.*1 could not load/);
+  assert(failed.el('SearchPanel').classList.contains('has-error'));assert(failed.el('BackgroundStatus').classList.contains('has-error'));
   await failed.el('BackgroundStart').click();assert.equal(reads(failed).length,4,'resume retries only unfinished ads');
-  assert.match(failed.el('BackgroundStatus').textContent,/3 of 3/);
+  assert.match(failed.el('BackgroundStatus').textContent,/3 of 3/);assert(!failed.el('SearchPanel').classList.contains('has-error'));assert(!failed.el('BackgroundStatus').classList.contains('has-error'));
 
   for(const action of ['stop','clear','foreground','foreground-status','new-search','pagehide']){
     const g=fixture();let replyRead,operation;

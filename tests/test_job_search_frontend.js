@@ -220,12 +220,15 @@ if(require.main===module)(async()=>{
     const before=f.calls.length;await f.el('SearchStart').click();
     assert.deepEqual(f.calls.slice(before).map(call=>call.action),['jobStatus'],'unavailable/busy/old companions never open or end a search');
     assert.match(f.el('SearchCount').textContent,/3 found/,'readiness failures keep the prior results');
-    assert.equal(f.el('SearchStart').disabled,false);
+    assert.equal(f.el('SearchStart').disabled,false);assert(f.el('SearchPanel').classList.contains('has-error'));
     if('searchRevision' in patch)assert.match(f.el('SearchStatus').textContent,/Update and reload/);
   }
+  Object.assign(f.state,{connected:true,searchCapable:true,searchRevision:1,oldConcurrent:false,busy:false});
+  await f.el('SearchStart').click();assert(!f.el('SearchPanel').classList.contains('has-error'),'successful retry clears search failure');
   const stopped=fixture();await stopped.init();stopped.state.hold=true;const running=stopped.el('SearchStart').click();
   for(let attempt=0;attempt<50&&!stopped.state.held;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
   assert(stopped.state.held);assert.equal(stopped.el('SearchResults')['aria-busy'],'true');assert(stopped.el('SearchStatus').classList.contains('is-running'));assert(!stopped.el('SearchStop').disabled);await stopped.el('SearchStop').click();stopped.state.held();await running;assert.equal(stopped.el('SearchResults')['aria-busy'],'false');assert(!stopped.el('SearchStatus').classList.contains('is-running'));
+  assert(!stopped.el('SearchPanel').classList.contains('has-error'));
   assert.match(stopped.el('SearchStatus').textContent,/Stopped/);assert.match(stopped.el('SearchCount').textContent,/2 found/);
   assert.equal(stopped.requests.length,0,'stop never saves results');assert.equal(stopped.el('SearchStart').disabled,false);
   const many=fixture();await many.init();many.state.many=true;many.state.totalPages=15;many.el('SearchPages').value='15';await many.el('SearchStart').click();

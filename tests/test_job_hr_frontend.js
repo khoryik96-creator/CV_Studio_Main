@@ -73,7 +73,7 @@ if(require.main===module)(async()=>{
   assert.equal(f.calls.filter(x=>x.action==='hrJoined').length,1,'duplicate pages do not re-open profiles');
   assert(f.calls.some(x=>x.action==='end'));
   assert.deepEqual(f.activity,['running','done']);
-  assert(!f.el('HR').classList.contains('is-running'));
+  assert(!f.el('HR').classList.contains('is-running'));assert(!f.el('HR').classList.contains('has-error'));
   const branded=hrFixture();branded.state.records[0].company='ABC';await branded.init();branded.state.companyCapture={company:'ABC Corporate Business Solutions'};
   await branded.el('HRStart').click();assert.equal(branded.state.hrArgs?.company,'ABC Corporate Business Solutions','the exact ad employer, not its saved display label, scopes the scan');
   assert.equal(branded.state.hrArgs.job_url,branded.state.records[0].url);assert.equal(branded.state.records[0].company,'ABC');
@@ -104,6 +104,7 @@ if(require.main===module)(async()=>{
     assert.match(g.el('HRMessage').textContent,/Previous saved results/);
     assert.deepEqual(g.activity,['running','failed'],kind+' must settle the activity on failure');
     assert(!g.el('HR').classList.contains('is-running'),kind+' clears the panel highlight');
+    assert(g.el('HR').classList.contains('has-error'),kind+' marks the failed HR panel');
     if(['oldCompanion','oldKeywords','oldCompanyIdentity','oldGroupFilter','oldCompanySource','oldResilience','oldLayout','oldJoinedLoading','oldEmployment','oldExperiencePage','oldEmploymentShapes','oldBrowsing','oldConcurrent','oldApplyTransition','hrBusy'].includes(kind))assert(!g.calls.some(x=>x.action==='hrBegin'));
   }
   const stopped=hrFixture();await stopped.init();stopped.state.hold=true;
@@ -116,7 +117,7 @@ if(require.main===module)(async()=>{
   stopped.el('HRStop').click();
   assert(stopped.el('HR').classList.contains('is-running'),'highlight stays until the pending read settles');
   stopped.state.release();await run;
-  assert(!stopped.el('HR').classList.contains('is-running'));
+  assert(!stopped.el('HR').classList.contains('is-running'));assert(!stopped.el('HR').classList.contains('has-error'));
   for(const id of ['Search','Filter','FolderFilter'])assert(!stopped.el(id).disabled);
   assert(!stopped.requests.some(x=>x.action==='save_hr'));assert(stopped.calls.some(x=>x.action==='end'));
   assert.match(stopped.el('HRMessage').textContent,/Scan stopped/);

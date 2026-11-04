@@ -7,6 +7,22 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.559 Job Leads/HR failure highlights (unmerged)**
+on `codex/job-read-queue-recovery`, including v555–v558 below.
+- Failed job discovery gives the search panel the same static red border/tint as
+  Sourcer. Terminal full-ad preflight failures or unread failed ads also mark the
+  panel and description-loading status red after the queue settles. New searches,
+  retries and Clear reset their relevant error state; active reads stay orange.
+- Single-ad HR failures/cleanup issues mark only that ad's HR panel red. Retry,
+  Clear or selecting another ad clears the state. Normal Stop is neutral. HR queue
+  progress turns red for partial failures or an abnormal stopped reason and resets
+  when its next queue starts. Existing error text/results remain visible.
+- All 96 JavaScript fixtures, five version checks, syntax, whitespace and repository
+  consistency pass. Fictional Chromium confirms computed red borders, HR/search
+  retry resets, normal Stop, Clear, orange/reduced-motion and mobile behavior.
+  See `cv_studio_v24_6_559_job_hr_failure_qa_report.md`. No live provider action,
+  push, merge, installation, route/storage or companion behavior change.
+
 **Local work: v24.6.558 Sourcer activity and failure highlight (unmerged)**
 on `codex/job-read-queue-recovery`, including v555–v557 below.
 - The entire LinkedIn Sourcer control card has an orange border, warm fill and

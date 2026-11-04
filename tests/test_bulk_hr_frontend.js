@@ -66,8 +66,10 @@ if(require.main===module)(async()=>{
   assert.equal(stopped.requests.filter(r=>r.action==='save_hr').length,1);assert.equal(stopped.state.starts.length,2);assert.equal(stopped.state.records[1].hr.country,'Singapore');assert.equal(stopped.state.records[2].hr.country,'Singapore');
   assert.match(stopped.el('BulkHRMessage').textContent,/stopped/i);assert(!stopped.el('BulkHRStart').disabled);
   assert.deepEqual(stopped.activity,['running','done'],'intentional Stop releases the activity after cleanup');
+  assert(!stopped.el('BulkHRProgress').classList.contains('has-error'));
   const failed=bulkFixture();await failed.init();failed.select();failed.state.failId='2'.repeat(32);await failed.start();
   assert.deepEqual(failed.activity,['running','failed'],'partial failures require attention');
+  assert(failed.el('BulkHRProgress').classList.contains('has-error'));
   assert.equal(failed.requests.filter(r=>r.action==='save_hr').length,2);assert.equal(failed.el('BulkHRBar').value,3);assert.match(failed.el('BulkHRResults').children[1].textContent,/unavailable/);
   const stale=bulkFixture();await stale.init();stale.select();stale.state.staleId='2'.repeat(32);await stale.start();assert.equal(stale.state.records[1].hr.country,'Singapore');assert.equal(stale.state.records[2].hr.people.length,1);
   const storage=bulkFixture();await storage.init();storage.select();storage.state.onRequest=async data=>data.action==='save_hr'?{ok:false,json:async()=>({error:'Storage unavailable',code:'JOB_LEADS_STORAGE_ERROR'})}:undefined;

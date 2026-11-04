@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.559 is local/unmerged on `codex/job-read-queue-recovery`, including v555–558.
+  Job search/full-ad failure and single/bulk HR failure areas get static red
+  outlines/tints. Relevant retry/new search/Clear resets them; normal Stop stays
+  neutral. All 96 JS fixtures, five version checks and fictional Chromium search/
+  HR failure/retry visuals pass. Existing provider/browser/storage behavior stays.
+
 - v24.6.558 is local/unmerged on `codex/job-read-queue-recovery`, including v555–557.
   The whole Sourcer control card pulses orange while running and shows a static
   red highlight after failure. Success/Stop clear activity; Start/Clear reset red.
