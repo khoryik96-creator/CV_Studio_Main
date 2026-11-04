@@ -913,7 +913,10 @@ function leadIsDirectJobUrl(url) {
   var path = (a.pathname || '').toLowerCase();
   var q = (a.search || '').toLowerCase();
   if (!host || path === '' || path === '/') return false;
-  if (/(^|\.)(google\.[a-z.]+|bing\.com|yahoo\.com|duckduckgo\.com)$/.test(host)) return false;
+  if (/(^|\.)(google\.[a-z.]+|bing\.com|yahoo\.com|duckduckgo\.com)$/.test(host)) {
+    return ((host === 'google.com' || host === 'www.google.com') && /^\/about\/careers\/applications\/jobs\/results\/[0-9]{1,24}(?:-[a-z0-9-]+)?\/?$/.test(path)) ||
+      (host === 'careers.google.com' && /^\/jobs\/results\/[0-9]{1,24}(?:-[a-z0-9-]+)?\/?$/.test(path));
+  }
   if (host.indexOf('linkedin.com') >= 0) return path.indexOf('/jobs/view') >= 0 || (path.indexOf('/jobs/collections/recommended') >= 0 && /(^|[?&])currentjobid=\d+/.test(q));
   if (host.indexOf('jobstreet') >= 0 || host.indexOf('jobsdb') >= 0) {
     if (/(\/career-advice|\/career-guide|\/careers-advice|\/salary-guide|\/salary-guides|\/salary-report|\/salary-centre|\/salary-center|\/career-resources|\/resources\/|\/trends\/|\/blog\/|\/articles\/|\/news\/|\/insights\/|\/help\/|\/faq)/.test(path)) return false;

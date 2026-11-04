@@ -43,7 +43,15 @@ def _lead_is_direct_job_url(url):
     if not host or path in ("", "/"):
         return False
     if re.search(r"(^|\.)(google\.[a-z.]+|bing\.com|yahoo\.com|duckduckgo\.com)$", u.hostname or "", re.I):
-        return False
+        # Google also hosts its own employer's postings. Admit only individual
+        # careers results with a numeric job id, never listings or web searches.
+        careers_prefix = {
+            "google.com": "/about/careers/applications/jobs/results/",
+            "www.google.com": "/about/careers/applications/jobs/results/",
+            "careers.google.com": "/jobs/results/",
+        }.get((u.hostname or "").lower())
+        return bool(careers_prefix and re.fullmatch(
+            re.escape(careers_prefix) + r"[0-9]{1,24}(?:-[a-z0-9-]+)?/?", path))
     # Common portal direct-ad patterns.
     if "linkedin.com" in host:
         params = urllib.parse.parse_qs(query, keep_blank_values=True)
@@ -2113,6 +2121,8 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
     parsed, location_warning = _lead_filter_by_regions(parsed, regions)
     parsed = _lead_normalize_company_fit_freshness(parsed)
     parsed, filter_warning = _lead_apply_basic_job_filters(parsed, job_filters or {})
+    # Normalize/deduplicate aliases before they consume a lead slot or count.
+    parsed, direct_warning = _lead_keep_only_direct_job_leads(parsed)
     parsed["companies"] = _lead_balance_source_leads(parsed.get("companies") or [], job_sources or [], int(max_n or 12))
     parsed["summary"]["job_source_counts"] = [
         {"source": source, "count": sum(_lead_source_bucket(c, job_sources or []) == source
@@ -2124,6 +2134,8 @@ def _lead_provider_results_to_leads(provider_results, regions, job_sources, titl
         warning = location_warning
     if filter_warning:
         warning = (warning + " " + filter_warning).strip() if warning else filter_warning
+    if direct_warning:
+        warning = (warning + " " + direct_warning).strip()
     return parsed, warning
 
 
