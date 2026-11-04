@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.561 is local/unmerged on `codex/module-lock-preferences`, from merged560 /
+  PR299. CV Summary opens permanently; Sourcer uses version-scoped code1212 with
+  tab-entry/direct-Start guards. Lead Finder retains its current lock/code1571
+  per the owner's correction. Provider consent/shared companion setup stay.
+
 - v24.6.560 on `codex/job-read-queue-recovery` includes v555–559; the associated PR
   records CI/review/merge status. Code review fixed two reproduced stale failure
   outlines after manual full-ad recovery and bulk HR recovery. Includes all search

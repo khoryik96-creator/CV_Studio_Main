@@ -494,10 +494,12 @@ function clearStats() {
 try { updateSummaryLockUI(); } catch(e) {}
 try { updateCvScoringLockUI(); } catch(e) {}
 try { updateLeadFinderLockUI(); } catch(e) {}
+try { updateLinkedinSourcerLockUI(); } catch(e) {}
 try { updateAiCrawlerLockUI(); } catch(e) {}
 window.addEventListener('load', function(){
   try { updateSummaryLockUI(); } catch(e) {}
   try { updateCvScoringLockUI(); } catch(e) {}
   try { updateLeadFinderLockUI(); } catch(e) {}
+  try { updateLinkedinSourcerLockUI(); } catch(e) {}
 try { updateAiCrawlerLockUI(); } catch(e) {}
 });

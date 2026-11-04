@@ -2,6 +2,9 @@
 function switchTab(tab) {
   try { if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('page-tab')) document.activeElement.blur(); } catch(e) {}
   if (tab !== 'ppc' && typeof ppcCloseInvoicePreview === 'function') ppcCloseInvoicePreview();
+  if (tab === 'linkedinsourcer' && !requestLinkedinSourcerUnlock()) {
+    tab = 'format';
+  }
   if (tab === 'summary' && !requestSummaryUnlock()) {
     tab = 'format';
   }

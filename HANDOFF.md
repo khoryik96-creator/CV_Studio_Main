@@ -7,6 +7,21 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.561 module lock preferences (unmerged)**
+on `codex/module-lock-preferences`, from merged v24.6.560 / PR299.
+- CV Summary is permanently available without a code or storage flag, including
+  after restarts/upgrades. Its compatibility unlock functions now return true and
+  its static/dynamic tab labels show CV Summary immediately.
+- LinkedIn Sourcer uses code 1212 through the existing version-scoped tab-lock
+  persistence, with a named lock icon. Navigation/deep links and direct Start
+  enforce the tab lock; locked initialization performs no companion/provider work.
+  Shared companion setup/update functions used by Job Leads remain available.
+- The owner corrected the request before implementation: Lead Finder keeps all
+  existing frontend/backend guards and code 1571. CV Scoring and AI Crawler stay.
+- See `cv_studio_v24_6_561_module_locks_qa_report.md`. No backend/route/storage
+  schema changes, live provider action, push, merge or installation. All 96 JS
+  fixtures, five version checks and fictional Chromium lock checks pass.
+
 **Current source: v24.6.560 search recovery and activity highlights**
 on `codex/job-read-queue-recovery`, from merged v24.6.554 / PR298.
 The associated pull request records current CI, review and merge status.
