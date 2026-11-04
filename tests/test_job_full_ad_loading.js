@@ -29,6 +29,12 @@ function fullFixture(){
   const base=partial.state.onScript;partial.state.onScript=args=>{if(args.files || args.args?.[0]===url)immediate.push(args.injectImmediately);return base(args);};
   assert.equal((await partial.rpc('jobFromLink',{url})).result?.description,'Complete full ad','a committed document with ready ad content need not wait for Chrome load completion');
   assert.equal(partial.state.fullReads,1);assert(immediate.length>=2 && immediate.every(value=>value===true));assert(!partial.tabs.has(11));
+  for(const alias of [url+'/',url.replace('/1234567890','/fictional-role-at-company-1234567890/')]){
+    const redirected=fullFixture();await redirected.arm();redirected.state.onCreated=tab=>{tab.url=alias;};
+    assert((await redirected.rpc('jobFromLink',{url})).result?.description);assert(!redirected.tabs.has(11),'a path-only job redirect still closes after capture');
+    const viewed=fullFixture();await viewed.arm();viewed.state.onCreated=tab=>{tab.url=alias;tab.active=true;};
+    assert((await viewed.rpc('jobFromLink',{url})).result?.description);assert(viewed.tabs.has(11),'a viewed ad stays available');
+  }
   const pending=fullFixture();await pending.arm();pending.state.onCreated=tab=>{tab.status='loading';tab.pendingUrl=url;};
   assert.equal((await pending.rpc('jobFromLink',{url})).error_code,'HR_AD_TIMEOUT','navigation timeout is an isolated ad failure, not a fatal companion error');assert.equal(pending.state.fullReads,0,'a pending navigation is not observed as a ready document');
   const metadata=fullFixture();await metadata.arm();metadata.state.onCreated=tab=>{tab.status='loading';};

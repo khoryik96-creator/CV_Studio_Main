@@ -7,6 +7,28 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Local work: v24.6.563 captured-tab cleanup and review fix (unmerged)**
+on `codex/browser-tab-grouping`, including unmerged v561/v562 below.
+- Successful full-ad reads now retain cleanup ownership across same-job path-only
+  trailing-slash/SEO redirects. Previously the reader accepted these aliases but
+  cleanup could leave the captured tab open. Query/hash/other-job changes still
+  relinquish ownership; activated/viewed and pre-existing user tabs are protected.
+- Current Sourcer reads request close_after_read. Ready, nonempty profile captures
+  close/release their own background tab before AI detail review and return
+  profile_tab_released, so the next profile opens a fresh tab. Loading reads keep
+  polling; viewed tabs are released without closing. Legacy app/companion pairs
+  retain their previous reuse/End behavior. Search result sources stay available.
+- A transient native close failure keeps exact cleanup ownership for the next
+  normal cleanup attempt. No provider call, authorization or replay rule changes.
+- Independent review found one P2: an awaited app-window lookup could open a tab
+  after End/Stop. A per-session binding/run/capture guard now rechecks immediately
+  before creation. The original repro now creates zero tabs after completed End;
+  jobReadCancel during that lookup is covered too. Independent re-review found
+  no additional actionable issues. See `cv_studio_v24_6_563_capture_cleanup_qa_report.md`.
+- All 98 JavaScript fixtures, nineteen version/Sourcer Python checks, syntax,
+  whitespace and repository consistency pass. No live provider action,
+  push, merge, installed update or native browser-extension verification.
+
 **Local work: v24.6.562 browser tab grouping (unmerged)**
 on `codex/browser-tab-grouping`, including unmerged v561 below.
 - The companion groups the authenticated CV Studio tab and new browser tabs in a

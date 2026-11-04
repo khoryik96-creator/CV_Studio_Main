@@ -71,8 +71,10 @@ function sessionChrome(scope) {
     get:async id=>{assertSessionTab(scope,id);return nativeChrome.tabs.get(id);},
     query:async args=>(await nativeChrome.tabs.query(args)).filter(tab=>!otherOwns(scope,tab.id)),
     create:async args=>{
-      const rootId=sessions.get(scope)?.binding()?.tabId;
+      const session=sessions.get(scope),checkCreation=session.creationGuard();
+      const rootId=session.binding()?.tabId;
       let windowId;try{windowId=(await nativeChrome.tabs.get(rootId)).windowId;}catch{}
+      checkCreation();
       const tab=await nativeChrome.tabs.create({...args,...(Number.isInteger(windowId)?{windowId}:{})});
       assertSessionTab(scope,tab.id);tabLeases.set(tab.id,scope);
       if(Number.isInteger(rootId))void appTabGroups.add(tab.id,rootId);
@@ -480,6 +482,9 @@ function live(bound, run) {
   if (stateFailed || connection !== bound || run && bound.run !== run) throw Error('The companion connection changed.');
 }
 function sameOwnedPage(value, expected) {
+  // Job reads accept LinkedIn's canonical/title paths; retain cleanup authority
+  // across those path-only aliases, without accepting query/hash changes.
+  if (jobURL(expected)===expected && typeof value==='string' && !/[?#]/.test(value) && jobURL(value)===expected) return true;
   // LinkedIn may add a single trailing slash while loading an observed profile.
   // Do not equate query/hash changes, another identity or arbitrary redirects.
   return value === expected || typeof value==='string' && (!!profile(expected) || !!hrExperienceURL(expected)) && !/[?#]/.test(expected) && value.replace(/\/$/,'')===expected.replace(/\/$/,'');
@@ -501,13 +506,18 @@ function protectViewed(id) {
   viewed.set(id,owned.get(id));owned.delete(id);return true;
 }
 async function closeOwned(id, expected) {
+  let retry=false;
   try {
     const tab = await chrome.tabs.get(id);
-    if (owned.get(id) === expected && !tab.active && (sameOwnedPage(tab.url, expected) || expectedLoading(tab, expected)) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) await chrome.tabs.remove(id);
+    if (owned.get(id) === expected && !tab.active && (sameOwnedPage(tab.url, expected) || expectedLoading(tab, expected)) && (!tab.pendingUrl || sameOwnedPage(tab.pendingUrl, expected))) {
+      try { await chrome.tabs.remove(id); }
+      catch { retry=true; } // Retain exact ownership for the next normal cleanup.
+    }
   } catch {}
-  if (owned.get(id) === expected) owned.delete(id);
+  if (!retry && owned.get(id) === expected) owned.delete(id);
   if (viewed.get(id) === expected) viewed.delete(id);
 }
+
 async function closeHROwnedTabs() {
   // The app may already be gone before its pagehide message can arrive. Exact
   // ownership/current-or-pending URL checks still protect user-taken-over tabs.
@@ -1428,11 +1438,20 @@ async function handle(message, sender) {
     }
     if (args.method === 'readSearch' && !Array.isArray(result.profiles)) throw safeError(readerError);
     if (args.method === 'readSearch') { connection.allowed = new Set((result?.profiles || []).map(row => row.url).filter(profile).slice(0,40)); await persist(); }
+    if (args.method==='readProfile' && args.close_after_read===true && !result.loading && typeof result.text==='string' && result.text.trim()) {
+      const expected=owned.get(tab.id) || viewed.get(tab.id);
+      await closeOwned(tab.id,expected);await persist();live(bound,args.run_id);
+      return {...result,profile_tab_released:true};
+    }
     return result;
   }
   throw Error('Unsupported browser action.');
 }
 return {ready,handle,pickJob,pair,connectApp,removed,updated,activated,publicError,
+  creationGuard:()=>{
+    const bound=connection,run=bound?.run,capture=jobCapture;
+    return ()=>{if(stateFailed || connection!==bound || connection?.run!==run || jobCapture!==capture || capture?.cancelled)throw safeError('The browser action was stopped before opening its tab.');};
+  },
   binding:()=>connection, busy:()=>!!connection?.run || !!jobCapture,
   hasOwned:()=>!!owned.size,
   owns:id=>!!connection?.run && connection.source===id || owned.has(id) || viewed.has(id)};

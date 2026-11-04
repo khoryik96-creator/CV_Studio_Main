@@ -54,6 +54,13 @@ function grouped(make=fixture){
  await hr.rpc('hrJoined',{run_id:hr.run,tab_id:hrSource,url:'https://www.linkedin.com/in/sample'});
  await until(()=>hr.tabs.get(12)?.groupId===hr.tabs.get(1).groupId);assert.equal(hr.tabs.get(12).groupId,hr.tabs.get(1).groupId,'employment/profile tabs opened during HR scans share the group');
  await hr.end();assert(hr.tabs.has(1),'grouping never changes owned-tab cleanup');
+ const stopped=fixture({configureChrome(chrome,state){const get=chrome.tabs.get;chrome.tabs.get=async id=>id===1 && state.holdRoot?(state.holdRoot=false,new Promise(resolve=>state.releaseRoot=()=>resolve(get(id)))):get(id);}});
+ await stopped.arm();const run='c'.repeat(32),profile='https://www.linkedin.com/in/stopped';
+ stopped.state.onScript=args=>args.args?.[0]==='readSearch'?[{result:{profiles:[{id:'p0',url:profile}],signature:'one',hasNext:false}}]:undefined;
+ const rpc=(action,args={})=>stopped.rpc(action,{run_id:run,...args},undefined,'profiles');
+ await rpc('begin',{source_tab_id:3,mode:'standard',max_pages:1});await rpc('read',{tab_id:3,method:'readSearch',values:['standard']});
+ stopped.state.holdRoot=true;const creating=rpc('create',{url:profile});await until(()=>stopped.state.releaseRoot);await rpc('end');stopped.state.releaseRoot();
+ assert((await creating).error);assert.equal(stopped.state.created.length,0,'End during app-window lookup prevents the native tab creation');
  const failed=grouped();failed.state.groupError=true;await failed.arm();const result=await failed.begin();assert(result.result?.tab_id,'group API failure does not fail a scan');await failed.end();
  const held=grouped();held.state.groupHold=true;await held.arm();assert((await held.begin()).result?.tab_id,'a hung cosmetic group API never delays scan creation or ownership');await held.end();
  const storage=grouped();storage.state.groupStorageError=true;await storage.arm();assert((await storage.begin()).result?.tab_id,'group storage failure does not fail a scan');await storage.end();

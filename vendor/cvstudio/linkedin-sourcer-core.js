@@ -164,6 +164,7 @@ class Agent {
             this.update({status:'A background profile did not finish loading; keeping its search-card result and continuing.',results:this.results});
             continue;
           }
+          if (profile.profile_tab_released===true) this.profileTab=null;
           details.push({...candidate, text: profile.text, name: profile.name || candidate.name,
                         publicUrl: profileURL(profile.publicUrl) || ''});
           inspected.add(candidate.url);

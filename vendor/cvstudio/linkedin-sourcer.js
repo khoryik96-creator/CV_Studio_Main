@@ -180,7 +180,7 @@
       for (let attempt = 0; attempt < (['setCountry','readProfile'].includes(method) ? 90 : 30); attempt++) {
         if (abort?.signal.aborted) throw Error('Stopped.');
         let value;
-        try {value = await rpc('read', {run_id: run.id, tab_id: id, method, values});}
+        try {value = await rpc('read', {run_id: run.id, tab_id: id, method, values,close_after_read:method==='readProfile'});}
         catch(error) {
           // A fixed reader failure for this detail page does not invalidate
           // its already assessed search card. Never suppress access, changed
