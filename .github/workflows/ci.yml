@@ -73,6 +73,14 @@ jobs:
         shell: bash
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
 
+      - name: Test protected frontend controls in Chromium
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund --package-lock=false javascript-obfuscator@4.1.1
+          python -m pip install playwright==1.62.0
+          python -m playwright install chromium
+          python tests/browser/protected_ai_controls.py
+
       - name: Run complete Python regression suite
         shell: bash
         run: python -m pytest tests -q

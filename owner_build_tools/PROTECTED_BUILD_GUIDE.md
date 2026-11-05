@@ -2,6 +2,21 @@
 
 This folder belongs only in the private-source package.
 
+## Protected frontend execution gate
+
+Each obfuscated script uses a distinct filename-derived global-helper prefix.
+Do not remove `--identifiers-prefix`: separate CLI invocations otherwise reuse
+`a0_` and can silently overwrite another module's decoder despite valid syntax.
+The builder rejects shared generated aliases before native compilation.
+
+CI installs the pinned Playwright test dependency and Chromium, then runs
+`python tests/browser/protected_ai_controls.py`. The protected workflow also
+runs the same check with `--zip <colleague.zip>` on the actual packaged frontend
+before uploading the distributable. Every request receives a fictional local
+reply, including key saving, provider Test and the Format parse boundary. This
+adds no provider traffic and never reads native credentials. Native smoke tests
+remain required; a frontend-only pass is not a compiled-package validation.
+
 ## What this build protects
 
 - Compiles the Python/Flask backend into a native Nuitka standalone executable.
