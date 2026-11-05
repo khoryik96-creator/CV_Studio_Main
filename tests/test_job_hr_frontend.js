@@ -69,6 +69,9 @@ if(require.main===module)(async()=>{
   assert.equal(f.state.records[0].hr.people.length,1,'profiles deduplicate across pages');
   assert.equal(f.el('notes').value,'Unsaved draft stays');assert.match(f.el('HRMessage').textContent,/1 HR matches saved/);
   assert.equal(f.el('HRResults').children[0].children[0].textContent,'Sample <Person>','names remain text');
+  const profileLink=f.el('HRResults').children[0].querySelectorAll('a').find(link=>link.textContent==='LinkedIn profile ↗');
+  assert.equal(profileLink.href,f.state.records[0].hr.people[0].url);assert.equal(profileLink.target,'_blank');assert.equal(profileLink.rel,'noopener noreferrer');
+  assert.equal(profileLink['aria-label'],'Open LinkedIn profile for Sample <Person>');
   assert.equal(f.el('HRResults').children[0].children[3].textContent,'Employment: Jun 2020');
   assert.equal(f.state.records[0].hr.people[0].joined,'2020-06');
   assert.equal(f.calls.filter(x=>x.action==='hrJoined').length,1,'duplicate pages do not re-open profiles');
