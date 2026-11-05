@@ -20,7 +20,7 @@ async function main(){
     assert(url.startsWith('https://api.apollo.io/api/v1/people/match?'));
     const params=new URL(url).searchParams;for(const field of ['reveal_personal_emails','reveal_phone_number','run_waterfall_email','run_waterfall_phone'])assert.equal(params.get(field),'false');
     assert.equal(options.headers.Authorization,'Bearer fictional-access');
-    if(hold)await new Promise(resolve=>{hold.release=resolve});if(failLookup)throw Error('private address and token');return Response.json(upstream);
+    if(hold)await new Promise(resolve=>{hold.release=resolve;hold.started?.()});if(failLookup)throw Error('private address and token');return Response.json(upstream);
   };
   const post=async(action,body)=>handle(new Request(env.PUBLIC_ORIGIN+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),env,fetcher,1000);
   async function login(secret){const start=await (await post('start',{proof_hash:await digest(secret)})).json();
@@ -46,8 +46,11 @@ async function main(){
   assert.equal((await (await post('reveal',ambiguous)).json()).state,'unconfirmed');
   failLookup=false;await post('reveal',ambiguous);await post('lookup-status',ambiguous);
   assert.equal(calls.filter(c=>c.url.includes('/people/match')).length,2,'ambiguous paid lookup never replays');
-  hold={};const concurrent={...op,...b,operation_id:'9'.repeat(64)},running=post('reveal',concurrent);
-  for(let i=0;i<100 && !hold.release;i++)await new Promise(resolve=>setImmediate(resolve));
+  let reached;const providerReached=new Promise(resolve=>{reached=resolve});
+  hold={started:reached};const concurrent={...op,...b,operation_id:'9'.repeat(64)},running=post('reveal',concurrent);
+  let providerTimeout;
+  try{await Promise.race([providerReached,new Promise((_,reject)=>{providerTimeout=setTimeout(()=>reject(Error('Controlled provider did not start.')),5000)})]);}
+  finally{clearTimeout(providerTimeout)}
   assert(hold.release,'the first lookup reached the controlled provider');
   assert.equal((await (await post('reveal',concurrent)).json()).state,'unconfirmed');
   assert.equal((await (await post('reveal',{...concurrent,operation_id:'8'.repeat(64)})).json()).state,'limited');

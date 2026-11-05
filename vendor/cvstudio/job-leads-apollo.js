@@ -108,12 +108,14 @@
   async function refreshContacts() {
     if(contactsLoading) return;
     contactsLoading=true;contactControls();el('ContactsMessage').textContent='Loading contacts…';
+    const linkVersion=window.cvStudioJAContacts?.linkVersion?.();
     try {
       const data=await api({action:'contacts'});
+      window.cvStudioJAContacts?.setLinks?.(data.jobadder_account,data.jobadder_links,linkVersion);
       contacts=data.contacts || [];contactsLoaded=true;contactChoices();
       const keys=new Set(contacts.map(row=>row.contact_key || row.profile_url+'|'+row.email));
       for(const key of contactVerifiers.keys()) if(!keys.has(key))contactVerifiers.delete(key);
-      el('ContactsMessage').textContent=data.contact_warning || (contacts.length?'':'No unlocked contacts yet.');
+      el('ContactsMessage').textContent=[data.contact_warning,data.jobadder_link_warning].filter(Boolean).join(' ') || (contacts.length?'':'No unlocked contacts yet.');
       renderContacts();
     } catch(error) {el('ContactsMessage').textContent=error.message;}
     finally {contactsLoading=false;contactControls();}
@@ -217,6 +219,7 @@
     return true;
   }
   window.cvStudioApollo={
+    redrawContacts:()=>{if(ready)renderContacts();},
     connected:()=>account.connected,
     available:()=>account.available,
     connect,

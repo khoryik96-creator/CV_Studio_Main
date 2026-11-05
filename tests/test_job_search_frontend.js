@@ -79,7 +79,7 @@ function fixture(options={}){
   }
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-search-walk.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/job-leads.js'),'utf8'),context);
-  return {el,document,state,calls,requests,apollo:window.cvStudioApollo,jobLeads:()=>window.cvStudioJobLeads,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
+  return {el,document,window,state,calls,requests,apollo:window.cvStudioApollo,jobLeads:()=>window.cvStudioJobLeads,pagehide:()=>events.pagehide?.(),init:()=>window.initJobLeads(),capture:(record,request)=>new Promise(resolve=>{
     state.captureReply=resolve;events.message({source:window,origin:location.origin,data:{type:'CVSTUDIO_LINKEDIN_CAPTURE',channel:document.getElementById('viewJobLeads').dataset.companionChannel,id:String(++serial).padStart(32,'0'),record,request}});
   })};
 }

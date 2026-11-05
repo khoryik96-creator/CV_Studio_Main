@@ -14,6 +14,30 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source change: v24.6.579 nested-table CVs and JobAdder record links**
+on `codex/contact-links-cv-formatting`, from merged v578 / PR307.
+- The reported CV stores most content in nested Word tables. The old upload
+  extracted 1,057 characters; the corrected real route extracts 10,897, including
+  the name, skills, work history and education, with all distinct source words.
+  Shared DOCX reading now descends tables in order, deduplicates merged cells
+  and keeps date textboxes beside their own cells. Root summary-shape ordering
+  remains intact. Excessively deep layouts fail visibly.
+- Unlocked contacts show Open in JobAdder from confirmed protected creation
+  history for the current account, immediately after creation and after reload.
+  Listing makes no remote JobAdder request or write. Account transitions and
+  older refreshes cannot expose/overwrite another account's links. Unreadable
+  link history leaves contacts available with a safe warning. Existing create,
+  review and non-replay controls remain unchanged.
+- Synthetic tests cover nested upload -> mocked parse -> actual Word generation,
+  protected link persistence/account isolation and frontend stale responses.
+  All 104 JS fixtures and focused Python/source-guardrail checks pass. One broker
+  fixture's fixed event-loop spin race was replaced by its controlled-provider
+  readiness signal; no broker runtime behavior changed.
+- Actual user documents and a regenerated private CV remain outside Git. No
+  live provider/JobAdder calls or installed update. Current QA and the PR record
+  final review/CI. Re-upload the original CV after updating; the old extraction
+  cached in an open browser is incomplete.
+
 **Current source change: v24.6.578 saved-ad selection buttons**
 on `codex/job-ads-select-all`, from merged v577 / PR306.
 - Select all and Unselect all sit beside the saved Job Ads table's page controls.

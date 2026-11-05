@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.578"
+_INSTALL_RECEIPT_VERSION = "v24.6.579"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.578"
+_CVSTUDIO_VERSION = "v24.6.579"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -12663,6 +12663,37 @@ def _docx_paragraph_has_numbering(paragraph):
     return _docx_paragraph_numbering_id(paragraph) is not None
 
 
+def _docx_cell_content_lines(cell, render_paragraph, depth=0):
+    """Read nested layout tables in place, including their anchored textboxes."""
+    if depth > 32:
+        raise ValueError('The DOCX table layout is too deeply nested. Export it as a simpler DOCX or PDF.')
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+    out = []
+    for child in cell._tc.iterchildren():
+        tag = child.tag.rsplit('}', 1)[-1]
+        if tag == 'p':
+            value = render_paragraph(Paragraph(child, cell)).strip()
+            if value:
+                out.append(value)
+            out.extend(_extract_docx_textbox_lines(child.xml))
+        elif tag == 'tbl':
+            for row in Table(child, cell).rows:
+                groups, seen = [], set()
+                for nested in row.cells:
+                    if nested._tc in seen:
+                        continue
+                    seen.add(nested._tc)
+                    values = _docx_cell_content_lines(nested, render_paragraph, depth+1)
+                    if values:
+                        groups.append(values)
+                if groups and all(len(group) == 1 for group in groups):
+                    out.append(' | '.join(group[0] for group in groups))
+                else:
+                    out.extend(value for group in groups for value in group)
+    return out
+
+
 def _extract_docx_text_preserve_tables(file_bytes):
     _validate_zip_payload(file_bytes, "DOCX")
     """Extract DOCX text, preserving table-cell paragraph/bullet boundaries.
@@ -12694,8 +12725,7 @@ def _extract_docx_text_preserve_tables(file_bytes):
 
     def cell_lines(cell):
         out = []
-        for paragraph in cell.paragraphs:
-            value = paragraph_line(paragraph)
+        for value in _docx_cell_content_lines(cell, paragraph_line):
             if value and (not out or value != out[-1]):
                 out.append(value)
         return out
@@ -13809,7 +13839,10 @@ def extract_text():
                     # Also extract textboxes from document body. Preserve each
                     # list paragraph and put ABOUT HIM / HER before its content;
                     # flattening the whole box loses the original summary bullets.
-                    doc_xml = z.read('word/document.xml').decode('utf-8', errors='ignore')
+                    # Table textboxes belong beside their employer/date cells;
+                    # body-level summary shapes retain their existing ordering.
+                    doc_xml = ''.join(element.xml for element in doc.element.body
+                                      if element.tag.rsplit('}', 1)[-1] != 'tbl')
                     paragraphs.extend(_extract_docx_textbox_lines(doc_xml))
             except Exception as exc:
                 app.logger.warning("DOCX raw XML fallback extraction skipped: %s", exc)
@@ -13855,8 +13888,15 @@ def extract_text():
                         paragraphs.append(list_paragraph_text(para))
                 elif tag == "tbl":
                     for row in _CVTable(element, doc).rows:
-                        row_text = " | ".join("\n".join(list_paragraph_text(para) for para in cell.paragraphs).strip()
-                                              for cell in row.cells if cell.text.strip())
+                        groups, seen_cells = [], set()
+                        for cell in row.cells:
+                            if cell._tc in seen_cells:
+                                continue
+                            seen_cells.add(cell._tc)
+                            values = _docx_cell_content_lines(cell, list_paragraph_text)
+                            if values:
+                                groups.append("\n".join(values))
+                        row_text = " | ".join(groups)
                         if row_text:
                             paragraphs.append(row_text)
 
@@ -15094,6 +15134,18 @@ def apollo_connection():
                     return response
             elif action in {"contacts", "export_contacts"}:
                 result = _APOLLO.perform("contacts", query=data.get("query", ""), filters=data.get("filters"))
+                if action == 'contacts':
+                    try:
+                        saved_links = _JOB_LEADS_JA.contact_links(result['contacts'])
+                        base = _jobadder_web_base()
+                        current = _ja_public_info()
+                        if not current.get('connected') or current.get('account_cache_namespace') != saved_links['account']:
+                            saved_links = {'account':'', 'links':[]}
+                        result['jobadder_account'] = saved_links['account']
+                        result['jobadder_links'] = [{**link, 'contact_url':base+'/contacts/'+str(link['contact_id'])} for link in saved_links['links']]
+                    except JobAdderContactError:
+                        result['jobadder_account'], result['jobadder_links'] = '', []
+                        result['jobadder_link_warning'] = 'Saved JobAdder links could not be loaded. Check JobAdder before creating this contact again.'
                 if action == "export_contacts":
                     from io import BytesIO
                     response = send_file(BytesIO(export_contacts(result["contacts"])),

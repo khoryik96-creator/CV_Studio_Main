@@ -43,6 +43,7 @@ function applyJAPublicInfo(info, options) {
   window._jaClientSecretConfigured = !!info.client_secret_configured;
   window._jaConfiguredClientId = String(info.client_id || '');
   window._jaAccountCacheNamespace = nextAccountCacheNamespace;
+  if(previousAccountCacheNamespace !== nextAccountCacheNamespace)window.cvStudioJAContacts?.accountChanged?.();
   if (!options.skipAccountStateInvalidation && previousAccountCacheNamespace
       && previousAccountCacheNamespace !== nextAccountCacheNamespace) {
     if (typeof clearTheSpiderJobAdderAccountState === 'function') clearTheSpiderJobAdderAccountState();

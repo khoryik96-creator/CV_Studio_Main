@@ -1373,3 +1373,13 @@ retain optional company_url metadata in the existing record payload. Regular
 edits preserve it for the same job/employer; changing either clears stale links.
 Unknown employer pages stay as text until a later capture supplies a link.
 Company names are never transformed into guessed LinkedIn URLs.
+
+
+## Created JobAdder contacts
+
+Unlocked contacts show Open in JobAdder after confirmed creation. The dashboard
+projects current-account contact IDs from the existing protected creation
+history; it makes no extra remote lookup and stores no contact emails in browser
+storage. Links survive reloads. Account changes clear the visible links, and an
+older contact refresh cannot erase a newly confirmed result. Uncertain writes
+continue to require the existing recovery checks before any new create request.

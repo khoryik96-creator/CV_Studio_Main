@@ -78,6 +78,25 @@ class JobAdderContactService:
         except Exception:
             raise JobAdderContactError("The contact result could not be saved securely. Check JobAdder before trying again.", "JOBADDER_CONTACT_STORAGE", 503) from None
 
+    def contact_links(self, rows):
+        """Project confirmed protected history for the current account, locally."""
+        info = self.account()
+        scope = info.get('account_cache_namespace', '') if info.get('connected') else ''
+        if not scope:
+            return {'account':'', 'links':[]}
+        operations = self._store()['operations']
+        links = []
+        for row in rows:
+            email, identity = row.get('email'), row.get('contact_key')
+            if not isinstance(email, str) or not re.fullmatch(r'[a-f0-9]{64}', str(identity or '')):
+                continue
+            key = hashlib.sha256(json.dumps([scope,email.strip().lower()]).encode()).hexdigest()
+            entry = operations.get(key, {})
+            contact_id = entry.get('contact_id')
+            if entry.get('state') in {'created','exists'} and type(contact_id) is int and contact_id > 0:
+                links.append({'contact_key':identity, 'state':entry['state'], 'contact_id':contact_id})
+        return {'account':scope, 'links':links}
+
     @staticmethod
     def _text(value, name, limit, required=False):
         if not isinstance(value, str) or len(value) > limit or any(ord(c)<32 or ord(c)==127 for c in value) or (required and not value.strip()):

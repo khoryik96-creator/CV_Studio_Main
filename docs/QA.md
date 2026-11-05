@@ -1,5 +1,35 @@
 # Current validation record
 
+## v24.6.579 — Nested CV tables and JobAdder record links
+
+The reported DOCX nests 34 tables inside one layout table. The previous real
+upload route extracted 1,057 characters; the corrected route returns 10,897 with
+100% distinct source-word coverage, including the name and missing sections.
+This lexical check alone does not prove ownership/order. Synthetic tests verify
+local date textboxes, merged-cell deduplication and source section order through
+shared extraction and the real upload route. A simulated provider parse then
+passes through real Word generation with name, employer, role, duties, education
+and skills retained. Existing summary/label-table/long-CV regressions and source
+guardrails pass. The private sample is not committed; its regenerated artifact
+retains 9 work entries, 68 duty statements, 7 skills groups and qualifications.
+
+Unlocked contact links come from confirmed protected history keyed by current
+JobAdder account and email. Tests cover local-only status projection, fresh
+service/dashboard reload, immediate successful creation, old-refresh races,
+account transitions, unsafe links and a history-read failure preserving contacts
+with a warning. Confirmed links use matching contact IDs and open in a new tab.
+Pending/uncertain creates retain existing recovery and non-replay boundaries.
+
+All 104 JavaScript fixtures pass. A pre-existing broker concurrency fixture's
+fixed event-loop spin failed intermittently before the controlled WebCrypto
+operation reached its fake provider; the fixture now awaits an explicit bounded
+readiness signal. No broker production behavior changed.
+
+No live AI/JobAdder call or installed-app update was performed. Private DOCX/PDF
+layout inspection uses LibreOffice here, not native Windows Word. The PR records
+fresh review and full Windows/macOS CI for the final head. Re-upload the original
+CV after updating so the browser does not reuse its old incomplete extraction.
+
 ## v24.6.578 — Saved Job Ads selection buttons
 
 Select all includes active ads matching current filters across every saved-ad

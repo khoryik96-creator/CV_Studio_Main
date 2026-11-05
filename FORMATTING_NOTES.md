@@ -49,6 +49,18 @@ when current headers conflict with its rendered company/latest role. Consistent
 headers, older jobs and qualifications retain their resolved filtering. See
 rules D2/D4 and the v438 QA report.
 
+## Nested layout tables
+
+The upload route and shared DOCX reader walk tables inside cells in XML order.
+This matters for CV templates that put the name, skills, employers and duties
+inside nested tables. Anchored date textboxes stay beside their own cell;
+root-level summary shapes keep the established ABOUT HIM / HER ordering.
+Repeated merged cells and exact textbox fallback groups are read once. Layouts
+deeper than 32 nested tables fail visibly. Tests use synthetic documents through
+extract, simulated parse and real Word generation; private source CVs stay out
+of Git. A browser holding an old truncated extraction needs the original file
+uploaded again after an update.
+
 ## The pipeline (source doc → formatted DOCX)
 
 Project Experience additional-info lists (v24.6.505) use optional positional
