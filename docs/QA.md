@@ -1,5 +1,17 @@
 # Current validation record
 
+## v24.6.578 — Saved Job Ads selection buttons
+
+Select all includes active ads matching current filters across every saved-ad
+page. Unselect all clears the selection. Buttons sit beside the table's page
+controls and respect busy state; the per-page checkbox remains available.
+
+Existing pagination regressions exercise 82-ad cross-page selection, per-page
+checkbox synchronization, clearing selection/HR controls, filter scope, empty
+results, Trash exclusion and absence of API writes or record changes. Targeted
+search/pagination fixtures and version checks pass. The PR records fresh review
+and complete Windows/macOS CI. No live data or installed-app update is involved.
+
 ## v24.6.577 — LinkedIn company hyperlinks
 
 Company URLs are captured from the actual search card, full ad, matching public
