@@ -151,7 +151,7 @@ def fetch_jobstreet(url):
 
 class JobstreetVerifier:
     def __init__(self, provider, fetch=fetch_jobstreet, extract=None):
-        self.provider=provider;self.fetch=fetch;self.extract=extract;self.cache={};self.calls=0
+        self.provider=provider;self.fetch=fetch;self.extract=extract;self.cache={};self.calls=0;self.extract_failed=False
 
     def check_many(self, urls):
         wanted={jobstreet_id(url):jobstreet_detail_url(url) for url in urls if jobstreet_id(url) and jobstreet_id(url) not in self.cache}
@@ -173,7 +173,10 @@ class JobstreetVerifier:
                     if ident not in wanted or wanted[ident] not in missing:continue
                     raw=result.get('raw_content')
                     if isinstance(raw,str):self.cache[ident]=parse_extracted_jobstreet(raw,wanted[ident])
-            except Exception:pass
+            except Exception:
+                # Keep failed evidence unavailable and expose a safe diagnostic;
+                # provider error text can contain credentials or request data.
+                self.extract_failed=True
 
     def results(self, rows):
         self.check_many([r.get('url') for r in rows if isinstance(r,dict)])
@@ -184,7 +187,9 @@ class JobstreetVerifier:
             evidence=self.cache.get(jobstreet_id(url),{'state':'unverified'})
             if evidence['state']!='active':removed+=1;continue
             out.append({**row,**{k:v for k,v in evidence.items() if k!='state' and v},'jobstreet_verified':True})
-        return out,(f'Skipped {removed} expired or unconfirmed JobStreet ad(s).' if removed else '')
+        warning=f'Skipped {removed} expired or unconfirmed JobStreet ad(s).' if removed else ''
+        if removed and self.extract_failed:warning+=' JobStreet extraction was unavailable. Check the selected search provider or retry later.'
+        return out,warning
 
     def leads(self, parsed):
         rows=parsed.get('companies') or []

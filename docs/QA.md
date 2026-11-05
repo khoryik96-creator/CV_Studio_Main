@@ -1,5 +1,24 @@
 # Current validation record
 
+## v24.6.576 — Numbered Job Leads pages
+
+Numbered result pages sit directly below the scrollable card list, with a
+visible ad range. Saved ads also have numbered pages. Large counts use bounded
+ellipsis controls. Node regressions cover jumping from page 1 to page 4 of 75
+ads, preview synchronization, selection retention, no repeated crawl/tab actions,
+saved-ad page counts and resetting/clamping after filters. Chromium checks actual
+layout at desktop and 390px widths, current-page accessibility, keyboard focus,
+selection retention and no extra background read on page changes.
+
+The full Windows run exposed a stale protected-asset inventory and a silent
+extraction exception. The inventory now includes lead-people.js. Failed Extract
+requests expose a safe warning without provider details or automatic replay;
+a regression checks both visibility and redaction. These checks pass locally.
+
+All browser data is fictional and uses the isolated local fixture. Screenshots
+are temporary test output, not another per-version root documentation file.
+PR305 records fresh review and CI for the final head, including earlier fixes.
+
 ## v24.6.575 — Cross-run people selection correction
 
 Follow-up review found new DeepSeek responses reused sequential person IDs

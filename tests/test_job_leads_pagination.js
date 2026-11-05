@@ -1,0 +1,31 @@
+const assert=require('assert/strict');
+const {fixture}=require('./test_job_search_frontend');
+const pages=f=>f.el('SearchPageNumbers').querySelectorAll('button');
+(async()=>{
+  const f=fixture();f.state.many=true;f.state.totalPages=3;f.state.pageSize=25;f.el('SearchPages').value='3';
+  await f.init();await f.el('SearchStart').click();
+  assert.equal(pages(f).length,4);assert.equal(f.el('SearchPageRange').textContent,'1–20 of 75');
+  assert.equal(pages(f)[0]['aria-current'],'page');
+  f.el('SearchSelectPage').checked=true;f.el('SearchSelectPage').handlers.change();
+  const calls=f.calls.length;
+  await pages(f)[3].click();
+  assert.equal(f.el('SearchPageRange').textContent,'61–75 of 75');assert.equal(f.el('SearchResults').children.length,15);
+  assert.match(f.el('PreviewPosition').textContent,/61 of 75/);assert.equal(pages(f)[3]['aria-current'],'page');
+  assert(f.el('SearchNext').disabled);assert(!f.el('SearchPrevious').disabled);
+  assert.match(f.el('SearchCount').textContent,/20 selected/,'selection survives jumping pages');
+  assert.equal(f.calls.length,calls,'browsing an existing page must not open tabs or repeat a crawl');
+  await f.el('PreviewPrevious').click();
+  assert.equal(f.el('SearchPageRange').textContent,'41–60 of 75');assert.equal(pages(f)[2]['aria-current'],'page');
+  await pages(f)[0].click();assert.equal(f.el('SearchResults').scrollTop,0);assert(f.el('SearchSelectPage').checked);
+  await f.el('SearchClear').click();assert(f.el('SearchColumn').hidden && f.el('SearchPagination').hidden);
+  assert.equal(pages(f).length,0);
+
+  const saved=fixture(),base=saved.state.records[0];
+  saved.state.records=Array.from({length:82},(_,i)=>({...base,id:(i+1).toString(16).padStart(32,'0'),url:'https://www.linkedin.com/jobs/view/'+(5555555500+i),company:'Company '+i,role:'Saved role '+i}));
+  await saved.init();let savedPages=saved.el('PageNumbers').querySelectorAll('button');assert.equal(savedPages.length,3);
+  await savedPages[2].click();assert.equal(saved.el('Count').textContent,'81–82 of 82');assert.equal(saved.el('List').children.length,2);
+  assert(saved.el('Next').disabled);assert.equal(saved.el('PageNumbers').querySelectorAll('button')[2]['aria-current'],'page');
+  saved.el('Search').value='Saved role 0';saved.el('Search').handlers.input();
+  assert.equal(saved.el('Count').textContent,'1–1 of 1');assert(saved.el('PageNumbers').hidden,'filter resets and clamps the page index');
+  console.log('Job Leads pagination: direct jumps across 75 ads, preview synchronization, selection retention, no repeated crawl and saved-ad/filter pages passed');
+})().catch(error=>{console.error(error);process.exitCode=1});

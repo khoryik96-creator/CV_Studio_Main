@@ -121,3 +121,12 @@ def test_supported_individual_ad_aliases_are_verified_at_the_detail_url(alias,de
 def test_non_ad_or_ambiguous_jobstreet_aliases_do_not_authorize_reads(url):
     fetch=mock.Mock();verifier=JobstreetVerifier({},fetch=fetch)
     rows,_=verifier.results([{'url':url}]);assert not rows;fetch.assert_not_called()
+
+
+def test_extract_failure_is_visible_without_echoing_provider_details_or_replaying():
+    extract=mock.Mock(side_effect=RuntimeError('Synthetic private provider detail'))
+    verifier=JobstreetVerifier({'provider':'tavily','api_key':'fictional'},fetch=lambda url:'',extract=extract)
+    rows,warning=verifier.results([{'url':URL}])
+    assert not rows and 'extraction was unavailable' in warning
+    assert 'private provider detail' not in warning
+    verifier.results([{'url':URL}]);assert extract.call_count==1

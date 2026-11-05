@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.576 adds numbered Job Leads search pages below the cards, with visible
+  ad ranges and matching preview navigation. Saved ads also get page numbers.
+  Preserves selection, busy controls and filters; browsing does not repeat reads.
+  Includes v572–v575 and documentation cleanup. PR305 records final review/CI.
+
 - v24.6.575 corrects PR305's follow-up review finding: DeepSeek people IDs are
   stable per profile and distinct across runs, preventing shared selection IDs.
   Includes v572–v574 and the Markdown cleanup. See PR305 for final review/CI.

@@ -178,6 +178,7 @@
     busy = value;
     window.cvStudioApollo?.busy(value);
     el('Previous').disabled=value || page===0;el('Next').disabled=value || (page+1)*40>=filtered().length;
+    el('PageNumbers').querySelectorAll('button').forEach(button => { button.disabled = value; });
     for (const name of ['Search','Filter','FolderFilter','ClientFilter','PostedFilter','Sort','FiltersReset']) el(name).disabled = value && hrRunning;
     for (const id of ['Save', 'New', 'FormClose', 'AddManual', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
@@ -248,6 +249,30 @@
     const value = document.createElement(tag); value.textContent = text;
     if (className) value.className = className;
     return value;
+  }
+  function drawPageNumbers(id, current, total, size, navigate) {
+    const target = el(id), count = Math.ceil(total / size), key = `${current}:${count}`;
+    target.hidden = count < 2;
+    if (target.dataset.pages !== key) {
+      const restoreFocus = target.contains?.(document.activeElement);
+      target.replaceChildren(); target.dataset.pages = key;
+      const pages = Array.from({length:count}, (_, index) => index).filter(index =>
+        count <= 7 || index === 0 || index === count-1 || Math.abs(index-current) <= 2);
+      let previous = -1;
+      for (const index of pages) {
+        if (index > previous+1) {
+          const gap = node('span','…','job-leads-page-gap'); gap.setAttribute('aria-hidden','true'); target.append(gap);
+        }
+        const button = node('button',String(index+1),'sec job-leads-page-number' + (index === current ? ' is-current' : ''));
+        button.type = 'button'; button.dataset.page = String(index);
+        button.setAttribute('aria-label','Page ' + (index+1));
+        if (index === current) button.setAttribute('aria-current','page');
+        button.addEventListener('click', () => { if (!busy && index !== current) navigate(index); });
+        target.append(button); previous = index;
+      }
+      if (restoreFocus) [...target.querySelectorAll('button')].find(button => Number(button.dataset.page) === current)?.focus({preventScroll:true});
+    }
+    target.querySelectorAll('button').forEach(button => { button.disabled = busy; });
   }
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
   const HR_REUSE_DAYS = 30; // a company's HR scan is reused for this long
@@ -366,6 +391,7 @@
     page = Math.min(page, Math.max(0, Math.ceil(selected.length / 40)-1));
     el('Count').textContent = selected.length ? `${page*40+1}–${Math.min((page+1)*40, selected.length)} of ${selected.length}` : '0 leads';
     el('Previous').disabled = busy || page === 0; el('Next').disabled = busy || (page+1)*40 >= selected.length;
+    drawPageNumbers('PageNumbers',page,selected.length,40,next => { page = next; render(); });
     updateSelection();
     if (!selected.length) {
       const empty = node('tr'), cell = node('td', rows.length ? 'No matching ads. Change or reset the filters.' : 'No saved ads yet. Search LinkedIn above, pull ads in Followed clients, or add one manually.', 'job-leads-muted');
@@ -783,6 +809,8 @@
     el('SearchAdd').disabled = busy || !discovered.some(row => discoveryPicked.has(row.url) && !savedJob(row.url));
     el('SearchPrevious').disabled = busy || discoveryPage === 0;
     el('SearchNext').disabled = busy || (discoveryPage+1)*20 >= discovered.length;
+    el('SearchPageRange').textContent = discovered.length ? `${discoveryPage*20+1}–${Math.min((discoveryPage+1)*20,discovered.length)} of ${discovered.length}` : '';
+    drawPageNumbers('SearchPageNumbers',discoveryPage,discovered.length,20,next => navigateResults(next-discoveryPage));
     el('SearchResults').querySelectorAll('button').forEach(button => { button.disabled = busy; });
     el('SearchResults').querySelectorAll('input').forEach(input => { input.disabled = busy || !!savedJob(input.value); });
     const preview = previewRow(), saved = preview && savedJob(preview.url);
@@ -807,7 +835,7 @@
     el('BackgroundStart').disabled = busy || discovering || !!backgroundAds;
     el('BackgroundStop').hidden = !backgroundAds;
     el('BackgroundStop').disabled = !backgroundAds || backgroundAds.stopped;
-    el('SearchPagination').hidden = discovered.length <= 20;
+    el('SearchPagination').hidden = !discovered.length;
     nextGuide();
   }
   function drawPreview() {
@@ -836,6 +864,7 @@
     if (!previewRow() && !previewDismissed) previewUrl = previewSequence()[0]?.url || '';
     el('Curation').hidden=!discovered.length && !previewRow();
     el('SearchResults').hidden = !discovered.length;
+    el('SearchColumn').hidden = !discovered.length;
     el('Curation').className = 'job-leads-curation' + (!discovered.length ? ' no-search-results' : '') + (!previewRow() ? ' no-preview' : '');
     if (savedJob(previewUrl) && !savedJob(previewUrl).deleted) el('Curation').className += ' has-hr';
     el('SearchCount').textContent = `${discovered.length} found · ${discoveryPicked.size} selected`;

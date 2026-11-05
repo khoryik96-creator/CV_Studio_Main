@@ -14,6 +14,21 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source change: v24.6.576 Job Leads numbered pages**
+- Search results now have numbered pages and a visible range directly below
+  the scrollable card list, inside its column. Jump between groups of 20 without
+  traversing individual previews. The preview follows the first ad on the chosen
+  page; selections persist and the list resets its scroll on page changes.
+- Saved ads also have numbered pages (40 per page). Filtering resets the page.
+  Compact ellipses keep large page counts bounded; no new crawl or tab opens
+  occur when browsing existing pages. Busy actions disable page controls.
+- The full Windows check also caught a stale protected-asset inventory and a
+  silent extraction fallback. Both are corrected: inventory includes the new
+  people script; failed extraction produces a safe warning without replay.
+- Node regressions cover 75-result jumps, preview/selection state, saved pages
+  and filter resets. Chromium checks desktop/mobile fit and keyboard focus.
+  See docs/QA.md and PR305 for validation, final review and CI status.
+
 **Current source correction: v24.6.575 (includes v572–v574 below)**
 - Follow-up PR305 review found people IDs restarted at one on every DeepSeek
   run, so distinct accumulated people could share a selection/enrichment ID.
