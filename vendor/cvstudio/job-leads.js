@@ -186,7 +186,7 @@
     el('Previous').disabled=value || page===0;el('Next').disabled=value || (page+1)*40>=filtered().length;
     el('PageNumbers').querySelectorAll('button').forEach(button => { button.disabled = value; });
     for (const name of ['Search','Filter','FolderFilter','ClientFilter','PostedFilter','Sort','FiltersReset']) el(name).disabled = value && hrRunning;
-    for (const id of ['Save', 'New', 'FormClose', 'AddManual', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage']) el(id).disabled = value;
+    for (const id of ['Save', 'New', 'FormClose', 'AddManual', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage', 'SelectAll', 'UnselectAll']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
     el('List').querySelectorAll('input').forEach(input => { input.disabled = value; });
@@ -327,7 +327,10 @@
     el('SearchFolder').value = folders.includes(searchFolder) ? searchFolder : '';
   }
   function updateSelection() {
-    const visible = filtered().slice(page*40, (page+1)*40).filter(row => !row.deleted);
+    const matching = filtered(), selectable = matching.filter(row => !row.deleted);
+    const visible = matching.slice(page*40, (page+1)*40).filter(row => !row.deleted);
+    el('SelectAll').disabled = busy || !selectable.some(row => !picked.has(row.id));
+    el('UnselectAll').disabled = busy || !picked.size;
     el('SelectPage').disabled = busy || !visible.length;
     el('SelectPage').checked = !!visible.length && visible.every(row => picked.has(row.id));
     el('SelectPage').indeterminate = !el('SelectPage').checked && visible.some(row => picked.has(row.id));
@@ -1889,6 +1892,15 @@
         if (el('SelectPage').checked) picked.add(row.id); else picked.delete(row.id);
       }
       render(); chooseGuide('BulkHR');
+    });
+    el('SelectAll').addEventListener('click', () => {
+      if (busy) return;
+      for (const row of filtered()) if (!row.deleted) picked.add(row.id);
+      render(); chooseGuide('BulkHR');
+    });
+    el('UnselectAll').addEventListener('click', () => {
+      if (busy) return;
+      picked.clear(); render(); chooseGuide('BulkHR');
     });
     el('Clear').addEventListener('click', () => moveToTrash(filtered(), true, true));
     el('ClearAll').addEventListener('click', () => moveToTrash(rows.filter(row => !row.deleted), true, true));

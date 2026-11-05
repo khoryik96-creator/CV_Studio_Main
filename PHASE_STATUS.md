@@ -4,6 +4,10 @@
 
 ## Release state
 
+- v24.6.578 adds Select all / Unselect all directly above the saved Job Ads
+  table, respecting current filters across pages, busy state and Trash exclusion.
+  Checkbox-only selection performs no writes. The PR records review and CI.
+
 - v24.6.577 makes saved Job Ads company names link to captured LinkedIn employer
   pages, including matching existing HR evidence. Captured URLs persist through
   save/edit/backup paths with safe canonicalization and stale-link removal.

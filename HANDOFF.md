@@ -14,6 +14,18 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source change: v24.6.578 saved-ad selection buttons**
+on `codex/job-ads-select-all`, from merged v577 / PR306.
+- Select all and Unselect all sit beside the saved Job Ads table's page controls.
+  Select all covers every active ad matching current filters across all pages;
+  Unselect all clears the selection. The existing per-page checkbox remains.
+- Both controls respect busy state. Empty/already-selected results disable
+  Select all; empty selection disables Unselect all. Trash rows are excluded.
+  Selection only changes browser checkbox state, with no API call or record edit.
+- Existing pagination regressions cover 82-ad selection across pages, unselect,
+  search/empty filters, Trash and absence of writes. Maintained QA and the PR
+  record focused/browser verification, fresh review and CI. No installed update.
+
 **Current source change: v24.6.577 LinkedIn employer hyperlinks**
 on `codex/job-ad-company-links`, from merged v576 / PR305.
 - Saved Job Ads company names open captured LinkedIn company pages in a new
