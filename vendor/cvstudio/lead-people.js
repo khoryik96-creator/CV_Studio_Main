@@ -41,7 +41,9 @@
       }
     }
     check();status('Reviewing observed people with DeepSeek…');
-    const reviewed=await request({...payload,companies:planned.companies,action:'companion_review',observed_people:observed});check();
+    // Once the paid review has started, retain its completed output and usage
+    // even if Stop is clicked while awaiting the response.
+    const reviewed=await request({...payload,companies:planned.companies,action:'companion_review',observed_people:observed});
     return reviewed;
   }
   window.cvStudioLeadFinderPeople={run};

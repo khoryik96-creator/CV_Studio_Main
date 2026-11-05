@@ -14,6 +14,15 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source correction: v24.6.573 (includes v572 below)**
+- Fresh local review reproduced Stop discarding a completed paid DeepSeek review
+  response. Once the request has begun, its returned output/usage is retained for
+  accounting; Stop before review still prevents the paid request.
+- When all provider results are rejected as expired/unconfirmed, the empty-search
+  response now retains the reason instead of losing the verification warning.
+- Regression tests cover both cases. PR305 records fresh review and all CI jobs;
+  [current QA](docs/QA.md) records validation limits. Both updates are required.
+
 **Current source change: v24.6.572 Lead Finder ad evidence and DeepSeek people**
 - JobStreet employers come from the matching ad, with explicit expiry checks.
   Expired and unconfirmed ads are omitted, including after AI refinement. Public

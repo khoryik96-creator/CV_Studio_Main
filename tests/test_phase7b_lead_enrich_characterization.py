@@ -549,6 +549,19 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         self.assertEqual(data['companies'][0]['days_open'], 3)
         self.assertEqual([c['job_url'] for c in data['companies']], ['https://my.jobstreet.com/job/87401944'])
 
+    def test_empty_verified_search_retains_expiry_warning_without_ai_fallback(self):
+        from unittest import mock
+        payload={'lead_lock_code':app._LEAD_FINDER_LOCK_CODE,'api_key':'fictional','provider':'deepseek','model':'deepseek-v4-flash',
+                 'cv_text':'Software Engineer Python backend development in Malaysia. '*3,'regions':['Malaysia'],
+                 'job_sources':['JobStreet'],'target_role':'Software Engineer','search_provider':{'provider':'tavily','api_key':'fictional-tavily'}}
+        with mock.patch.object(app,'_lead_evidence_checker') as checker, mock.patch.object(app,'_lead_search_tavily',return_value=[{'url':'https://sg.jobstreet.com/job/94790829'}]),mock.patch.object(app,'call_llm',side_effect=AssertionError('No paid fallback')):
+            checker.return_value.results.return_value=([],'Skipped 1 expired or unconfirmed JobStreet ad(s).')
+            client=app.app.test_client();client.set_cookie(app._AI_SPEND_SESSION_COOKIE,app._AI_SPEND_SESSION_TOKEN)
+            response=client.post('/lead-finder/search',json=payload,headers={'Origin':'http://127.0.0.1:5000'})
+        self.assertEqual(response.status_code,200,response.get_json())
+        self.assertEqual(response.get_json()['companies'],[])
+        self.assertIn('expired or unconfirmed',response.get_json()['warning'])
+
     def test_deepseek_people_reviews_only_observed_cards_without_web_tools(self):
         from unittest import mock
         import json

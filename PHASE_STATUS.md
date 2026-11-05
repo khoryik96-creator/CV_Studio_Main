@@ -4,6 +4,10 @@
 
 ## Release state
 
+- v24.6.573 includes v572 and fixes two fresh local-review findings: completed
+  DeepSeek review output/usage survives a late Stop, and an empty provider result
+  retains expiry/verification warnings. PR305 records the final review/CI state.
+
 - v24.6.572 verifies JobStreet employer and expiry evidence before adding ads,
   and uses companion-observed LinkedIn cards for DeepSeek Find people. Claude's
   existing mechanism stays intact. Search tabs group with CV Studio and close

@@ -1,5 +1,14 @@
 # Current validation record
 
+## v24.6.573 — Review corrections (includes v572)
+
+Local review reproduced late Stop discarding a completed paid review response.
+The client now retains output and usage once the paid request has started; Stop
+before that point still prevents the review call. The client regression failed
+before correction and passes afterwards. A guarded-route regression also checks
+that all-rejected provider results retain the expiry/verification warning and do
+not trigger an AI fallback.
+
 ## v24.6.572 — Lead Finder
 
 JobStreet search snippets no longer establish the employer or availability. A
