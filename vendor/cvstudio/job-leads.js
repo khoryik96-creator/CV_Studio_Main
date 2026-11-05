@@ -43,6 +43,7 @@
   }
   const receivedCaptures = new Map();
   let rows = [], editing = null, busy = false, dirty = false, page = 0, ready = false, lastReadUrl = '', descriptionTruncated = false, descriptionRich = [];
+  let draftCompanyURL = '', draftCompanyName = '';
   const guideNames = [...fields,'AutoFill','Save','SearchQuery','SearchLocation','SearchPages','SearchSource','SearchRefresh','SearchStart','SearchSetupGuide','SearchAdd','PreviewSave','HRStart','HRCountryMode','HRCountry','HRKeywords','HRPages','HRCompanyURL','BulkHRStart','BulkHRCountryMode','BulkHRCountry','BulkHRKeywords','BulkHRPages','SelectPage'];
   let guideFlow = 'Search', guideTried = false, guideIssue = '';
   function guide(name = '', invalid = false, focus = false) {
@@ -85,7 +86,11 @@
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   const due = row => row.follow_up && row.follow_up <= localDate() && !['won', 'closed'].includes(row.status);
-  function draft() { return {...Object.fromEntries(fields.map(key => [key, el(key).value])), status:editing?.status || 'new', description_truncated:descriptionTruncated, description_rich:descriptionRich}; }
+  function draft() {
+    const value = {...Object.fromEntries(fields.map(key => [key, el(key).value])), status:editing?.status || 'new', description_truncated:descriptionTruncated, description_rich:descriptionRich};
+    if (companyPage(draftCompanyURL) && value.company.trim() === draftCompanyName && jobLink(value.url) === lastReadUrl) value.company_url = draftCompanyURL;
+    return value;
+  }
   const richTags = new Set(['p','h3','h4','ul','ol','li','strong','em','br','blockquote']);
   const markupViews=new Map(),contentViews=new WeakMap();
   function content(target, plain, rich, normalized=false) {
@@ -166,6 +171,7 @@
     }
     editing = record?.id ? record : null; dirty = false;
     lastReadUrl = record?.url || '';
+    draftCompanyURL = recordCompanyPage(record); draftCompanyName = (record?.company || '').trim();
     descriptionTruncated = record?.description_truncated === true; descriptionRich = record?.description_rich || []; descriptionHint();
     el('Created').textContent = record?.created_at ? 'Date created: ' + createdLabel(record.created_at) : '';
     el('Created').hidden=!record?.created_at;
@@ -412,7 +418,12 @@
       const title = node('td'), open = button(row.role, () => { if (!busy) selectPreview(row.url, true); }, 'job-lead-title');
       open.setAttribute('aria-label', 'Preview ' + row.role + ' at ' + row.company); title.appendChild(open);
       if (row.notes) title.appendChild(node('div', row.notes.slice(0, 120) + (row.notes.length > 120 ? '…' : ''), 'job-leads-muted'));
-      const company = node('td', row.company); if (row.contact) company.appendChild(node('div', 'Contact: ' + row.contact, 'job-leads-muted'));
+      const company = node('td'), employerPage = recordCompanyPage(row);
+      if (employerPage) {
+        const link = node('a',row.company,'job-lead-company-link'); link.href = employerPage; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.setAttribute('aria-label','Open ' + row.company + ' on LinkedIn'); company.appendChild(link);
+      } else company.textContent = row.company;
+      if (row.contact) company.appendChild(node('div', 'Contact: ' + row.contact, 'job-leads-muted'));
       const state = node('td');
       if (!row.deleted) {
         const favorite = button(row.favorite ? '★' : '☆', async () => {
@@ -742,6 +753,9 @@
   }
   const searchStatus = value => { el('SearchStatus').textContent = value; };
   const savedJob = url => rows.find(row => jobLink(row.url) === url);
+  function recordCompanyPage(row) {
+    return companyPage(row?.company_url) || (row?.hr && row.hr.company === row.company ? companyPage(row.hr.company_url) : '');
+  }
   const previewRow = () => previewCapture?.url === previewUrl ? previewCapture : savedJob(previewUrl) || discovered.find(row => row.url === previewUrl);
   const previewSequence = () => previewSource === 'search' ? discovered : filtered();
   function applySavedFilters() {
@@ -1328,7 +1342,7 @@
   function savedFullContent(row) {
     const saved=savedJob(row.url);
     if(!saved || saved.deleted || saved.description_truncated!==false || !saved.description?.trim())return null;
-    return {...row,description:saved.description,description_rich:saved.description_rich || [],
+    return {...row,company_url:companyPage(row.company_url) || (row.company===saved.company ? recordCompanyPage(saved) : ''),description:saved.description,description_rich:saved.description_rich || [],
       description_truncated:false,full:true,fullOrigin:'saved',fullState:'ready',fullError:''};
   }
   function rememberJobs(snapshot) {
@@ -1390,7 +1404,7 @@
       const error = Error('The full content was not available. Its search summary is kept.');
       error.companionCode = 'HR_AD_EMPTY'; throw error;
     }
-    return {...row,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+    return {...row,company:data.company,company_url:companyPage(data.company_url) || (row.company===data.company ? companyPage(row.company_url) : ''),role:data.role,location:data.location || '',date_posted:data.date_posted || '',
       date_posted_estimate:data.date_posted ? '' : estimateOf(data) || estimateOf(row),
       description:data.description,description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
       full:true,fullOrigin:'captured',fullState:'ready',fullError:''};
@@ -1525,7 +1539,7 @@
       await load();
       if (folder && !folderNames.includes(folder)) throw Error('This folder changed in another window. Choose a folder again.');
       for (const row of selection) {
-        const record = {url:row.url,company:row.company,role:row.role,location:row.location,date_posted:row.date_posted,
+        const record = {url:row.url,company:row.company,...(companyPage(row.company_url)?{company_url:row.company_url}:{}),role:row.role,location:row.location,date_posted:row.date_posted,
           date_posted_estimate:row.date_posted ? '' : estimateOf(row),
           description:row.description,description_rich:row.description_rich,description_truncated:row.description_truncated,
           folder,status:'new',contact:'',notes:'',follow_up:''};
@@ -1628,7 +1642,7 @@
         return {ok:true,duplicate:true,saved:true,folder:existing.folder || ''};
       }
       const data = await prepareSource({...raw});
-      const record = {url,company:data.company,role:data.role,location:data.location || '',date_posted:data.date_posted || '',
+      const record = {url,company:data.company,...(companyPage(data.company_url)?{company_url:data.company_url}:{}),role:data.role,location:data.location || '',date_posted:data.date_posted || '',
         date_posted_estimate:data.date_posted ? '' : estimateOf(data),
         description:data.description || '',description_rich:data.description_rich || [],description_truncated:data.description_truncated === true,
         folder,status:'new',contact:'',notes:'',follow_up:''};
@@ -1692,6 +1706,10 @@
         }
       }
       descriptionHint();
+      if (typeof data.company === 'string' && el('company').value.trim() === data.company.trim()) {
+        draftCompanyURL = companyPage(data.company_url) || (!changedSource && before.company === data.company ? companyPage(before.company_url) : '');
+        draftCompanyName = data.company.trim();
+      } else { draftCompanyURL = ''; draftCompanyName = ''; }
       el('url').value = url; dirty = true; lastReadUrl = url;
       status('Job details filled in' + (usedFallback ? ' using your connected Chrome companion' : '') + '. Review them, optionally add a contact, then Save lead.' + (data.description_truncated ? ' The description is an excerpt.' : ''));
     } catch (error) { if (changedSource) el('url').value = previousSource; status(error.message + ' Your draft has been kept.'); }

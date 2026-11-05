@@ -1,5 +1,20 @@
 # Current validation record
 
+## v24.6.577 — LinkedIn company hyperlinks
+
+Company URLs are captured from the actual search card, full ad, matching public
+employer header or JobPosting organization. Saved company names open validated
+LinkedIn company roots in a new tab. Older rows can reuse matching HR evidence;
+rows with no known page retain plain names instead of guessed slugs/search links.
+This adds no crawl or paid request. Normal tab grouping still applies.
+
+Focused tests cover canonicalization, hostile URLs, ambiguous metadata, public
+header/recommendation scope, persistence/reopen/backup/restore, same-employer edits,
+stale-link removal, and search/full/manual/direct capture paths. Browser checks
+use isolated fictional responses and block external requests. The PR records
+fresh review and full Windows/macOS CI against its final head. No live employer
+page verification or installed-app update is claimed.
+
 ## v24.6.576 — Numbered Job Leads pages
 
 Numbered result pages sit directly below the scrollable card list, with a

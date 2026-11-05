@@ -790,7 +790,8 @@
           if (state.stopped) break;
           progress(`Saving ${index + 1} of ${selected.length}…`);
           // The client the ad was pulled for groups it in Saved client job ads.
-          const result = await leads({action:'save', record:{url:row.url, company:row.company, role:row.role, location:row.location, date_posted:row.date_posted,
+          const employerPage = window.cvStudioJobSearch.companyLink?.(row.company_url) || '';
+          const result = await leads({action:'save', record:{url:row.url, company:row.company, ...(employerPage?{company_url:employerPage}:{}),role:row.role, location:row.location, date_posted:row.date_posted,
             date_posted_estimate:row.date_posted ? '' : row.date_posted_estimate || '',
             description:row.description, description_rich:[], description_truncated:true, folder, status:'new', contact:'', notes:'', follow_up:'',
             ...(Number.isSafeInteger(row.client_id) && row.client_id > 0 && row.client_name ? {client:{company_id:row.client_id, name:String(row.client_name).slice(0, 200)}} : {})}});

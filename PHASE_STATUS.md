@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.577 makes saved Job Ads company names link to captured LinkedIn employer
+  pages, including matching existing HR evidence. Captured URLs persist through
+  save/edit/backup paths with safe canonicalization and stale-link removal.
+  No schema/route change or extra crawl. Its PR records review and CI status.
+
 - v24.6.576 adds numbered Job Leads search pages below the cards, with visible
   ad ranges and matching preview navigation. Saved ads also get page numbers.
   Preserves selection, busy controls and filters; browsing does not repeat reads.

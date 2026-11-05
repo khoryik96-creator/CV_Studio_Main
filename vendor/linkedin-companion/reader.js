@@ -487,7 +487,8 @@
         const role = compact(String(paragraphs[0].innerText || '').split('\n')[0]).replace(/\s*\(Verified job\)\s*$/i,'').slice(0,240);
         const company = text(paragraphs[1]).slice(0,200), where = text(paragraphs[2]).slice(0,240);
         if (!role || !company) continue;
-        seen.add(url); jobs.push({url,role,company,location:where,date_posted:'',date_posted_estimate:relativePosted(jobSummary(card)),description:jobSummary(card).slice(0,6500),description_truncated:true});
+        const employerURL=jobCompanyURL(card,company);
+        seen.add(url); jobs.push({url,role,company,...(employerURL?{company_url:employerURL}:{}),location:where,date_posted:'',date_posted_estimate:relativePosted(jobSummary(card)),description:jobSummary(card).slice(0,6500),description_truncated:true});
         if (jobs.length >= 40) break;
       }
     }
@@ -510,7 +511,8 @@
       const day = validDate ? posted.slice(0,10) : '';
       const calendar = new Date(day + 'T00:00:00Z');
       const datePosted = day && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0,10) === day ? day : '';
-      seen.add(url); jobs.push({url,role,company,location:where,date_posted:datePosted,date_posted_estimate:datePosted ? '' : relativePosted(jobSummary(card)),description:jobSummary(card).slice(0,6500),description_truncated:true});
+      const employerURL=jobCompanyURL(card,company);
+      seen.add(url); jobs.push({url,role,company,...(employerURL?{company_url:employerURL}:{}),location:where,date_posted:datePosted,date_posted_estimate:datePosted ? '' : relativePosted(jobSummary(card)),description:jobSummary(card).slice(0,6500),description_truncated:true});
       if (jobs.length >= 40) break;
     }
     const scroller = jobScroller(scope), next = jobNextButton(scope);

@@ -13,11 +13,30 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 import requests
 
-from cvstudio_job_leads import JobLeadsError, job_url, format_description
+from cvstudio_job_leads import JobLeadsError, job_url, company_url, format_description
 
 MAX_HTML_BYTES = 4 * 1024 * 1024
 PUBLIC_RATE_LIMIT_PAUSE = 300
 PUBLIC_RATE_LIMIT_MAX = 2_147_483_647
+
+
+def _employer_page(soup, name, organization=None, allow_header=False):
+    links = set()
+    def normalize(value):
+        return company_url(urljoin('https://www.linkedin.com', value)) if isinstance(value, str) else ''
+    if isinstance(organization, dict):
+        values = organization.get('sameAs') or []
+        if not isinstance(values, list):
+            values = [values]
+        for value in [organization.get('url'), *values[:20]]:
+            if normalize(value):
+                links.add(normalize(value))
+    cards = soup.select('.top-card-layout') if allow_header else []
+    if len(cards) == 1:
+        for anchor in cards[0].select('a.topcard__org-name-link[href]'):
+            if _text(str(anchor), 200).casefold() == name.casefold() and normalize(anchor.get('href')):
+                links.add(normalize(anchor.get('href')))
+    return next(iter(links)) if len(links) == 1 else ''
 
 
 def _posted_date(value):
@@ -141,14 +160,16 @@ def parse_public_job(html, expected_url, *, _trusted_guest=False):
             continue
         if not (posting_url == expected or identity == expected_id or canonical and len(postings) == 1):
             continue
-        company = posting.get('hiringOrganization')
-        company = company.get('name') if isinstance(company, dict) else ''
+        organization = posting.get('hiringOrganization')
+        company = organization.get('name') if isinstance(organization, dict) else ''
         role, company = _text(posting.get('title'), 240), _text(company, 200)
         if role and company:
             words = _description(posting.get('description'))
             if not words.strip():
                 continue
+            employer_page = _employer_page(soup, company, organization, canonical)
             candidates.append({'url':expected, 'company':company, 'role':role,
+                               **({'company_url':employer_page} if employer_page else {}),
                                'location':_location(posting.get('jobLocation')),
                                'date_posted':_posted_date(posting.get('datePosted')),
                                'description':words[:20000], 'description_rich':format_description(words[:20000], posting.get('description', '')),
@@ -157,6 +178,10 @@ def parse_public_job(html, expected_url, *, _trusted_guest=False):
         if len({(row['company'], row['role']) for row in candidates}) != 1:
             raise _unavailable()
         result = candidates[0]
+        employer_pages = {row['company_url'] for row in candidates if row.get('company_url')}
+        result.pop('company_url', None)
+        if len(employer_pages) == 1:
+            result['company_url'] = next(iter(employer_pages))
         descriptions = soup.select('.description__text') if canonical else []
         if len(descriptions) == 1:
             # Metadata sometimes has only plain text while the canonical ad
@@ -179,7 +204,9 @@ def parse_public_job(html, expected_url, *, _trusted_guest=False):
         if role and company:
             words = _description(str(description)) if description else ''
             if words.strip():
+                employer_page = _employer_page(soup, _text(str(company),200), allow_header=True)
                 return {'url':expected, 'role':_text(str(role),240), 'company':_text(str(company),200),
+                        **({'company_url':employer_page} if employer_page else {}),
                         'location':_text(str(location),240) if location else '',
                         'date_posted':_posted_date(posted.get('datetime') or posted.get('content')) if posted else '',
                         'description':words[:20000], 'description_rich':format_description(words[:20000], str(description)) if description else [],

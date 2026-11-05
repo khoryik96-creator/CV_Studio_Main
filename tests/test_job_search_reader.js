@@ -10,7 +10,7 @@ function fixture(){
   const duplicate=visible('Duplicate label',{href:url,closest:()=>card});
   const evil=visible('Wrong origin',{href:'https://www.linkedin.com.attacker.invalid/jobs/view/222',closest:()=>card});
   const other=visible('Other',{href:'https://www.linkedin.com/jobs/view/999',closest:()=>({getClientRects:()=>[{}],querySelectorAll:()=>[link,other]})});
-  card.querySelectorAll=selector=>selector==='a[href]'?[link,duplicate]:selector.includes('job-card-list__title')?[role]:selector.includes('primary-description')?[company]:selector.includes('metadata-item')?[where]:selector==='time[datetime]'?[visible('',{getAttribute:()=>state.date})]:[];
+  card.querySelectorAll=selector=>selector==='a[href]'?[link,duplicate]:selector==='a[href*="/company/"]' && state.companyHref?[visible('Example Finance',{href:state.companyHref})]:selector.includes('job-card-list__title')?[role]:selector.includes('primary-description')?[company]:selector.includes('metadata-item')?[where]:selector==='time[datetime]'?[visible('',{getAttribute:()=>state.date})]:[];
   const scope=visible(card.innerText,{scrollTop:0,clientHeight:500,scrollHeight:1500,contains:value=>value===scope,
     querySelectorAll:()=>state.empty||state.pendingCards?[]:[link,duplicate,evil,other],scrollBy:({top})=>{scope.scrollTop+=top;state.scrolls++}});
   const next=visible('Next',{disabled:false,getAttribute:()=> 'View next page',matches:()=>true,click:()=>state.next++});
@@ -28,6 +28,11 @@ assert.equal(result.jobs.length,1,'duplicates, hostile hosts and ambiguous multi
 assert.equal(result.jobs[0].url,url);assert.equal(result.jobs[0].role,'Finance Manager');assert.equal(result.jobs[0].company,'Example Finance');
 assert.equal(result.jobs[0].date_posted,'2026-10-02');assert(result.jobs[0].description_truncated);
 assert.equal(result.hasNext,true);assert.equal(result.atBottom,false);
+f.state.companyHref='https://www.linkedin.com/company/example/?trk=jobs';
+assert.equal(f.reader.readJobSearch().jobs[0].company_url,'https://www.linkedin.com/company/example/','search cards retain their matching employer page');
+f.state.companyHref='https://www.linkedin.com.evil.invalid/company/example/';
+assert(!f.reader.readJobSearch().jobs[0].company_url,'lookalike company hosts cannot become links');
+delete f.state.companyHref;
 assert.throws(()=>f.reader.nextJobSearch('stale signature'));assert.equal(f.state.next,0);
 assert(f.reader.nextJobSearch(result.signature));assert.equal(f.state.next,1);
 assert(f.reader.scrollJobSearch(result.signature));assert.equal(f.state.scrolls,1);
