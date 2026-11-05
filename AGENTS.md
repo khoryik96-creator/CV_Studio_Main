@@ -502,33 +502,15 @@ Before changing code:
 1. Read `ROADMAP.md`.
 2. Read `PHASE_STATUS.md`.
 3. Read `IMPLEMENT.md`.
-4. Read `CV_STUDIO_V24_6_242_PHASE_6_HANDOVER.md`,
-   `cv_studio_v24_6_242_jobadder_account_settings_signout_qa_report.md`,
-   `CV_STUDIO_V24_6_241_PHASE_6_HANDOVER.md`.
-5. Read
-   `cv_studio_v24_6_241_windows_x64_antiword_toctou_corrective_qa_report.md`,
-   `CV_STUDIO_V24_6_240_PHASE_6_HANDOVER.md`,
-   `cv_studio_v24_6_240_windows_x64_antiword_mandatory_qa_report.md`,
-   `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md`,
-   `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md`,
-   `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md`,
-   `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md`,
-   `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md`,
-   `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md`,
-   `CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md`,
-   `cv_studio_v24_6_236_phase5b_ai_cost_guardrails_corrective_qa_report.md`,
-   `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md`,
-   `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md`,
-   `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md`,
-   `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`,
-   `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md`,
-   `cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md`,
-   `cv_studio_v24_6_230_phase3_content_negotiation_corrective_qa_report.md`,
-   the v24.6.224 corrective QA report, the
-   v24.6.223 Phase 3 QA report, the
-   Phase 2B QA reports and the historical Phase 2A QA reports.
-6. Inspect the relevant existing storage paths and tests.
-7. Verify the baseline before implementation.
+4. Read the current validation record in `docs/QA.md` and the module notes
+   relevant to the requested work.
+5. Inspect the relevant existing storage paths and tests.
+6. Verify the baseline before implementation.
+
+Old version-specific handovers and QA reports are archived in Git history; they
+are not required reading for every change. See `README.md` for the archive link.
+Keep current evidence in `docs/QA.md` and the PR rather than creating another
+version-specific root Markdown file.
 
 During work:
 

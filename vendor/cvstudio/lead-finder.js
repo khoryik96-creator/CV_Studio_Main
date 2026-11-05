@@ -8,6 +8,9 @@ var _leadLastWarning = '';
 var _leadCosts = { search_usd:0, people_usd:0, email_usd:0, total_usd:0, search_tokens:0, people_tokens:0, email_tokens:0, model:'' };
 var _leadSelectedCompanyIds = {};
 var _leadSelectedPersonIds = {};
+var _leadPeopleAbort = null;
+function stopLeadPeopleSearch(){if(_leadPeopleAbort)_leadPeopleAbort.abort();}
+if(typeof window!=='undefined' && window.addEventListener)window.addEventListener('pagehide',stopLeadPeopleSearch);
 
 function toggleLeadPill(btn) {
   btn.classList.toggle('active');
@@ -524,7 +527,7 @@ async function runLeadSearch() {
     };
     var r = await fetchWithTimeout('/lead-finder/search', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-    }, depth === 'deep' ? 125000 : 95000);
+    }, depth === 'deep' ? 180000 : 150000);
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || d.error) {
       recordPaidAiFailure('Lead Finder Search failed output', d, route.model, route.provider);
@@ -597,7 +600,7 @@ function leadMergePeople(existing, incoming) {
 }
 
 async function runLeadPeopleSearch(visibleOnly) {
-  if (!requireLeadFinderUnlocked()) return;
+  if (_leadPeopleAbort || !requireLeadFinderUnlocked()) return;
   var status = document.getElementById('leadPeopleStatus');
   var btn = document.getElementById('btnLeadPeopleSearch');
   var btnShown = document.getElementById('btnLeadPeopleSearchShown');
@@ -609,6 +612,8 @@ async function runLeadPeopleSearch(visibleOnly) {
   var route = aiRoutePayload('lead_people');
   var apiKey = route.api_key;
   if (!apiKey) { showToast('Save an API key for Lead Finder People route. Apollo only enriches emails after people are found.', 'err'); return; }
+  if(companiesToSend.length>8){showToast('Select up to 8 job ads for one people search.','err');return;}
+  _leadPeopleAbort=new AbortController();
   var _tabRun = markTabRunning('leadfinder');
   var cvText = (document.getElementById('leadCvText').value || _leadExtractedText || '').trim();
   if (btn) btn.disabled = true;
@@ -617,25 +622,28 @@ async function runLeadPeopleSearch(visibleOnly) {
   status.className = 'lead-status';
   status.textContent = 'Searching public web/profile results for likely HR, TA, recruiters and functional hiring managers from ' + companiesToSend.length + (mode === 'selected' ? ' selected' : (mode === 'shown' ? ' shown/filtered' : ' saved')) + ' job leads using common title variations…';
   switchLeadSubtab('people');
+  var stop=document.getElementById('leadPeopleStop');if(stop)stop.hidden=route.provider!=='deepseek';
+  var searchButton=document.getElementById('btnLeadSearch'),clearButton=document.getElementById('btnLeadClear');
+  if(searchButton)searchButton.disabled=true;if(clearButton)clearButton.disabled=true;
   try {
-    var r = await fetchWithTimeout('/lead-finder/find-people', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-        lead_lock_code: leadFinderLockPayload(),
-        api_key: apiKey,
-        model: route.model,
-        provider: route.provider,
-        companies: companiesToSend,
-        regions: leadGetRegions(),
-        target_role: (document.getElementById('leadTargetRole').value || '').trim(),
-        candidate_context: (document.getElementById('leadContext').value || '').trim(),
-        cv_text: cvText
-      })
-    }, 135000);
-    var d = await r.json().catch(function(){ return {}; });
-    if (!r.ok || d.error) {
-      recordPaidAiFailure('Lead Finder People Search failed output', d, route.model, route.provider);
-      throw new Error(d.error || 'People search failed');
+    var payload={lead_lock_code:leadFinderLockPayload(),api_key:apiKey,model:route.model,provider:route.provider,
+      companies:companiesToSend,regions:leadGetRegions(),target_role:(document.getElementById('leadTargetRole').value || '').trim(),
+      candidate_context:(document.getElementById('leadContext').value || '').trim(),cv_text:cvText,search_provider:getSearchProviderConfig()};
+    async function peopleRequest(body){
+      var response=await fetchWithTimeout('/lead-finder/find-people',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},135000);
+      var data=await response.json().catch(function(){return {};});
+      if(!response.ok || data.error){recordPaidAiFailure('Lead Finder People Search failed output',data,route.model,route.provider);throw Error(data.error || 'People search failed');}
+      return data;
     }
+    var d;
+    if(route.provider==='deepseek'){
+      if(!window.cvStudioLeadFinderPeople || !window.cvStudioJobLeads?.rpc)throw Error('Refresh CV Studio to load the companion people search.');
+      d=await window.cvStudioLeadFinderPeople.run({payload,rpc:window.cvStudioJobLeads.rpc,request:peopleRequest,status:function(message){status.textContent=message;},signal:_leadPeopleAbort.signal,
+        onCompanies:function(confirmed){
+          var selected=new Set(companiesToSend.map(function(c){return c.id;})),byID=new Map(confirmed.map(function(c){return [c.id,c];}));
+          _leadCompanies=_leadCompanies.flatMap(function(c){return selected.has(c.id)?(byID.has(c.id)?[byID.get(c.id)]:[]):[c];});renderLeadFinder();
+        }});
+    }else d=await peopleRequest(payload);
     var n = normalizeLeadData({ people: d.people || [], companies: _leadCompanies, summary: _leadSummary, warning: d.warning || '' });
     var beforePeopleCount = _leadPeople.length;
     _leadPeople = leadMergePeople(_leadPeople, n.people);
@@ -649,9 +657,7 @@ async function runLeadPeopleSearch(visibleOnly) {
     leadRefreshTotalCost();
     renderLeadFinder();
     status.className = 'lead-status ok';
-    var noPeopleHint = !_leadPeople.length ? '\nNo public people leads were returned. Try selecting 1-3 specific job leads with clear company names/job URLs, especially LinkedIn/JobStreet results, then run Find People for Selected.' : '';
-    var titleAngles = Array.isArray(d.title_search_angles) && d.title_search_angles.length ? '\nRole-specific title angles used: ' + d.title_search_angles.slice(0, 12).join(', ') : '';
-    status.textContent = 'People search done. ' + _leadPeople.length + ' total people leads saved (' + addedPeopleCount + ' newly added this run). Run cost: ' + leadCostLabel(peopleRunCost) + ' / ' + leadMyrLabel(peopleRunCost) + '. Total Lead Finder cost: ' + leadCostLabel(_leadCosts.total_usd) + ' / ' + leadMyrLabel(_leadCosts.total_usd) + titleAngles + noPeopleHint + (d.warning ? '\nNote: ' + d.warning : '');
+    status.textContent = addedPeopleCount+' people added · '+_leadPeople.length+' saved · Cost: '+leadCostLabel(peopleRunCost)+(addedPeopleCount?'':'. No matching people were confirmed.');
     statsRecord('Lead Finder People Search', 'lead', peopleRunCost || 0, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
     showToast('People search completed', 'ok');
     markTabDone('leadfinder', _tabRun);
@@ -664,6 +670,8 @@ async function runLeadPeopleSearch(visibleOnly) {
     if (btn) btn.disabled = false;
     if (btnShown) btnShown.disabled = false;
     if (btnSelected) btnSelected.disabled = false;
+    _leadPeopleAbort=null;if(stop)stop.hidden=true;
+    if(searchButton)searchButton.disabled=false;if(clearButton)clearButton.disabled=false;
   }
 }
 

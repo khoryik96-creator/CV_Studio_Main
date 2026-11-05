@@ -67,6 +67,7 @@ FRONTEND_MODULES = (
     "cv-format.js",
     "ai-keys.js",
     "tab-status.js",
+    "lead-people.js",
     "lead-finder.js",
     "ppc.js",
     "batch-format.js",

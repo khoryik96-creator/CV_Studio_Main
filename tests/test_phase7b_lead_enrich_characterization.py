@@ -536,7 +536,9 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
             {"title":"Software Engineer - Fictional Systems - JobStreet", "url":"https://my.jobstreet.com/job/87401944", "snippet":"Software Engineer at Fictional Systems in Malaysia", "location":"Malaysia", "published_date":"3 days ago"},
         ]
         payload = {"lead_lock_code":app._LEAD_FINDER_LOCK_CODE, "api_key":"fictional", "provider":"deepseek", "model":"deepseek-v4-flash", "cv_text":"Software Engineer in Malaysia. Python backend systems development and SQL. " * 3, "regions":["Malaysia"], "job_sources":["JobStreet"], "target_role":"Software Engineer", "search_provider":{"provider":"tavily", "api_key":"fictional-tavily"}}
-        with mock.patch.object(app, '_lead_search_tavily', return_value=results) as search, mock.patch.object(app, 'call_llm', side_effect=AssertionError('No extra AI call')):
+        with mock.patch.object(app, '_lead_evidence_checker') as checker, mock.patch.object(app, '_lead_search_tavily', return_value=results) as search, mock.patch.object(app, 'call_llm', side_effect=AssertionError('No extra AI call')):
+            checker.return_value.results.side_effect=lambda rows:(rows,'')
+            checker.return_value.leads.side_effect=lambda data:(data,'')
             client = app.app.test_client()
             client.set_cookie(app._AI_SPEND_SESSION_COOKIE, app._AI_SPEND_SESSION_TOKEN)
             response = client.post('/lead-finder/search', json=payload, headers={'Origin':'http://127.0.0.1:5000'})
@@ -546,6 +548,51 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         self.assertEqual(data['summary']['search_provider_used'], 'tavily')
         self.assertEqual(data['companies'][0]['days_open'], 3)
         self.assertEqual([c['job_url'] for c in data['companies']], ['https://my.jobstreet.com/job/87401944'])
+
+    def test_empty_verified_search_retains_expiry_warning_without_ai_fallback(self):
+        from unittest import mock
+        payload={'lead_lock_code':app._LEAD_FINDER_LOCK_CODE,'api_key':'fictional','provider':'deepseek','model':'deepseek-v4-flash',
+                 'cv_text':'Software Engineer Python backend development in Malaysia. '*3,'regions':['Malaysia'],
+                 'job_sources':['JobStreet'],'target_role':'Software Engineer','search_provider':{'provider':'tavily','api_key':'fictional-tavily'}}
+        with mock.patch.object(app,'_lead_evidence_checker') as checker, mock.patch.object(app,'_lead_search_tavily',return_value=[{'url':'https://sg.jobstreet.com/job/94790829'}]),mock.patch.object(app,'call_llm',side_effect=AssertionError('No paid fallback')):
+            checker.return_value.results.return_value=([],'Skipped 1 expired or unconfirmed JobStreet ad(s).')
+            client=app.app.test_client();client.set_cookie(app._AI_SPEND_SESSION_COOKIE,app._AI_SPEND_SESSION_TOKEN)
+            response=client.post('/lead-finder/search',json=payload,headers={'Origin':'http://127.0.0.1:5000'})
+        self.assertEqual(response.status_code,200,response.get_json())
+        self.assertEqual(response.get_json()['companies'],[])
+        self.assertIn('expired or unconfirmed',response.get_json()['warning'])
+
+    def test_deepseek_people_reviews_only_observed_cards_without_web_tools(self):
+        from unittest import mock
+        import json
+        companies=[{'id':'one','company':'Elitez','job_url':'https://sg.jobstreet.com/job/95258471','matched_role':'Software Engineer'}]
+        body={'lead_lock_code':app._LEAD_FINDER_LOCK_CODE,'api_key':'fictional','provider':'deepseek','model':'deepseek-v4-flash','companies':companies,'target_role':'Software Engineer'}
+        client=app.app.test_client();client.set_cookie(app._AI_SPEND_SESSION_COOKIE,app._AI_SPEND_SESSION_TOKEN)
+        headers={'Origin':'http://127.0.0.1:5000'}
+        with mock.patch.object(app,'_lead_evidence_checker') as checker,mock.patch.object(app,'call_llm') as llm,mock.patch.object(app,'_lead_call_with_optional_web',side_effect=AssertionError('No web call')):
+            checker.return_value.leads.side_effect=lambda data:(data,'')
+            planned=client.post('/lead-finder/find-people',json={**body,'action':'companion_plan'},headers=headers)
+            self.assertEqual(planned.status_code,200,planned.get_json());self.assertTrue(planned.get_json()['plan']);llm.assert_not_called()
+            card={'company':'Elitez','name':'Fictional HR','title':'HR Manager at Elitez','text':'Fictional HR HR Manager at Elitez Malaysia','url':'https://www.linkedin.com/in/fictional-hr'}
+            llm.return_value={'content':[{'type':'text','text':json.dumps({'matches':[{'id':'observed_1','reason':'Visible employer and HR title'},{'id':'invented'}]})}],'usage':{'input_tokens':100,'output_tokens':20}}
+            response=client.post('/lead-finder/find-people',json={**body,'action':'companion_review','observed_people':[card]},headers=headers)
+            self.assertEqual(response.status_code,200,response.get_json());self.assertEqual(response.get_json()['people'][0]['name'],'Fictional HR')
+            self.assertEqual(llm.call_args.args[0],'deepseek');self.assertNotIn('tools',llm.call_args.args[2])
+            llm.return_value={'content':[{'type':'text','text':'not valid output'}],'usage':{'input_tokens':100,'output_tokens':20}}
+            malformed=client.post('/lead-finder/find-people',json={**body,'action':'companion_review','observed_people':[card]},headers=headers)
+            self.assertEqual(malformed.status_code,200);self.assertEqual(malformed.get_json()['usage']['input_tokens'],100)
+            self.assertEqual(malformed.get_json()['people'],[])
+
+
+    def test_claude_people_keeps_existing_web_search_mechanism(self):
+        from unittest import mock
+        import json
+        body={'lead_lock_code':app._LEAD_FINDER_LOCK_CODE,'api_key':'fictional','provider':'anthropic','model':'claude-sonnet-4-6','companies':[{'company':'Elitez','matched_role':'Software Engineer'}]}
+        client=app.app.test_client();client.set_cookie(app._AI_SPEND_SESSION_COOKIE,app._AI_SPEND_SESSION_TOKEN)
+        reply={'content':[{'type':'text','text':json.dumps({'people':[]})}],'usage':{}}
+        with mock.patch.object(app,'_lead_call_with_optional_web',return_value=(reply,'')) as web,mock.patch.object(app,'call_llm',side_effect=AssertionError('No companion review')):
+            response=client.post('/lead-finder/find-people',json=body,headers={'Origin':'http://127.0.0.1:5000'})
+        self.assertEqual(response.status_code,200,response.get_json());self.assertTrue(web.call_args.args[1]['tools']);self.assertEqual(web.call_args.kwargs['provider'],'anthropic')
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.571"
+_INSTALL_RECEIPT_VERSION = "v24.6.576"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.571"
+_CVSTUDIO_VERSION = "v24.6.576"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -9685,8 +9685,31 @@ from cvstudio_lead_search import (
     _lead_fetch_json_url,
     _lead_search_serpapi,
     _lead_search_tavily,
+    _lead_extract_tavily,
     _lead_ssl_context,
 )
+
+
+from cvstudio_lead_evidence import JobstreetVerifier as _JobstreetVerifier, fetch_jobstreet as _lead_fetch_jobstreet
+
+
+def _lead_evidence_checker(provider):
+    return _JobstreetVerifier(provider,fetch=lambda url:_lead_fetch_jobstreet(url),
+                              extract=lambda key,urls:_lead_extract_tavily(key,urls))
+
+from cvstudio_lead_enrich import _lead_source_bucket
+
+
+def _lead_confirmed_ads(parsed, checker, regions, filters, titles, sources):
+    parsed,note=checker.leads(parsed);notes=[note] if note else []
+    parsed=_lead_normalize_company_fit_freshness(parsed)
+    for function,args in [(_lead_filter_by_regions,(regions,)),(_lead_apply_basic_job_filters,(filters,)),(_lead_filter_by_title_angles,(titles,)),(_lead_keep_only_direct_job_leads,())]:
+        parsed,note=function(parsed,*args)
+        if note:notes.append(note)
+    if isinstance(parsed.get('summary'),dict):
+        parsed['summary']['job_source_counts']=[{'source':source,'count':sum(_lead_source_bucket(row,sources)==source for row in parsed.get('companies') or [])} for source in dict.fromkeys(sources)]
+    return parsed,' '.join(notes)
+
 
 
 # _lead_search_provider_config + _lead_collect_search_provider_results are
@@ -9882,6 +9905,7 @@ def lead_finder_search():
         industries = (body.get("industries") or "").strip()
         job_filters = _lead_clean_job_filters(body.get("job_filters") or {})
         search_provider = _lead_search_provider_config(body.get("search_provider") or {})
+        evidence_checker = _lead_evidence_checker(search_provider)
         depth = (body.get("depth") or "standard").strip().lower()
 
         if not api_key:
@@ -9978,6 +10002,8 @@ def lead_finder_search():
             provider_results, provider_warnings = _lead_collect_search_provider_results(
                 search_provider, job_sources, job_title_angles, regions, role_search_target, job_filters, depth
             )
+            provider_results, evidence_warning = evidence_checker.results(provider_results)
+            if evidence_warning:provider_warnings.append(evidence_warning)
             if provider_results:
                 # First pass: deterministic provider extraction. This avoids spending
                 # another AI call when Tavily/SerpAPI already returned direct job URLs
@@ -10046,6 +10072,8 @@ def lead_finder_search():
                     if real_count:
                         parsed["summary"]["source_strategy"] = "Search provider results converted directly into provisional extracted job leads without extra AI classification cost."
                 parsed["people"] = []
+                parsed, evidence_warning = _lead_confirmed_ads(parsed,evidence_checker,regions,job_filters,job_title_angles,job_sources)
+                if evidence_warning:warnings.append(evidence_warning)
                 parsed, source_selection_warning = _lead_cleanup_urls_by_selected_sources(parsed, job_sources)
                 if source_selection_warning:
                     warnings.append(source_selection_warning)
@@ -10094,7 +10122,7 @@ def lead_finder_search():
                     "cost": _lead_cost(model, title_expansion_usage or {}, llm_provider),
                     "cost_details": _lead_cost_details(model, title_expansion_usage or {}, llm_provider),
                     "phase": "job_search_provider_empty",
-                    "warning": (f"Search provider {search_provider.get('provider')} returned no usable job results. No fallback search links shown and no AI fallback cost incurred." + (" " + title_expansion_warning if title_expansion_warning else "")).strip()
+                    "warning": (f"Search provider {search_provider.get('provider')} returned no usable job results. No fallback search links shown and no AI fallback cost incurred." + (" " + title_expansion_warning if title_expansion_warning else "") + (" " + " | ".join(provider_warnings[:3]) if provider_warnings else "")).strip()
                 }
                 out["external_billing"] = _phase5b_unavailable_external_billing(
                     search_provider.get("provider"),
@@ -10311,6 +10339,8 @@ TARGET COUNT
             parsed["summary"].setdefault("job_filters_used", job_filters)
             parsed["summary"].setdefault("regions", regions)
             parsed["summary"].setdefault("job_sources_used", job_sources)
+        parsed, evidence_warning = _lead_confirmed_ads(parsed,evidence_checker,regions,job_filters,job_title_angles,job_sources)
+        if evidence_warning:warning=(warning+' '+evidence_warning).strip()
         parsed, source_selection_warning = _lead_cleanup_urls_by_selected_sources(parsed, job_sources)
         if source_selection_warning:
             warning = (warning + " " + source_selection_warning).strip() if warning else source_selection_warning
@@ -10724,6 +10754,32 @@ RETURN ONLY VALID JSON. No markdown. Shape exactly:
 
 
 
+from cvstudio_lead_people import plan as _lead_people_plan, observations as _lead_people_observations, prompt as _lead_people_prompt, selected_people as _lead_people_selected
+
+
+def _lead_deepseek_people(body, api_key, model, companies, target_role, cv_text):
+    titles=_lead_role_specific_title_bank(target_role,[str(c.get('matched_role') or '') for c in companies if isinstance(c,dict)],cv_text)
+    action=body.get('action')
+    if action=='companion_plan':
+        checker=_lead_evidence_checker(_lead_search_provider_config(body.get('search_provider') or {}))
+        data,warning=checker.leads({'companies':companies[:8]})
+        queries=_lead_people_plan(data['companies'],titles)
+        if not queries:return jsonify({'error':'No confirmed employers are available. Refresh the job ads first.'}),400
+        return jsonify({'ok':True,'plan':queries,'companies':data['companies'],'title_search_angles':titles,'warning':warning,'usage':{},'cost':0,'provider':'deepseek','model':model})
+    if action!='companion_review':
+        return jsonify({'error':'DeepSeek people search needs the connected LinkedIn companion. Refresh CV Studio and use Find people.'}),400
+    cards=_lead_people_observations(body.get('observed_people'),companies)
+    usage={};people=[]
+    if cards:
+        data=call_llm('deepseek',api_key,{'model':model,'max_tokens':3500,'messages':[{'role':'user','content':_lead_people_prompt(cards,titles)}]})
+        text=''.join(block.get('text','') for block in data.get('content',[]) if isinstance(block,dict))
+        usage=data.get('usage') or {}
+        try:people=_lead_people_selected(_lead_extract_json(text),cards)
+        except ValueError:people=[]
+    return jsonify({'ok':True,'people':people,'title_search_angles':titles,'usage':usage,'model':model,'provider':'deepseek',
+       'cost':_lead_cost(model,usage,'deepseek'),'cost_details':_lead_cost_details(model,usage,'deepseek'),'phase':'people_companion_review'})
+
+
 @app.route("/lead-finder/find-people", methods=["POST"])
 def lead_finder_find_people():
     """Second phase: find likely HR/hiring managers from already-found job leads."""
@@ -10746,6 +10802,10 @@ def lead_finder_find_people():
             return jsonify({"error": "Job leads required. Run Find Leads first."}), 400
         if not isinstance(regions, list):
             regions = []
+
+        if llm_provider=='deepseek':
+            try:return _lead_deepseek_people(body,api_key,model,companies,target_role,cv_text)
+            except ValueError as error:return jsonify({'error':str(error)}),400
 
         # Keep this phase targeted, but not too narrow. Earlier builds were capped
         # around five companies / twelve people, which made valid HR and hiring

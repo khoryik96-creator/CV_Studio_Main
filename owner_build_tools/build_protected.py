@@ -40,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.571"
-VERSION_SLUG = "v24_6_571"
+VERSION = "v24.6.576"
+VERSION_SLUG = "v24_6_576"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -83,6 +83,7 @@ FRONTEND_MODULES = (
     "cv-format.js",
     "ai-keys.js",
     "tab-status.js",
+    "lead-people.js",
     "lead-finder.js",
     "ppc.js",
     "batch-format.js",
@@ -287,7 +288,7 @@ def validate_repository_dependency_state(root: Path) -> None:
             raise RuntimeError(f"POSIX script is not LF-only: {rel}. Run repo_consistency.py --repair.")
 
 def validate_source(root: Path) -> None:
-    required=("cvstudio_people.py","cvstudio_apollo.py","apollo_connection.json","cvstudio_email_verifier.py","cvstudio_job_ads.py","cvstudio_job_leads.py","app.py","cvstudio_linkedin_sourcer.py","cvstudio_architecture.py","cvstudio_ai_costs.py","cvstudio_ai_providers.py","cvstudio_antiword.py","cvstudio_tesseract.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","cvstudio_startup.py","cvstudio_runtime.py","cvstudio_downloads.py","cvstudio_web_assets.py","cvstudio_secrets.py","cvstudio_jobadder_request.py","cvstudio_jobadder_read.py","cvstudio_jobadder_write.py","cvstudio_onenote_text.py","cvstudio_outlook_crypto.py","cvstudio_cv_normalize.py","cvstudio_cv_reconcile.py","cvstudio_cv_fidelity.py","cvstudio_lead_match.py","cvstudio_lead_enrich.py","cvstudio_lead_cache.py","cvstudio_lead_search.py","cvstudio_spider_boolean.py","cvstudio_spider_summary.py","cvstudio_spider_score.py","cvstudio_spider_documents.py","cvstudio_ja_typos.py","cvstudio_salary_parse.py","cvstudio_ja_answers.py","cvstudio_ja_activity.py","cvstudio_ja_screening.py","cvstudio_ja_salary_notice.py","cvstudio_ja_salary_ai.py","cvstudio_blind_mask.py","cvstudio_ppc.py","cvstudio_msgraph.py","cvstudio_onenote_desktop.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py","vendor/linkedin-companion/manifest.json","vendor/linkedin-companion/content.js","vendor/linkedin-companion/worker.js","vendor/linkedin-companion/reader.js") + tuple(
+    required=("cvstudio_people.py","cvstudio_apollo.py","apollo_connection.json","cvstudio_email_verifier.py","cvstudio_job_ads.py","cvstudio_job_leads.py","app.py","cvstudio_linkedin_sourcer.py","cvstudio_architecture.py","cvstudio_ai_costs.py","cvstudio_ai_providers.py","cvstudio_antiword.py","cvstudio_tesseract.py","cvstudio_clients.py","cvstudio_storage.py","cvstudio_storage_bridge.py","cvstudio_diagnostics.py","cvstudio_document_safety.py","cvstudio_jobs.py","cvstudio_startup.py","cvstudio_runtime.py","cvstudio_downloads.py","cvstudio_web_assets.py","cvstudio_secrets.py","cvstudio_jobadder_request.py","cvstudio_jobadder_read.py","cvstudio_jobadder_write.py","cvstudio_onenote_text.py","cvstudio_outlook_crypto.py","cvstudio_cv_normalize.py","cvstudio_cv_reconcile.py","cvstudio_cv_fidelity.py","cvstudio_lead_match.py","cvstudio_lead_enrich.py","cvstudio_lead_cache.py","cvstudio_lead_search.py","cvstudio_lead_evidence.py","cvstudio_lead_people.py","cvstudio_spider_boolean.py","cvstudio_spider_summary.py","cvstudio_spider_score.py","cvstudio_spider_documents.py","cvstudio_ja_typos.py","cvstudio_salary_parse.py","cvstudio_ja_answers.py","cvstudio_ja_activity.py","cvstudio_ja_screening.py","cvstudio_ja_salary_notice.py","cvstudio_ja_salary_ai.py","cvstudio_blind_mask.py","cvstudio_ppc.py","cvstudio_msgraph.py","cvstudio_onenote_desktop.py","index.html","generate.js","template.docx","package.json","requirements.txt","merge_title_cache.py","vendor/linkedin-companion/manifest.json","vendor/linkedin-companion/content.js","vendor/linkedin-companion/worker.js","vendor/linkedin-companion/reader.js") + tuple(
         "vendor/cvstudio/" + filename for filename in FRONTEND_MODULES
     ) + tuple(
         "vendor/cvstudio/" + filename for filename in FRONTEND_STATIC_ASSETS

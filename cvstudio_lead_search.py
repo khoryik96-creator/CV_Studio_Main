@@ -120,6 +120,12 @@ def _lead_search_tavily(api_key, query, max_results=6, timeout=18):
     return out
 
 
+def _lead_extract_tavily(api_key, urls):
+    return _lead_fetch_json_url('https://api.tavily.com/extract',method='POST',
+        data={'urls':urls[:12],'extract_depth':'basic','format':'markdown'},
+        headers={'Content-Type':'application/json','Authorization':'Bearer '+str(api_key).strip()},timeout=10)
+
+
 def _lead_search_serpapi(api_key, query, max_results=8, timeout=18):
     """Search SerpAPI for job results.
 
