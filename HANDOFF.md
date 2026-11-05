@@ -7,6 +7,20 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current work: v24.6.571 Lead Finder dependency fixes**
+on `codex/leadfinder-relative-date-fix`, from merged570 / PR303.
+- Reproduced the reported `name 'timedelta' is not defined` through the actual
+  search route with a fictional Tavily result posted three days ago (HTTP500).
+  Import timedelta in the enrichment module, covering relative posting dates
+  and date backfill from days_open.
+- A scoped global-reference inspection also found missing ast in the JSON
+  recovery helper. Its single-quoted-dictionary recovery regression failed;
+  import ast to restore the existing literal_eval fallback.
+- New checks cover yesterday, days/weeks/months ago, today, days_open backfill,
+  literal recovery and the real search route. Inspections of all four Lead Finder
+  modules now find no unresolved global references. No live provider/AI calls,
+  real key access, or installed-app update. See the v571 QA report and PR.
+
 **Current work: v24.6.570 fresh Lead Finder review corrections**
 on `codex/leadfinder-google-careers-review`, includes v569 in corrective PR303.
 - Fresh review also reproduced duplicate LinkedIn URL aliases consuming lead

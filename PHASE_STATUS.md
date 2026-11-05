@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.571 fixes missing timedelta/ast imports in Lead Finder enrichment.
+  The screenshot error is reproduced through the search route; relative dates,
+  numeric date backfill and dictionary-response recovery have regressions.
+  No live provider calls. The associated PR records review/CI/merge state.
+
 - v24.6.570 adds the second fresh-review correction to PR303: duplicate
   canonical job aliases are removed before source counts, balancing and the cap.
   Includes the Google careers posting correction from v569. The PR records

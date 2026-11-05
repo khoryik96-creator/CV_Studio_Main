@@ -186,3 +186,30 @@ def test_canonical_aliases_are_deduplicated_before_source_counts_and_lead_cap():
     out,_=_lead_keep_only_direct_job_leads(out)
     assert [c['job_url'] for c in out['companies']] == [urls[0],urls[2],urls[3]]
     assert out['summary']['job_source_counts'] == [{'source':'LinkedIn Jobs','count':3}]
+
+
+
+@pytest.mark.parametrize(('text','days'), [('yesterday',1),('3 days ago',3),('2 weeks ago',14),('1 month ago',30),('Posted today',0)])
+def test_relative_posting_dates_are_converted_without_missing_dependencies(text, days):
+    from datetime import date, timedelta
+    from cvstudio_lead_enrich import _lead_parse_posted_date
+    today=date(2026,11,5)
+    assert _lead_parse_posted_date(text,today=today) == ((today-timedelta(days=days)).isoformat(),days)
+
+
+def test_days_open_backfills_missing_posting_date(monkeypatch):
+    from datetime import date
+    import cvstudio_lead_enrich as enrich
+    class FixedDate(date):
+        @classmethod
+        def today(cls):return cls(2026,11,5)
+    monkeypatch.setattr(enrich,'date',FixedDate)
+    out=enrich._lead_normalize_company_fit_freshness({'companies':[row(days_open=3)]})
+    assert out['companies'][0]['date_posted']=='2026-11-02'
+    assert out['companies'][0]['days_open']==3
+
+
+def test_response_recovery_handles_single_quoted_dictionary_output():
+    from cvstudio_lead_enrich import _lead_extract_json
+    assert _lead_extract_json("{'companies': [], 'summary': {'candidate_title': 'Software Engineer'}}") == {
+        'companies':[], 'summary':{'candidate_title':'Software Engineer'}}
