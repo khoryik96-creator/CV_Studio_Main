@@ -4,6 +4,27 @@
   const el=name=>document.getElementById('jobLeadsJA'+name);
   let ready=false,current=null,account='',review='',working=false,generation=0,priorUnconfirmed=false,recoveryAccount='',recoveryToken='';
   let users=[],recruiters=null,assignmentAccount='',assignmentsReady=false;
+  let linkAccount='',linkEpoch=0;const savedLinks=new Map();
+  const currentLinkAccount=()=>String(window._jaAccountCacheNamespace || '').replace(/^ja/,'');
+  const redrawContacts=()=>window.cvStudioApollo?.redrawContacts?.();
+  function setLinks(scope,links,epoch){
+    if(epoch!==linkEpoch)return;
+    savedLinks.clear();linkAccount='';
+    if(!/^[a-f0-9]{64}$/.test(scope || '') || currentLinkAccount() && currentLinkAccount()!==scope)return;
+    linkAccount=scope;
+    for(const row of Array.isArray(links)?links:[])if(/^[a-f0-9]{64}$/.test(row?.contact_key || '') && ['created','exists'].includes(row.state) && linkable(row.contact_id,row.contact_url))savedLinks.set(row.contact_key,row);
+  }
+  function rememberLink(row,scope,data){
+    if(scope!==currentLinkAccount() || !['created','exists'].includes(data.state) || !linkable(data.contact_id,data.contact_url))return;
+    if(linkAccount!==scope)savedLinks.clear();linkAccount=scope;++linkEpoch;
+    savedLinks.set(row.contact_key,{contact_id:data.contact_id,contact_url:data.contact_url,state:data.state});redrawContacts();
+  }
+  function accountChanged(){
+    ++linkEpoch;
+    if(linkAccount!==currentLinkAccount()){savedLinks.clear();linkAccount='';}
+    if(ready){++generation;current=null;account='';review='';priorUnconfirmed=false;recoveryAccount='';recoveryToken='';hideLinks();el('Dialog').close();lock(false);}
+    redrawContacts();
+  }
   const hideLinks=()=>{el('Open').hidden=true;el('Open').href='';el('Matches').replaceChildren();el('Matches').hidden=true;};
   const msg=value=>{el('Message').textContent=value;hideLinks();};
   // A link is shown only for a JobAdder contact page whose id is the contact's own.
@@ -87,6 +108,7 @@
     const token=generation,request=body(action);lock(true);guide();msg(action==='create'?'Creating contact in JobAdder…':recovering?'Checking the previous request…':'Checking details and existing contacts…');
     try{
       const data=await api(request);if(token!==generation)return;
+      rememberLink(current,request.account,data);
       recoveryToken=/^[a-f0-9]{64}$/.test(data.recovery_token || '')?data.recovery_token:'';el('RecoveryPanel').hidden=!recoveryToken;el('RecoveryConfirm').checked=false;
       review=data.review_token || '';priorUnconfirmed=data.state==='unconfirmed';recoveryAccount=priorUnconfirmed?request.account:'';el('Review').hidden=priorUnconfirmed;el('Create').hidden=data.state!=='review';el('Check').hidden=!priorUnconfirmed;
       msg(data.message+(data.state==='review'?' Company: '+data.company:'')+(data.contact_id?' Contact #'+data.contact_id:'')+(data.matches?.length?' Company: '+data.matches.map(row=>row.company || 'Existing company').join(', '):''));
@@ -110,5 +132,12 @@
     const names=row.name.trim().split(/\s+/);el('First').value=names.shift() || '';el('Last').value=names.join(' ');el('Position').value=row.position || '';el('Email').value=row.email;el('CompanyQuery').value=row.company || '';
     el('Company').replaceChildren(new Option('Choose company',''));msg('Choose the existing JobAdder company and check the name before creating.');lock(false);el('Dialog').showModal();guide(['Search']);
   }
-  window.cvStudioJAContacts={decorate(parent,row){if(!row.contact_key)return;const button=document.createElement('button');button.type='button';button.className='sec';button.textContent='Create in JobAdder';button.addEventListener('click',()=>open(row));parent.append(button);}};
+  window.cvStudioJAContacts={linkVersion:()=>linkEpoch,setLinks,accountChanged,decorate(parent,row){
+    if(!row.contact_key)return;
+    const saved=linkAccount===currentLinkAccount()?savedLinks.get(row.contact_key):null;
+    if(saved && linkable(saved.contact_id,saved.contact_url)){
+      const link=document.createElement('a');link.href=saved.contact_url;link.target='_blank';link.rel='noopener noreferrer';link.className='sec';link.textContent='Open in JobAdder';parent.append(link);return;
+    }
+    const button=document.createElement('button');button.type='button';button.className='sec';button.textContent='Create in JobAdder';button.addEventListener('click',()=>open(row));parent.append(button);
+  }};
 })();

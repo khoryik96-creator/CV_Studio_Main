@@ -41,6 +41,37 @@ def call(service,action,**changes):return service.perform({**BASE,"action":actio
 def review(service):return call(service,'review')['review_token']
 def post_count(client):return sum(kw.get('method')=='POST' for _,kw in client.calls)
 
+
+def test_dashboard_links_use_confirmed_current_account_history_without_remote_requests():
+    service,client,vault,account=setup();proof=review(service)
+    call(service,'create',review_token=proof,confirmed=True)
+    rows=[{**SOURCE,'contact_key':KEY}];before=len(client.calls)
+    assert service.contact_links(rows)=={'account':SCOPE,'links':[{'contact_key':KEY,'state':'created','contact_id':45}]}
+    restored=JobAdderContactService(client=service.client,account=service.account,contact=service.contact,load=service.load,save=service.save)
+    assert restored.contact_links(rows)==service.contact_links(rows)
+    assert len(client.calls)==before,'dashboard projection performs no JobAdder request'
+    account['account_cache_namespace']='c'*64;assert service.contact_links(rows)['links']==[]
+    account['account_cache_namespace']=SCOPE
+    next(iter(vault['operations'].values()))['state']='unconfirmed';assert service.contact_links(rows)['links']==[]
+    account['connected']=False;assert service.contact_links(rows)=={'account':'','links':[]}
+
+
+def test_contacts_route_joins_protected_links_and_discards_account_changes():
+    import test_cv_label_table_reconciliation as fixture
+    app=fixture.app;client=app.app.test_client();rows=[{**SOURCE,'contact_key':KEY}]
+    client.set_cookie(app._AI_SPEND_SESSION_COOKIE,app._AI_SPEND_SESSION_TOKEN)
+    linked={'account':SCOPE,'links':[{'contact_key':KEY,'state':'created','contact_id':45}]}
+    with mock.patch.object(app._APOLLO,'perform',return_value={'contacts':rows}),mock.patch.object(app._JOB_LEADS_JA,'contact_links',return_value=linked),mock.patch.object(app,'_jobadder_web_base',return_value='https://au3.jobadder.com'),mock.patch.object(app,'_ja_public_info',return_value={'connected':True,'account_cache_namespace':SCOPE}):
+        response=client.post('/apollo',json={'action':'contacts'},headers=fixture.HEADERS)
+        assert response.status_code==200,response.get_json()
+        assert response.get_json()['jobadder_links'][0]['contact_url']=='https://au3.jobadder.com/contacts/45'
+        with mock.patch.object(app,'_ja_public_info',return_value={'connected':True,'account_cache_namespace':'c'*64}):
+            changed=client.post('/apollo',json={'action':'contacts'},headers=fixture.HEADERS).get_json()
+        assert changed['contacts']==rows and changed['jobadder_links']==[] and changed['jobadder_account']==''
+        with mock.patch.object(app._JOB_LEADS_JA,'contact_links',side_effect=JobAdderContactError('Storage unavailable')):
+            failed=client.post('/apollo',json={'action':'contacts'},headers=fixture.HEADERS).get_json()
+        assert failed['contacts']==rows and not failed['jobadder_links'] and failed['jobadder_link_warning']
+
 def test_only_reviewed_existing_company_contact_is_posted_once():
     service,client,vault,account=setup()
     assert service.perform({'action':'companies','query':'Example'},'fictional-token')['companies']==[{"id":12,"name":"Example Company"}]

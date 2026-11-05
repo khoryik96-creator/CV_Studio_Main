@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.579 fixes nested-table CV content loss before parsing and adds persisted,
+  current-account JobAdder links to Unlocked contacts after confirmed creation.
+  No new routes/schema, remote lookup, paid request or create replay. Synthetic
+  route/Word tests and private-sample extraction verify the fix; see current QA
+  and the PR for final review/CI and limitations.
+
 - v24.6.578 adds Select all / Unselect all directly above the saved Job Ads
   table, respecting current filters across pages, busy state and Trash exclusion.
   Checkbox-only selection performs no writes. The PR records review and CI.
