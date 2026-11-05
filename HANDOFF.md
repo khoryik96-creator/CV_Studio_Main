@@ -14,6 +14,17 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source change: v24.6.580 visible HR LinkedIn profile links**
+on `codex/hr-linkedin-profile-links`, from merged v579 / PR308.
+- Each per-ad HR result card and saved HR dashboard row now includes an explicit
+  LinkedIn profile link. Existing clickable names remain. Links use the captured
+  profile URL, open in a new tab and retain noopener/noreferrer. Old saved people
+  gain the link immediately; no additional crawl, unlock or persistence change.
+- Existing HR/candidate fixtures and Chromium checks cover correct URL/new-tab
+  behavior, saved dashboard and card rendering, mobile visibility and absence
+  of automatic unlocks. Current QA and the PR record final review/CI. No native
+  installed-app update or live LinkedIn profile request was performed.
+
 **Current source change: v24.6.579 nested-table CVs and JobAdder record links**
 on `codex/contact-links-cv-formatting`, from merged v578 / PR307.
 - The reported CV stores most content in nested Word tables. The old upload

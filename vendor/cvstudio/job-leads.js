@@ -988,6 +988,8 @@
       const card = node('article','','job-leads-hr-person'), link = node('a',person.name);
       link.href=person.url; link.target='_blank'; link.rel='noopener noreferrer';
       card.append(link,node('p',person.title),node('p',person.location || 'Location not shown','job-leads-muted'),node('p','Employment: '+hrEmploymentLabel(person),'job-leads-muted'),node('p','Matched: '+person.matched,'job-leads-muted'));
+      const profile=node('a','LinkedIn profile ↗','sec job-leads-profile-link');profile.href=person.url;profile.target='_blank';profile.rel='noopener noreferrer';
+      profile.setAttribute('aria-label','Open LinkedIn profile for '+person.name);card.append(profile);
       window.cvStudioPeople?.decorateDate(card,savedJob(previewUrl),person);
       window.cvStudioEmailVerifier?.decorate(card,person);
       window.cvStudioApollo?.decorate(card,person);

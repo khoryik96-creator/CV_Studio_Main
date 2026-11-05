@@ -1,5 +1,17 @@
 # Current validation record
 
+## v24.6.580 — Visible HR profile links
+
+Per-ad HR cards and saved HR dashboard rows expose an explicit LinkedIn profile
+link in addition to their clickable names. Captured profile URLs open in a new
+tab with noopener/noreferrer; existing records need no new retrieval or unlock.
+Existing URL validation remains in place. No backend/schema changes are needed.
+
+Targeted HR and candidate fixtures pass, including exact target/rel/URL checks.
+Chromium checks both saved HR surfaces, correct new-tab navigation and mobile
+visibility with fictional data and external pages mocked. No live profile read,
+unlock or installed update. The PR records fresh review and full CI results.
+
 ## v24.6.579 — Nested CV tables and JobAdder record links
 
 The reported DOCX nests 34 tables inside one layout table. The previous real

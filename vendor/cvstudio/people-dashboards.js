@@ -267,6 +267,8 @@
       }
       tr.append(name);
       if(kind==='HR') {
+        const profile=link('LinkedIn profile ↗',row.url);
+        if(profile.href){profile.className='people-profile-link';profile.setAttribute('aria-label','Open LinkedIn profile for '+row.name);name.append(profile);}
         tr.append(text('td',row.title || '—'),text('td',row.company),text('td',row.location || '—'));
         const dates=text('td',row.employment);decorateDate(dates,personSource(row,true),row);tr.append(dates);
         const email=document.createElement('td'),result=row.email_result;

@@ -1727,6 +1727,8 @@ body.cv-caret-guard #jobLeadsEmailEditor[contenteditable="true"], body.cv-caret-
 .job-lead-company-link { color:var(--accent);text-decoration:none; }
 .job-lead-company-link:hover { text-decoration:underline; }
 .job-lead-company-link:focus-visible { outline:2px solid var(--accent);outline-offset:3px;border-radius:2px; }
+.people-profile-link { display:block;width:fit-content;margin-top:4px;font-size:11px; }
+.job-leads-profile-link { display:inline-block;margin:4px 0 8px;font-size:11px;text-decoration:none; }
 @media(max-width:900px) { .job-leads-layout { grid-template-columns:1fr; } .job-leads-intro { align-items:flex-start; flex-direction:column; gap:12px; } }
 .job-leads-curation.has-hr{grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr)}
 .job-leads-curation.has-hr:not(.no-search-results){grid-template-columns:minmax(200px,.7fr) minmax(0,1fr) minmax(280px,.8fr)}

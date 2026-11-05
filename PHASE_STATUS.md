@@ -4,6 +4,10 @@
 
 ## Release state
 
+- v24.6.580 adds visible LinkedIn profile links to saved HR dashboard rows and
+  per-ad HR cards, including existing records. Uses captured URLs, with no extra
+  crawl/unlock/write. The PR records fresh review and CI status.
+
 - v24.6.579 fixes nested-table CV content loss before parsing and adds persisted,
   current-account JobAdder links to Unlocked contacts after confirmed creation.
   No new routes/schema, remote lookup, paid request or create replay. Synthetic
