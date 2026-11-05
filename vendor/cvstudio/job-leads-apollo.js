@@ -6,6 +6,7 @@
   let ready=false, account={available:false,connected:false}, row=null, rowKey='', sequence=0;
   let working=false, appBusy=false, polling=false, pollGeneration=0, cache={}, views=[];
   let contacts=[], contactsPage=0, contactsLoading=false, contactsLoaded=false, contactsExporting=false;
+  let contactsRefreshQueued=false;
   const contactVerifiers=new Map();
   const contactFilters=()=>({company:el('ContactsCompany').value,country:el('ContactsCountry').value,email_status:el('ContactsStatus').value});
   function contactChoices() {
@@ -107,7 +108,7 @@
   }
   async function refreshContacts() {
     if(contactsLoading) return;
-    contactsLoading=true;contactControls();el('ContactsMessage').textContent='Loading contacts…';
+    contactsLoading=true;contactsRefreshQueued=false;contactControls();el('ContactsMessage').textContent='Loading contacts…';
     const linkVersion=window.cvStudioJAContacts?.linkVersion?.();
     try {
       const data=await api({action:'contacts'});
@@ -118,7 +119,7 @@
       el('ContactsMessage').textContent=[data.contact_warning,data.jobadder_link_warning].filter(Boolean).join(' ') || (contacts.length?'':'No unlocked contacts yet.');
       renderContacts();
     } catch(error) {el('ContactsMessage').textContent=error.message;}
-    finally {contactsLoading=false;contactControls();}
+    finally {contactsLoading=false;contactControls();if(contactsRefreshQueued)void refreshContacts();}
   }
   function showContacts(show) {
     window.cvStudioPeople?.hideHR();
@@ -219,6 +220,10 @@
     return true;
   }
   window.cvStudioApollo={
+    jobAdderAccountChanged:()=>{
+      if(!ready || !contactsLoaded && el('ContactsPanel').hidden)return;
+      if(contactsLoading)contactsRefreshQueued=true;else void refreshContacts();
+    },
     redrawContacts:()=>{if(ready)renderContacts();},
     connected:()=>account.connected,
     available:()=>account.available,

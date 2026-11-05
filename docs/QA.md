@@ -1,5 +1,27 @@
 # Current validation record
 
+## v24.6.581 — Fresh post-merge review corrections
+
+A new manual-request GitHub review of merged v580 (d9a5a70) found no HR-link
+issues. Fresh manual review of the recent CV/JobAdder work reproduced two bugs:
+
+- The pre-v579 upload route kept a date textbox inside a table-cell content
+  control; v580 lost it because table shapes were excluded from the root fallback
+  and controlled cells were skipped. Shared/real-route tests now cover visible
+  content-control, custom-XML and inserted/moved block wrappers with nested
+  employer tables. The combined wrapper/table depth is bounded and fails visibly.
+- JobAdder account info arriving during a held contacts read left an already
+  created contact labelled Create. The stale response remains rejected, but
+  account changes now queue one fresh local snapshot. Tests cover initial/idle
+  account changes, coalescing, correct-account links and zero contact-action calls.
+
+All 104 JS fixtures, 265 focused Python checks and 2,331 subtests pass. Chromium
+held-response testing confirms the current-account link appears after the queued
+read. The private CV's previously corrected extracted text stays identical.
+The corrective PR records fresh review/full CI. No live provider call, private
+fixture committed or installed-app update. Original Word native rendering was
+not needed for this source-extraction regression.
+
 ## v24.6.580 — Visible HR profile links
 
 Per-ad HR cards and saved HR dashboard rows expose an explicit LinkedIn profile

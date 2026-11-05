@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.580"
+_INSTALL_RECEIPT_VERSION = "v24.6.581"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.580"
+_CVSTUDIO_VERSION = "v24.6.581"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -12670,7 +12670,15 @@ def _docx_cell_content_lines(cell, render_paragraph, depth=0):
     from docx.table import Table
     from docx.text.paragraph import Paragraph
     out = []
-    for child in cell._tc.iterchildren():
+    def blocks(parent, level):
+        if level > 32:
+            raise ValueError('The DOCX table layout is too deeply nested. Export it as a simpler DOCX or PDF.')
+        for child in parent.iterchildren():
+            if child.tag.rsplit('}', 1)[-1] in {'sdt', 'sdtContent', 'customXml', 'ins', 'moveTo'}:
+                yield from blocks(child, level+1)
+            else:
+                yield child, level
+    for child, level in blocks(cell._tc, depth):
         tag = child.tag.rsplit('}', 1)[-1]
         if tag == 'p':
             value = render_paragraph(Paragraph(child, cell)).strip()
@@ -12684,7 +12692,7 @@ def _docx_cell_content_lines(cell, render_paragraph, depth=0):
                     if nested._tc in seen:
                         continue
                     seen.add(nested._tc)
-                    values = _docx_cell_content_lines(nested, render_paragraph, depth+1)
+                    values = _docx_cell_content_lines(nested, render_paragraph, level+1)
                     if values:
                         groups.append(values)
                 if groups and all(len(group) == 1 for group in groups):
