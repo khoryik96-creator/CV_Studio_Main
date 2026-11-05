@@ -533,7 +533,7 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         from unittest import mock
         results = [
             {"title":"Software Engineer (with Salaries) - Nov 2026 | JobStreet", "url":"https://my.jobstreet.com/software-engineer-jobs", "snippet":"Software Engineer jobs in Malaysia"},
-            {"title":"Software Engineer - Fictional Systems - JobStreet", "url":"https://my.jobstreet.com/job/87401944", "snippet":"Software Engineer at Fictional Systems in Malaysia", "location":"Malaysia"},
+            {"title":"Software Engineer - Fictional Systems - JobStreet", "url":"https://my.jobstreet.com/job/87401944", "snippet":"Software Engineer at Fictional Systems in Malaysia", "location":"Malaysia", "published_date":"3 days ago"},
         ]
         payload = {"lead_lock_code":app._LEAD_FINDER_LOCK_CODE, "api_key":"fictional", "provider":"deepseek", "model":"deepseek-v4-flash", "cv_text":"Software Engineer in Malaysia. Python backend systems development and SQL. " * 3, "regions":["Malaysia"], "job_sources":["JobStreet"], "target_role":"Software Engineer", "search_provider":{"provider":"tavily", "api_key":"fictional-tavily"}}
         with mock.patch.object(app, '_lead_search_tavily', return_value=results) as search, mock.patch.object(app, 'call_llm', side_effect=AssertionError('No extra AI call')):
@@ -544,6 +544,7 @@ class LeadEnrichCharacterizationTests(unittest.TestCase):
         data = response.get_json()
         self.assertTrue(search.called)
         self.assertEqual(data['summary']['search_provider_used'], 'tavily')
+        self.assertEqual(data['companies'][0]['days_open'], 3)
         self.assertEqual([c['job_url'] for c in data['companies']], ['https://my.jobstreet.com/job/87401944'])
 
 
