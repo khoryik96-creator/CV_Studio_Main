@@ -7,6 +7,13 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Documentation policy.** Keep active guides and module notes in the tree.
+Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
+187 superseded release reports/handovers were removed from the current tree;
+[the historical snapshot](https://github.com/khoryik96-creator/CV_Studio_Main/tree/24d77eaf07d09cf09cb6e07f391bb112ffe70a71)
+retains them. Version-specific sections below are historical records, not active
+scope or current merge status. Do not add new per-release root Markdown files.
+
 **Current source change: v24.6.572 Lead Finder ad evidence and DeepSeek people**
 - JobStreet employers come from the matching ad, with explicit expiry checks.
   Expired and unconfirmed ads are omitted, including after AI refinement. Public
@@ -42,7 +49,7 @@ on `codex/leadfinder-google-careers-review`, includes v569 in corrective PR303.
   and a later unique ad could be dropped by the cap. A new regression failed.
 - The extractor now normalizes/deduplicates before source balancing, counts and
   the cap. Google's employer posting correction from v569 remains included.
-- See `cv_studio_v24_6_570_fresh_review_qa_report.md`. The corrective PR records
+- See [cv_studio_v24_6_570_fresh_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_570_fresh_review_qa_report.md). The corrective PR records
   current review/CI/merge state. No live provider/AI requests or installed update.
 
 **Current work: v24.6.569 fresh review of merged Lead Finder changes**
@@ -53,7 +60,7 @@ on `codex/leadfinder-google-careers-review`, from merged v568 / PR302.
 - The filter now admits only Google's known careers detail paths with numeric
   job ids; Google web searches, career listings, malformed ids and other paths
   stay excluded. Backend and browser rules match.
-- See `cv_studio_v24_6_569_fresh_review_qa_report.md`. No live provider/AI request,
+- See [cv_studio_v24_6_569_fresh_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_569_fresh_review_qa_report.md). No live provider/AI request,
   actual Google job verification, credential use or installed update. The
   corrective PR records fresh external review and CI status.
 
@@ -65,7 +72,7 @@ on `codex/leadfinder-clear-search-results`, extends v566/v567 in PR302 (unmerged
   retain structured Google Jobs and its existing organic fallback.
 - The regression checks actual outgoing engine/query parameters and one request
   per site-scoped query. All 99 focused Python/version checks pass. No live
-  provider requests or credentials. See `cv_studio_v24_6_568_portal_review_qa_report.md`
+  provider requests or credentials. See [cv_studio_v24_6_568_portal_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_568_portal_review_qa_report.md)
   and PR302 for the current review/CI state. Not merged or installed yet.
 
 **Current work: v24.6.567 Lead Finder selected-portal coverage**
@@ -79,7 +86,7 @@ on `codex/leadfinder-clear-search-results`, extends v566 in PR302 (unmerged).
 - Location/keyword filters run before portal-balanced lead capping. Other Portals
   also admits unknown job/career pages, consistent with the source filter's contract.
   Summary counts show qualifying ads per source without double-counting overlap.
-- See `cv_studio_v24_6_567_portal_coverage_qa_report.md`. All provider calls in tests
+- See [cv_studio_v24_6_567_portal_coverage_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_567_portal_coverage_qa_report.md). All provider calls in tests
   are fictional; no real key, live search, AI spend or installed update. PR302
   records current head review/CI status and is not merged yet.
 
@@ -96,7 +103,7 @@ on `codex/leadfinder-clear-search-results`, from merged v565 / PR301.
   status. Match/search details are collapsed; active settings/AI cost choices stay.
 - All 99 JavaScript fixtures, 90 focused Python/version checks and Chromium
   form/search/result checks pass, along with repository consistency.
-  See `cv_studio_v24_6_566_leadfinder_qa_report.md`. No live Tavily/AI requests,
+  See [cv_studio_v24_6_566_leadfinder_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_566_leadfinder_qa_report.md). No live Tavily/AI requests,
   credential use or installed-app update. Results remain heuristic direct links,
   not live verification of posting availability. The PR records CI/review state.
 
@@ -111,7 +118,7 @@ The associated pull request records current CI, review and merge status.
   Leads applies this after its background queue stops, avoiding a late Done badge.
 - Regressions failed on prior source, then passed. All 98 JavaScript fixtures,
   134 focused Python checks, repository consistency and Chromium recovery/badge
-  workflows pass. See `cv_studio_v24_6_565_review_qa_report.md` for validation. No live LinkedIn/provider
+  workflows pass. See [cv_studio_v24_6_565_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_565_review_qa_report.md) for validation. No live LinkedIn/provider
   action or installed-app update. Both app and companion updates are required.
 
 **Local work: v24.6.564 full-ad recovery and browser completion badges (unmerged)**
@@ -130,7 +137,7 @@ on `codex/full-ad-recovery-browser-badges`, from merged v563 / PR300.
   hands activity to the full-ad queue before finishing, avoiding premature Done.
   Manual reads are tracked too. Starting a fresh run acknowledges only that
   module's earlier badge; other module notifications and nested runs are kept.
-- See `cv_studio_v24_6_564_ad_recovery_browser_badges_qa_report.md`. User example
+- See [cv_studio_v24_6_564_ad_recovery_browser_badges_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_564_ad_recovery_browser_badges_qa_report.md). User example
   4456899159 is tested with fictional markup, not live signed-in page contents.
   Both app and companion updates are required. All 98 JavaScript fixtures, 130
   backend/version checks and Chromium badge/recovery workflows pass. No push,
@@ -154,7 +161,7 @@ The associated pull request records current CI, review and merge status.
   after End/Stop. A per-session binding/run/capture guard now rechecks immediately
   before creation. The original repro now creates zero tabs after completed End;
   jobReadCancel during that lookup is covered too. Independent re-review found
-  no additional actionable issues. See `cv_studio_v24_6_563_capture_cleanup_qa_report.md`.
+  no additional actionable issues. See [cv_studio_v24_6_563_capture_cleanup_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_563_capture_cleanup_qa_report.md).
 - All 98 JavaScript fixtures, nineteen version/Sourcer Python checks, syntax,
   whitespace and repository consistency pass. No live provider action,
   installed update or native browser-extension verification.
@@ -176,7 +183,7 @@ on `codex/browser-tab-grouping`, including unmerged v561 below.
   All 97 JavaScript fixtures, 19 version/Sourcer tests and consistency checks pass.
 - Adds tabGroups and webNavigation permissions. Apply/reload the companion update;
   the browser may require enabling its new permissions. See
-  `cv_studio_v24_6_562_tab_groups_qa_report.md`. Native extension loading is blocked
+  [cv_studio_v24_6_562_tab_groups_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_562_tab_groups_qa_report.md). Native extension loading is blocked
   by this environment's administrator, so actual native tab-strip behavior remains
   unverified here. No live provider action, push, merge or installed-app update.
 
@@ -191,7 +198,7 @@ on `codex/module-lock-preferences`, from merged v24.6.560 / PR299.
   Shared companion setup/update functions used by Job Leads remain available.
 - The owner corrected the request before implementation: Lead Finder keeps all
   existing frontend/backend guards and code 1571. CV Scoring and AI Crawler stay.
-- See `cv_studio_v24_6_561_module_locks_qa_report.md`. No backend/route/storage
+- See [cv_studio_v24_6_561_module_locks_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_561_module_locks_qa_report.md). No backend/route/storage
   schema changes, live provider action, push, merge or installation. All 96 JS
   fixtures, five version checks and fictional Chromium lock checks pass.
 
@@ -206,7 +213,7 @@ The associated pull request records current CI, review and merge status.
   bulk HR result clears a previous individual failure for the same ad. Regressions
   failed on the previous source and pass with the corrections. Saved data, provider
   calls and scan ownership/cleanup decisions are unchanged.
-- See `cv_studio_v24_6_560_review_qa_report.md` for combined verification. No live
+- See [cv_studio_v24_6_560_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_560_review_qa_report.md) for combined verification. No live
   LinkedIn/provider operation or installed update. The owner needs both the app and
   companion updates for the full-ad reader improvement.
 
@@ -223,7 +230,7 @@ on `codex/job-read-queue-recovery`, including v555–v558 below.
 - All 96 JavaScript fixtures, five version checks, syntax, whitespace and repository
   consistency pass. Fictional Chromium confirms computed red borders, HR/search
   retry resets, normal Stop, Clear, orange/reduced-motion and mobile behavior.
-  See `cv_studio_v24_6_559_job_hr_failure_qa_report.md`. No live provider action,
+  See [cv_studio_v24_6_559_job_hr_failure_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_559_job_hr_failure_qa_report.md). No live provider action,
   push, merge, installation, route/storage or companion behavior change.
 
 **Local work: v24.6.558 Sourcer activity and failure highlight (unmerged)**
@@ -237,7 +244,7 @@ on `codex/job-read-queue-recovery`, including v555–v557 below.
 - Sourcer UI, candidate-folder and assessment fixtures, five version tests,
   syntax, whitespace and repository consistency pass. Fictional Chromium checks
   whole-panel activity, success/Stop/failure, Clear, reduced motion and mobile.
-  See `cv_studio_v24_6_558_sourcer_activity_qa_report.md`. No live provider action,
+  See [cv_studio_v24_6_558_sourcer_activity_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_558_sourcer_activity_qa_report.md). No live provider action,
   push, merge or installed update.
 
 **Local work: v24.6.557 HR panel activity highlight (unmerged)**
@@ -249,7 +256,7 @@ on `codex/job-read-queue-recovery`, including unmerged v555/v556 below.
   Existing HR and bulk-HR fixtures, five version tests, syntax, whitespace and
   repository consistency pass. Fictional Chromium checks orange animation,
   reduced motion, mobile wrapping and Stop/failure cleanup. No live provider action.
-  See `cv_studio_v24_6_557_hr_activity_qa_report.md`. Local, unmerged/uninstalled.
+  See [cv_studio_v24_6_557_hr_activity_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_557_hr_activity_qa_report.md). Local, unmerged/uninstalled.
 
 **Local work: v24.6.556 full-ad queue recovery (unmerged)**
 on `codex/job-read-queue-recovery`, including the unmerged v555 visuals below.
@@ -267,7 +274,7 @@ on `codex/job-read-queue-recovery`, including the unmerged v555 visuals below.
   repository consistency pass. Fictional Chromium checks read content before the
   load event, reuse saved rich content and continue after a legacy loading timeout.
   Existing search/activity/card/background flows pass. See
-  `cv_studio_v24_6_556_job_queue_recovery_qa_report.md`. Live owner LinkedIn DOM
+  [cv_studio_v24_6_556_job_queue_recovery_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_556_job_queue_recovery_qa_report.md). Live owner LinkedIn DOM
   remains unverified. Update both app and companion for the worker improvement.
   No push, merge, installed update or live provider action.
 
@@ -399,7 +406,7 @@ on `codex/job-search-results-scroll`, from merged v24.6.549 / PR294.
   syntax, whitespace and repository consistency passed. Chromium checked a
   fictional 25-ad list-first workflow, rich capture, selection, stable scroll,
   focus/expanded content, Stop/Clear, desktop/mobile bounded scrolling and no
-  horizontal overflow. See `cv_studio_v24_6_550_background_ads_qa_report.md`.
+  horizontal overflow. See [cv_studio_v24_6_550_background_ads_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_550_background_ads_qa_report.md).
   No live LinkedIn/provider action, publication, merge or installed-app update.
 
 **Previous checkpoint: v24.6.549 company-header resolution and pull summary (merged PR294)**
@@ -1890,7 +1897,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   paid/live calls or protected build. Preview on loopback 5070 has isolated state
   and no copied owner credentials; the v434 preview on 5069 is preserved. Owner
   authorized merge through PR #221. See
-  `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md`; the PR's final hosted
+  [cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md); the PR's final hosted
   checks and issue #35 record the exact merge state.
   Initial local gate: 1,522 passed, four skipped, 6,864 subtests; three exact updater
   environment fixtures deselected after the unfiltered run and same failures on
@@ -1933,7 +1940,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   dependencies, credentials, live AI calls or Word layout changes. Protected
   compilation remains manual. The owner authorized fixes and merge after gates
   pass; it merged with all three hosted gates passing. Its branch is complete. See
-  `cv_studio_v24_6_433_plural_subject_safety_qa_report.md` for the latest gate,
+  [cv_studio_v24_6_433_plural_subject_safety_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_433_plural_subject_safety_qa_report.md) for the latest gate,
   differential/corpus/mutation evidence and existing updater fixture limits.
 
 - **Title-above rows follow-up — v24.6.428, MERGED via PR #219 as `cb0bcae`.** Starts at merged master
@@ -1943,7 +1950,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   unsure, so the AI's are kept); titles with "and", officer acronyms (CEO, VP,
   GM) and words such as chairman, counsel and buyer are read as titles; city
   names with joining words ("Rio de Janeiro") are places. See
-  `cv_studio_v24_6_428_title_above_followup_qa_report.md`.
+  [cv_studio_v24_6_428_title_above_followup_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_428_title_above_followup_qa_report.md).
 
 - **Title above "Company | Place | Dates" rows — v24.6.427, MERGED via PR #218 as
   `01688bb`.** Starts at
@@ -1957,7 +1964,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   place is refused from any reader. Rule F4 puts back a stated "graduated 2007"
   year when the AI left the education date empty. 65 new cases plus
   `tests/test_cv_title_above_place_rows.py` through `/parse` and `/generate-docx`.
-  See `cv_studio_v24_6_427_title_above_place_rows_qa_report.md`. (v24.6.426 is used
+  See [cv_studio_v24_6_427_title_above_place_rows_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_427_title_above_place_rows_qa_report.md). (v24.6.426 is used
   by the unmerged PR #214 crawler branch.)
 
 - **Summary box salary guardrail — v24.6.419–v24.6.425, MERGED via PR #217 as
@@ -1975,7 +1982,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   cases) plus `tests/test_cv_summary_salary_generated.py` (generated own-pay, work,
   currency-lookalike and fact-before-pay sentences, and repeat/consistency/bold
   checks, plus a speed limit on hostile input). See
-  `cv_studio_v24_6_425_summary_salary_guardrail_qa_report.md`. Whether a pay phrase is
+  [cv_studio_v24_6_425_summary_salary_guardrail_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_425_summary_salary_guardrail_qa_report.md). Whether a pay phrase is
   work is judged from the words around the amount, not the whole sentence. Any
   change to these rules follows the six steps in the rulebook's "How to change
   these rules".
@@ -1995,7 +2002,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   fidelity audit, which found zero source employers here because it only reads
   Dates/Organization/Role tables, now also reads explicit "Company:" labels, so a
   shortfall is reported rather than shipped. See
-  `cv_studio_v24_6_418_year_first_dates_employer_safety_qa_report.md`.
+  [cv_studio_v24_6_418_year_first_dates_employer_safety_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_418_year_first_dates_employer_safety_qa_report.md).
   v24.6.412 corrects eight review findings, four of them introduced by v24.6.411
   and two of those actively harmful: the date rewrite matched "YYYY Month" anywhere
   in the document, so it reworded the candidate's own prose ("figures for 2023 may
@@ -2060,7 +2067,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   the prose path, so a project went to the newest promotion instead of the role the
   source named. The word test is script-agnostic, and a caseless script counts as a
   name because capitalisation cannot signal anything there. See
-  `cv_studio_v24_6_410_role_qualifier_script_qa_report.md`.
+  [cv_studio_v24_6_410_role_qualifier_script_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_410_role_qualifier_script_qa_report.md).
 
 - **Source-ownership audit corrective — v24.6.406 through v24.6.409, MERGED via PR #211
   as `5b1f2a4`.**
@@ -2073,7 +2080,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   outright rather than screening it against a list of role nouns that could not
   be completed, guards the new group loop against a null employment entry, and
   stops a sentence after a separator reading as a role qualifier. See
-  `cv_studio_v24_6_406_source_ownership_audit_qa_report.md`.
+  [cv_studio_v24_6_406_source_ownership_audit_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_406_source_ownership_audit_qa_report.md).
 
 - **CV source-safety corrective — v24.6.403 plus v24.6.404, MERGED via PR #210.**
   Starts at merged master `6a454d7`. v24.6.404 repairs the real-document
@@ -2082,7 +2089,7 @@ process docs (`PHASE_STATUS.md`, `ROADMAP.md`, `AGENTS.md`, etc.) point at
   beside a heading no longer refuses it, a company matched inside a referees
   block is skipped, and an unplaceable promotion falls back to the newest role
   instead of leaving the sub-brand on its own dateless row. See
-  `cv_studio_v24_6_404_two_column_subsidiary_corrective_qa_report.md`. A project/sub-brand must have a unique
+  [cv_studio_v24_6_404_two_column_subsidiary_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_404_two_column_subsidiary_corrective_qa_report.md). A project/sub-brand must have a unique
   source heading and its own duties before attachment; corroborated mid-line
   two-column headings remain supported. Source title/date metadata and
   ambiguous matches keep a block standalone. With multiple promotions, source

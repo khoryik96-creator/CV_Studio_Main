@@ -285,7 +285,7 @@
   4 skipped, 8418 subtests;85 JS fixtures and actual isolated Chromium desktop/
   mobile flows, source/static/native preflight and consistency pass. No live
   provider calls, paid action, owner data/install change, PR/merge or hosting.
-  See `cv_studio_v24_6_530_client_sourcer_controls_qa_report.md`;PR257 held.
+  See [cv_studio_v24_6_530_client_sourcer_controls_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_530_client_sourcer_controls_qa_report.md);PR257 held.
 
 - v24.6.529 (merged PR #274 / `786f40c`, on `claude/job-leads-signed-clients` after v528) adds
   folders, a shortlist star and recoverable Trash to the Sourcer Candidates
@@ -755,7 +755,7 @@
   Existing loading recovery, pre-plan ownership, search/ad/HR/folder behavior and
   local update flow remain. All 1,779 Windows Python tests (four skipped, 8,392
   subtests), all 47 JavaScript suites and isolated Chromium lifecycle checks pass.
-  See `cv_studio_v24_6_482_companion_pairing_qa_report.md`; exact-head hosted
+  See [cv_studio_v24_6_482_companion_pairing_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_482_companion_pairing_qa_report.md); exact-head hosted
   checks/review remain required before the owner-authorized merge of PR #239.
 
 - v24.6.481 corrects both v480 review findings: cold-load handshake recovery at
@@ -766,7 +766,7 @@
   Full isolated Windows Python: 1,777 passed, four skipped, 8,392 subtests;
   all 47 JavaScript suites, source/native preflight and 24 smoke assertions passed.
   Owner authorized fix and merge; exact-head PR checks/review remain required.
-  See `cv_studio_v24_6_481_companion_connection_corrective_qa_report.md`.
+  See [cv_studio_v24_6_481_companion_connection_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_481_companion_connection_corrective_qa_report.md).
 
 - v24.6.480 adds owner-requested automatic companion connection and bundled-folder
   setup with an in-app apply-update action. Exact document verification,
@@ -780,7 +780,7 @@
   passed. Isolated Chromium verified automatic connection, page-refresh recovery
   and applying an on-disk bundle update without forcing draft loss. No owner
   browser installation/state change, paid call, PR or merge in this task.
-  See `cv_studio_v24_6_480_companion_connection_updates_qa_report.md`.
+  See [cv_studio_v24_6_480_companion_connection_updates_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_480_companion_connection_updates_qa_report.md).
 
 - v24.6.479 corrects PR #238's capped-final-page completeness finding. Any
   unique matches omitted by the 100-person ceiling keep saved evidence and the
@@ -789,7 +789,7 @@
   permission or provider changes. Prior HR unload and rich-ad fixes remain.
   Full isolated Windows Python passed (1,776 tests, four skipped, 8,392
   subtests), as did all 46 JavaScript suites.
-  See `cv_studio_v24_6_479_hr_result_completeness_qa_report.md` and PR #238 for
+  See [cv_studio_v24_6_479_hr_result_completeness_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_479_hr_result_completeness_qa_report.md) and PR #238 for
   verification and owner-authorized merge evidence.
 
 - v24.6.478 corrects PR #238's automated-review HR unload finding. Pagehide
@@ -800,7 +800,7 @@
   Owner-authorized merge remains gated on local and exact-head PR checks.
   Full isolated Windows Python passed: 1,776 tests, four skipped, 8,392
   subtests. All 46 JavaScript suites passed after the final cleanup fixtures.
-  See `cv_studio_v24_6_478_hr_unload_cleanup_qa_report.md` and PR #238.
+  See [cv_studio_v24_6_478_hr_unload_cleanup_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_478_hr_unload_cleanup_qa_report.md) and PR #238.
 
 - v24.6.477 corrects the review's complex-ad import regression while retaining
   the v474 company HR feature, v475 rich formatting and v476 joining dates.
@@ -811,7 +811,7 @@
   full isolated Windows Python passed (1,776 passed, four skipped, 8,392
   subtests) and all 46 JavaScript suites passed. Further
   local/CI verification and merge evidence are recorded in
-  `cv_studio_v24_6_477_complex_job_ad_fallback_qa_report.md`.
+  [cv_studio_v24_6_477_complex_job_ad_fallback_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_477_complex_job_ad_fallback_qa_report.md).
 
 - HR company joining dates: v24.6.476 continues the unmerged
   `codex/v24.6.474-job-leads-company-hr` branch. HR cards show an explicit
@@ -824,7 +824,7 @@
   state change. Full isolated Windows Python: 1,776 passed, four skipped,
   8,392 subtests; all 46 JavaScript suites, static/native/source preflight and
   24 source-smoke assertions passed. QA details are in
-  `cv_studio_v24_6_476_hr_joining_dates_qa_report.md`. Local checkpoint only;
+  [cv_studio_v24_6_476_hr_joining_dates_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_476_hr_joining_dates_qa_report.md). Local checkpoint only;
   no PR or merge requested.
 
 - Job-ad rich formatting corrective: v24.6.475 continues the unmerged
@@ -840,7 +840,7 @@
   checks passed. Browser QA rendered the inspected LinkedIn DOM structure with
   synthetic text, preserving bold sections and seven numbered items. No live
   installed-companion capture, owner data change, PR or merge was performed.
-  See `cv_studio_v24_6_475_job_ad_rich_formatting_qa_report.md`.
+  See [cv_studio_v24_6_475_job_ad_rich_formatting_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_475_job_ad_rich_formatting_qa_report.md).
 
 - Owner-requested Job Leads Phase 2: v24.6.474 on
   `codex/v24.6.474-job-leads-company-hr`, from merged master `15b89cf`.
@@ -858,7 +858,7 @@
   Current LinkedIn company/location controls were inspected read-only; no real
   installed-companion end-to-end scan or paid call is claimed. Local checkpoint
   only; no PR or merge has been requested. See
-  `cv_studio_v24_6_474_company_hr_people_qa_report.md`.
+  [cv_studio_v24_6_474_company_hr_people_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_474_company_hr_people_qa_report.md).
 
 - PR #237 timing corrective: v24.6.473 on
   `codex/v24.6.471-linkedin-folder-refresh`. The Add handler treats every existing
@@ -871,7 +871,7 @@
   Windows Python passed (1,750 passed, four skipped, 8,392 subtests). Source/static/
   repository/native preflight and 24 smoke assertions passed. Exact-head PR gate
   results are recorded before merge in issue #35 and
-  `cv_studio_v24_6_473_companion_add_idempotency_qa_report.md`.
+  [cv_studio_v24_6_473_companion_add_idempotency_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_473_companion_add_idempotency_qa_report.md).
 
 - PR #237 review corrective: v24.6.472 on
   `codex/v24.6.471-linkedin-folder-refresh`. Add now fetches the clicked ad's own
@@ -883,7 +883,7 @@
   retained an existing ad in Priority with zero Add writes despite SAP selected
   across both menus, then saved a new ad into SAP. Only fictional data/simulated
   transport was used. Final source/native and exact-head PR checks gate merge.
-  See `cv_studio_v24_6_472_companion_saved_state_corrective_qa_report.md`.
+  See [cv_studio_v24_6_472_companion_saved_state_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_472_companion_saved_state_corrective_qa_report.md).
 
 - Owner-requested LinkedIn ad folder-menu correction: v24.6.471 on
   `codex/v24.6.471-linkedin-folder-refresh`, retaining reviewed unmerged v470
@@ -897,7 +897,7 @@
   preflight and 24 smoke assertions passed. Browser QA uses fictional job
   cards with the actual controls and a simulated companion connection.
   Local checkpoint only; no PR/merge or owner installation/data changes.
-  See `cv_studio_v24_6_471_linkedin_folder_catalog_qa_report.md`.
+  See [cv_studio_v24_6_471_linkedin_folder_catalog_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_471_linkedin_folder_catalog_qa_report.md).
 
 - Owner-requested LinkedIn Sourcer startup/readiness correction: v24.6.470 on
   `codex/v24.6.470-linkedin-sourcer-start`, from merged v469 `59c7f09`.
@@ -911,7 +911,7 @@
   completed two runs with distinct simulated new sources, recovering from a
   null read. No live LinkedIn/extension or paid provider test is claimed.
   Local source checkpoint and isolated demo only; no PR/merge requested yet.
-  See `cv_studio_v24_6_470_sourcer_start_readiness_qa_report.md`.
+  See [cv_studio_v24_6_470_sourcer_start_readiness_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_470_sourcer_start_readiness_qa_report.md).
 
 - Owner-authorized Job Leads preview review corrective and merge: v24.6.469 on
   `codex/v24.6.468-job-preview-controls`, from merged v467 `3528005`.
@@ -923,7 +923,7 @@
   subtests; all 42 JavaScript suites passed. An actual browser check with
   isolated fictional ads confirmed a new empty folder shows zero leads and
   clears the previous preview/action while retaining all three saved records.
-  See `cv_studio_v24_6_469_job_preview_folder_corrective_qa_report.md`.
+  See [cv_studio_v24_6_469_job_preview_folder_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_469_job_preview_folder_corrective_qa_report.md).
   Source/static/repository/Windows native preflight and 24 smoke assertions
   passed. PR checks and merge verification follow the tested checkpoint.
 
@@ -937,7 +937,7 @@
   used fictional records and a simulated companion. Source/static/repository/
   Windows native preflight and 24 smoke assertions passed. Source checkpoint only;
   installed owner app/records unchanged, no new PR or merge requested yet.
-  See `cv_studio_v24_6_468_job_preview_controls_qa_report.md`.
+  See [cv_studio_v24_6_468_job_preview_controls_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_468_job_preview_controls_qa_report.md).
 
 - Owner-authorized PR #235 automatic-review corrective: v24.6.467 on
   `codex/v24.6.465-blind-profile-summary-lists`. Blind source-summary recovery
@@ -949,7 +949,7 @@
   Full isolated Windows Python: 1,750 passed, four skipped, 8,392 subtests;
   all 42 JavaScript suites passed. Original master replay, 710 generated heading
   layouts, hostile input and eleven deliberate mutations passed. Validation is in
-  `cv_studio_v24_6_467_blind_summary_section_boundaries_qa_report.md`.
+  [cv_studio_v24_6_467_blind_summary_section_boundaries_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_467_blind_summary_section_boundaries_qa_report.md).
   Final PR checks and merge identity are recorded in the coordination log.
 
 - Owner-authorized review corrective and merge: v24.6.466 on
@@ -964,7 +964,7 @@
   Master 985-case replay, unchanged v465 fixture expectations, generated/hostile
   inputs, nine deliberate mutations, source/native preflight and 24 source smoke
   assertions passed. No owner installed-app/receipt or private document update.
-  See `cv_studio_v24_6_466_blind_summary_review_corrective_qa_report.md`.
+  See [cv_studio_v24_6_466_blind_summary_review_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_466_blind_summary_review_corrective_qa_report.md).
   PR checks and final merge verification follow the tested checkpoint.
 
 - Owner-requested Blind CV summary preservation: v24.6.465,
@@ -980,7 +980,7 @@
   was rendered through native Word plus the packaged renderer and all six pages
   inspected. No paid call or owner installed-app update. Source checkpoint only,
   not pushed, opened as a PR or merged. See
-  `cv_studio_v24_6_465_blind_profile_summary_qa_report.md`.
+  [cv_studio_v24_6_465_blind_profile_summary_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_465_blind_profile_summary_qa_report.md).
 
 - Merge-review compatibility correction: v24.6.464 on
   `codex/v24.6.463-sourcer-simple-start`, PR #234. The companion retains Chrome
@@ -990,7 +990,7 @@
   regressions failed before the correction; all 42 JavaScript suites pass.
   Full isolated Python: 1,737 passed, four skipped, 7,599 subtests; source/native
   preflight and 24 source smoke assertions passed. PR checks/review precede merge. See
-  `cv_studio_v24_6_464_sourcer_tab_compatibility_qa_report.md`.
+  [cv_studio_v24_6_464_sourcer_tab_compatibility_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_464_sourcer_tab_compatibility_qa_report.md).
 
 - Owner-requested simpler Sourcer startup: v24.6.463,
   `codex/v24.6.463-sourcer-simple-start`, from merged v462 `b4f4760`.
@@ -1003,7 +1003,7 @@
   four skipped, 7,599 subtests; all 42 JavaScript suites, source/native preflight
   and 24 source smoke assertions passed. Actual UI/controller/
   backend checks use fictional profiles and simulated companion/provider transport.
-  See `cv_studio_v24_6_463_sourcer_simple_start_qa_report.md`.
+  See [cv_studio_v24_6_463_sourcer_simple_start_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_463_sourcer_simple_start_qa_report.md).
   Published at owner request as PR #234; v464 above corrects its review finding
   before merge. No owner installed-app update.
 
@@ -1019,7 +1019,7 @@
   and 24 source smoke assertions passed. Actual controller/backend and
   content-script browser fixtures use sample data and simulated companion
   transport; no live installed-companion claim. See
-  `cv_studio_v24_6_462_job_leads_preview_polish_qa_report.md`.
+  [cv_studio_v24_6_462_job_leads_preview_polish_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_462_job_leads_preview_polish_qa_report.md).
   Subsequently merged with owner authorization as PR #233, squash `b4f4760`.
 
 - Owner-requested LinkedIn ad controls: v24.6.461,
@@ -1038,7 +1038,7 @@
   folder save, Trash, folder creation/restore and a preserved unsaved draft.
   Flex, narrow and grid card widths stayed identical after Add/error messages.
   Subsequently merged with owner authorization as PR #232, squash `854109b`.
-  See `cv_studio_v24_6_461_linkedin_ad_controls_qa_report.md`.
+  See [cv_studio_v24_6_461_linkedin_ad_controls_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_461_linkedin_ad_controls_qa_report.md).
 
 - Owner-authorized merge corrective: v24.6.460 on
   `codex/v24.6.459-job-ad-curation` / PR #231, including the v459 work below.
@@ -1048,7 +1048,7 @@
   the control or its rendered child; unrelated controls cannot block discovery.
   Conflicting locations still reject. A failing-before regression covers the
   actual help controls and additional filters. See
-  `cv_studio_v24_6_460_job_location_review_fix_qa_report.md`. Full isolated
+  [cv_studio_v24_6_460_job_location_review_fix_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_460_job_location_review_fix_qa_report.md). Full isolated
   Windows gate: 1,737 passed, four skipped, 7,599 subtests; all 41 JavaScript
   suites and source/native-dependency preflight plus 24 smoke assertions passed.
   Merged via PR #231 as `0f80bc5`; all three hosted checks passed. Installed app remained
@@ -1065,7 +1065,7 @@
   real filters remain pinned. Full isolated Windows tests: 1,737 passed,
   four skipped, 7,599 subtests; all 41 JavaScript suites passed. Synthetic UI
   verifies preview/full content, selected-folder direct save and retained draft.
-  See `cv_studio_v24_6_459_job_ad_curation_qa_report.md` for checks and live-test
+  See [cv_studio_v24_6_459_job_ad_curation_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_459_job_ad_curation_qa_report.md) for checks and live-test
   limits. Pushed as PR #231 at the owner's merge request; the v460 review
   corrective above addresses its automatic review finding before merge.
 
@@ -1078,7 +1078,7 @@
   includes the v455–v457 discovery, folder/content and read-fallback work below.
   Owner explicitly authorized push, PR and merge after verification. No new
   route/schema/permission/provider or owner installation change. See
-  `cv_studio_v24_6_458_job_search_review_fix_qa_report.md` for final test evidence:
+  [cv_studio_v24_6_458_job_search_review_fix_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_458_job_search_review_fix_qa_report.md) for final test evidence:
   1,737 Python tests, four skips, 7,599 subtests, all 39 JavaScript suites,
   source/native-dependency preflight and 24 smoke assertions passed. Preview
   5074 reports v458 with both saved lead rows verified exactly unchanged.
@@ -1093,7 +1093,7 @@
   scoped pagination and selected-job description alongside legacy markup.
   Search path aliases and selected-ad links canonicalize while actual filters
   and identity checks remain pinned. No new route/schema/permission/provider.
-  See `cv_studio_v24_6_457_job_search_layout_qa_report.md` for evidence and limits.
+  See [cv_studio_v24_6_457_job_search_layout_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_457_job_search_layout_qa_report.md) for evidence and limits.
   No push, PR, merge or installed app change.
 
 - Current owner-reported intermittent job-read corrective: v24.6.456,
@@ -1104,7 +1104,7 @@
   browser captures are never automatically repeated. Manual edits, identity,
   folder, optional contact/status and content-refresh protections remain.
   No route, schema, permission, provider or saved-data change. Tests and limits
-  are recorded in `cv_studio_v24_6_456_job_read_fallback_qa_report.md`.
+  are recorded in [cv_studio_v24_6_456_job_read_fallback_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_456_job_read_fallback_qa_report.md).
   Preview 5074 retains its saved rows; installed 5000 and earlier draft tabs
   remain untouched. No push, PR or merge.
 
@@ -1119,7 +1119,7 @@
   display cleanly without rewriting saved rows. Single-ad capture waits briefly
   for delayed detail fields on the same DOM. No provider call, new route/schema,
   extension permission or access-limit bypass. Verification and limits are in
-  `cv_studio_v24_6_455_linkedin_job_search_qa_report.md`.
+  [cv_studio_v24_6_455_linkedin_job_search_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_455_linkedin_job_search_qa_report.md).
   Source preview 5074 retains its two saved ads; installed app 5000 is untouched.
   No push, PR or merge requested or performed.
 
@@ -1139,7 +1139,7 @@
   assertions pass. Actual synthetic UI verified empty folder creation, moving
   two saved ads, deleting the folder without losing ads, and the rate-limit
   message. The persistent source preview migrated with its exact lead rows
-  preserved. See `cv_studio_v24_6_454_job_leads_folders_qa_report.md`.
+  preserved. See [cv_studio_v24_6_454_job_leads_folders_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_454_job_leads_folders_qa_report.md).
   No owner installed app update, paid call, push, PR or merge.
 
 - Current owner-requested UI cleanup: v24.6.453,
@@ -1152,7 +1152,7 @@
   suites, 123 focused Python checks, source/native-dependency preflight and
   24-assertion smoke pass. Actual in-app preview confirms blank fields,
   collapsed/expanded tools and the existing saved card. See
-  `cv_studio_v24_6_453_job_leads_ui_cleanup_qa_report.md`.
+  [cv_studio_v24_6_453_job_leads_ui_cleanup_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_453_job_leads_ui_cleanup_qa_report.md).
   Source preview 5074 retains its persistent data and earlier drafts;
   no owner install update, paid call, push, PR or merge.
 
@@ -1171,7 +1171,7 @@
   failures without changing installer/runtime code. Final unfiltered Windows
   gate: 1,716 passed, four skipped, 7,599 subtests, no failures or deselections.
   Full gate details are in
-  `cv_studio_v24_6_452_review_corrective_qa_report.md`. Native installed-extension
+  [cv_studio_v24_6_452_review_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_452_review_corrective_qa_report.md). Native installed-extension
   lifecycle remains untested; no paid call, owner install update, push, PR or merge.
 
 - Current owner-authorized source work (2026-10-19): v24.6.451,
@@ -1430,7 +1430,7 @@
   6,885 subtests. See the v435 QA follow-up for evidence.
   Final hosted checks/issue #35 carry the exact merge state. No release, protected
   compilation, live AI or JobAdder write.
-  See `cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md` for evidence/limits.
+  See [cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_435_batch_ai_review_settings_qa_report.md) for evidence/limits.
 
 - Approved baseline: v24.6.217
 - Current source baseline: see the repository-root `VERSION` file (single source
@@ -1519,7 +1519,7 @@
 - Pure-function and real parse/DOCX tests cover all four cases without live AI.
 - Final local gate: 1303 passed, 4 skipped, 2911 subtests; all 24 frontend groups,
   24 source-smoke assertions, protected-source preflight and repository checks
-  passed. See `cv_studio_v24_6_403_cv_source_safety_qa_report.md`.
+  passed. See [cv_studio_v24_6_403_cv_source_safety_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_403_cv_source_safety_qa_report.md).
 - No routes, schemas, dependencies, credentials or paid-call behavior changes.
 
 ## v24.6.396 date-edge corrective (merged via PR #204)
@@ -1532,7 +1532,7 @@
   repeated passes, and both direct/HTTP DOCX work and education output.
 - Final local gate: 1223 passed, 4 skipped, 2803 subtests; 24 frontend groups,
   24 source-smoke assertions, 2160 additional date variants and protected-source
-  preflight passed. See `cv_studio_v24_6_396_date_edge_qa_report.md`.
+  preflight passed. See [cv_studio_v24_6_396_date_edge_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_396_date_edge_qa_report.md).
 - No routes, schemas, dependencies, credentials or paid-call behavior changes.
 
 ## v24.6.395 PR #202 date-parity corrective (merged via PR #203)
@@ -3575,8 +3575,8 @@ part of v24.6.240.
   verification sidecars. It is generated from final branch HEAD and freshly
   compared against every tracked Git blob with zero missing, extra or
   byte-mismatched files.
-- `cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md`
-  and `CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md` record the release evidence.
+- [cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_239_blind_jd_pdf_metadata_overflow_corrective_qa_report.md)
+  and [CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_239_PHASE_6_HANDOVER.md) record the release evidence.
 - No live credential, paid request, external mutation, protected colleague
   build, native compilation, handoff, merge, JobAdder sign-out/settings or
   Phase 6 work was performed.
@@ -3667,8 +3667,8 @@ part of v24.6.240.
   verification sidecars. It is generated from final branch HEAD and freshly
   compared against every tracked Git blob with zero missing, extra or
   byte-mismatched files.
-- `cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md` and
-  `CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md` record the release evidence.
+- [cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_238_blind_jd_exp_summary_corrective_qa_report.md) and
+  [CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_238_PHASE_6_HANDOVER.md) record the release evidence.
 - No live credential, JobAdder call, paid request, protected colleague build,
   native compilation, handoff, merge, JobAdder sign-out/settings or Phase 6
   work was performed.
@@ -3751,8 +3751,8 @@ part of v24.6.240.
   verification sidecars. It is generated from final branch HEAD and freshly
   compared against every tracked Git blob with zero missing, extra or
   byte-mismatched files.
-- `cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md` and
-  `CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md` record the release evidence.
+- [cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_237_jobadder_esc2_corrective_qa_report.md) and
+  [CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_237_PHASE_6_HANDOVER.md) record the release evidence.
 - No live credential, JobAdder call, paid request, protected colleague build,
   native compilation, handoff, merge or Phase 6 work was performed.
 
@@ -4192,7 +4192,7 @@ part of v24.6.240.
 - The adjacent `.zip.sha256` and `.zip.verification.json` sidecars are
   authoritative for the final SHA-256, bytes, tracked/extracted file counts,
   verification time and exact final `source_commit`. The QA report and
-  `CV_STUDIO_V24_6_235_PHASE_6_HANDOVER.md` are copied beside them.
+  [CV_STUDIO_V24_6_235_PHASE_6_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_235_PHASE_6_HANDOVER.md) are copied beside them.
 - No live credentials, paid/provider call, protected colleague build, native
   compilation or genuine macOS test was performed or claimed. Work stops
   before handoff, merge and Phase 6.
@@ -4302,7 +4302,7 @@ part of v24.6.240.
   `source_commit`; a fresh extraction matches every tracked Git blob with zero
   missing, extra or byte-mismatched files.
 - The corrective QA report and
-  `CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md` are copied beside the archive.
+  [CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_236_PHASE_6_HANDOVER.md) are copied beside the archive.
   Phase 6 remains inactive and work stops before handoff or merge.
 - No route, security guard, confirmation gate, provider endpoint/header/
   timeout/retry rule, SQLite schema, journal schema/semantic, credential slot,
@@ -4785,8 +4785,8 @@ part of v24.6.240.
   exact. Phase 1–4 storage/client/module implementations remain unchanged
   outside version surfaces and the documented bounded integration.
 - Produced
-  `cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md` and
-  `CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md`. The handover is not Phase 5B
+  [cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_233_phase5a_persistent_jobs_qa_report.md) and
+  [CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_233_PHASE_5B_HANDOVER.md). The handover is not Phase 5B
   authorization.
 - The private owner/source ZIP is generated from the exact final clean commit
   with one `cv_formatter/` root and copied with SHA-256/verification sidecars
@@ -4903,8 +4903,8 @@ The fifth review started again from exact master and is clean:
   repository consistency and Git whitespace validation pass.
 - The ten corrective findings and unchanged recovery/non-replay semantics are
   recorded in
-  `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md`.
-  `CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md` is owner-gated evidence only and
+  [cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_qa_report.md).
+  [CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_234_PHASE_5B_HANDOVER.md) is owner-gated evidence only and
   does not authorize Phase 5B.
 - The authoritative private archive is
   `cv_studio_v24_6_234_phase5a_persistent_jobs_corrective_owner_source.zip`
@@ -5313,8 +5313,8 @@ will leave this registration and security boundary in `app.py`.
 - The authoritative SHA-256, byte size, final `source_commit` and extraction
   counts are recorded in adjacent sidecars under
   `C:\CV-Studio-Codex\releases\v24.6.232`.
-- `cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md` records
-  the corrective QA evidence and `CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md`
+- [cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_232_phase4_compatibility_corrective_qa_report.md) records
+  the corrective QA evidence and [CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_232_PHASE_5_HANDOVER.md)
   refreshes the owner-gated next-phase handover.
 
 ## Phase 4 Milestone 5 acceptance and release result
@@ -5369,9 +5369,9 @@ will leave this registration and security boundary in `app.py`.
   `CODEX_FIRST_PROMPT.txt`, `README_FIRST.txt`, `BACKBURNER_ROADMAP.md` and
   `KEEP_PRIVATE_PATCH_BASE.txt` — Phase 4 completion and Phase 5 activation
   gate.
-- `cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md` — Phase 4
+- [cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_231_phase4_backend_modularisation_qa_report.md) — Phase 4
   release QA evidence.
-- `CV_STUDIO_V24_6_231_PHASE_5_HANDOVER.md` — owner-gated next-phase handover.
+- [CV_STUDIO_V24_6_231_PHASE_5_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_231_PHASE_5_HANDOVER.md) — owner-gated next-phase handover.
 
 ## Phase 3 authorization and constraints
 
@@ -6502,10 +6502,10 @@ None.
 - `tests/run_phase2a_source_smoke.py` — bounded real-loopback source smoke with temporary local state and 18 assertions.
 - Production/installer/launcher/protected-build version surfaces — advanced consistently to v24.6.219.
 - `AGENTS.md`, `ROADMAP.md`, `IMPLEMENT.md`, `CODEX_FIRST_PROMPT.txt`, `README_FIRST.txt`, `BACKBURNER_ROADMAP.md` and `KEEP_PRIVATE_PATCH_BASE.txt` — v24.6.219 completion/stop gate and next-phase entry instructions.
-- `cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md` — Phase 2A release QA evidence.
-- `CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md` — owner-gated next-phase handover.
-- `cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md` — corrective review and release QA evidence.
-- `CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md` — updated owner-gated next-phase handover.
+- [cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_218_phase2a_sqlite_foundation_qa_report.md) — Phase 2A release QA evidence.
+- [CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_218_PHASE_2B_HANDOVER.md) — owner-gated next-phase handover.
+- [cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_219_phase2a_corrective_review_qa_report.md) — corrective review and release QA evidence.
+- [CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_219_PHASE_2B_HANDOVER.md) — updated owner-gated next-phase handover.
 
 ## Phase 2B files changed
 
@@ -6525,19 +6525,19 @@ None.
   advanced consistently to v24.6.220.
 - Project control/starter files — Phase 2B completion and the Phase 3 activation
   gate.
-- `cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md` — Phase 2B release
+- [cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_220_phase2b_browser_storage_qa_report.md) — Phase 2B release
   QA evidence.
-- `CV_STUDIO_V24_6_220_PHASE_3_HANDOVER.md` — owner-gated next-phase handover.
+- [CV_STUDIO_V24_6_220_PHASE_3_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_220_PHASE_3_HANDOVER.md) — owner-gated next-phase handover.
 
-- `cv_studio_v24_6_221_phase2b_corrective_review_qa_report.md` — corrective
+- [cv_studio_v24_6_221_phase2b_corrective_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_221_phase2b_corrective_review_qa_report.md) — corrective
   review and release QA evidence.
-- `CV_STUDIO_V24_6_221_PHASE_3_HANDOVER.md` — refreshed owner-gated Phase 3
+- [CV_STUDIO_V24_6_221_PHASE_3_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_221_PHASE_3_HANDOVER.md) — refreshed owner-gated Phase 3
   handover preserving all corrected Phase 2B contracts.
 - Production, installer, launcher, protected-build and starter-pack version
   surfaces — advanced consistently to v24.6.221.
-- `cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md` — second
+- [cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/cv_studio_v24_6_222_phase2b_second_corrective_review_qa_report.md) — second
   corrective review and release QA evidence.
-- `CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md` — refreshed owner-gated Phase 3
+- [CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md](https://github.com/khoryik96-creator/CV_Studio_Main/blob/24d77eaf07d09cf09cb6e07f391bb112ffe70a71/CV_STUDIO_V24_6_222_PHASE_3_HANDOVER.md) — refreshed owner-gated Phase 3
   handover preserving both Phase 2B corrective contracts.
 - Production, installer, launcher, protected-build and starter-pack version
   surfaces — advanced consistently to v24.6.222.
