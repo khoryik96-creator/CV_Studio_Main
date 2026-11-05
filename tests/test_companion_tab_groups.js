@@ -48,6 +48,11 @@ function grouped(make=fixture){
  f.state.groups.set(90,{id:90,windowId:7,title:'My workspace',color:'purple'});f.tabs.get(1).groupId=90;
  f.tabs.set(55,{id:55,windowId:7,groupId:-1});f.state.navigationEvent({sourceTabId:1,tabId:55});await until(()=>f.tabs.get(55).groupId===90);
  assert.equal(f.state.groups.get(90).title,'My workspace');
+ const leadPeople=grouped();await leadPeople.arm();await until(()=>leadPeople.tabs.get(1).groupId>=0);
+ const leadRun='e'.repeat(32);const leadSource=(await leadPeople.rpc('leadPeopleBegin',{run_id:leadRun,query:'Elitez HR'},undefined,'leads')).result.tab_id;
+ await until(()=>leadPeople.tabs.get(leadSource).groupId===leadPeople.tabs.get(1).groupId);
+ assert.equal(leadPeople.tabs.get(leadSource).groupId,leadPeople.tabs.get(1).groupId,'Lead Finder People source belongs to CV Studio');
+ await leadPeople.rpc('end',{run_id:leadRun},undefined,'leads');assert(!leadPeople.tabs.has(leadSource),'completed Lead Finder source is closed');
  const hr=grouped(options=>require('./test_linkedin_company_hr').hrFixture('',options));await hr.arm();
  const hrSource=(await hr.beginHR()).result.tab_id;await until(()=>hr.tabs.get(hrSource).groupId===hr.tabs.get(1).groupId);assert.equal(hr.tabs.get(hrSource).groupId,hr.tabs.get(1).groupId,'HR People source belongs to the app group');
  await hr.readHR(hrSource);await hr.readHR(hrSource);

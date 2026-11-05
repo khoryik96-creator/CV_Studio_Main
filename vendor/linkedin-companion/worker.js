@@ -418,10 +418,11 @@ async function restore() {
   }
   const bound = saved.connection;
   if (!bound) return;
-  if (scope === 'profiles' && ['hr','jobs'].includes(bound.kind) || scope === 'leads' && bound.run && !['hr','jobs'].includes(bound.kind)) throw Error('Invalid session scope.');
+  if (scope === 'profiles' && ['hr','jobs','leadpeople'].includes(bound.kind) || scope === 'leads' && bound.run && !['hr','jobs','leadpeople'].includes(bound.kind)) throw Error('Invalid session scope.');
+  if (bound.kind==='leadpeople' && (!bound.leadPeople || typeof bound.leadPeople.key!=='string' || bound.leadPeople.key.length>2048 || hrSearchKey(bound.leadPeople.key)!==bound.leadPeople.key || typeof bound.leadPeople.released!=='boolean' || !Number.isFinite(bound.leadPeople.started))) throw Error('Invalid Lead Finder People source.');
   if (bound.jobCompany!==undefined && !jobCompanyEvidence(bound.jobCompany)) throw Error('Invalid job company evidence.');
   if (!Number.isInteger(bound.tabId) || bound.tabId < 0 || typeof bound.documentId !== 'string' || !bound.documentId || !local(bound.url) ||
-      !Array.isArray(bound.allowed) || bound.allowed.length > 40 || bound.allowed.some(url => !profile(url)) || bound.kind && !['profiles','jobs','hr'].includes(bound.kind) ||
+      !Array.isArray(bound.allowed) || bound.allowed.length > 40 || bound.allowed.some(url => !profile(url)) || bound.kind && !['profiles','jobs','hr','leadpeople'].includes(bound.kind) ||
       bound.run && (!/^[a-f0-9]{32}$/.test(bound.run) || !Number.isInteger(bound.source) || bound.source < 0 || !Number.isInteger(bound.pages) || bound.pages < 1 || bound.pages > 15) ||
       bound.kind === 'jobs' && (!jobSearchKey(bound.jobKey) || !Number.isFinite(bound.jobStarted) || !Number.isInteger(bound.jobScrolls) || bound.jobScrolls < 0 || bound.jobScrolls > 120 ||
         bound.jobInitial && (bound.jobInitial !== true || typeof bound.jobLocation !== 'string' || bound.jobLocation.length > 160)) ||
@@ -465,11 +466,12 @@ async function restore() {
       source:bound.source, pages:bound.pages, allowed:new Set(bound.allowed), kind:bound.kind || 'profiles'};
     if (bound.kind === 'jobs') Object.assign(connection, {jobKey:bound.jobKey, jobStarted:bound.jobStarted, jobScrolls:bound.jobScrolls,jobInitial:bound.jobInitial === true,jobLocation:bound.jobLocation || ''});
     if (bound.kind === 'hr') connection.hr = {...bound.hr};
+    if (bound.kind === 'leadpeople') connection.leadPeople = {...bound.leadPeople};
     if (bound.jobCompany && Date.now()-bound.jobCompany.at>=0 && Date.now()-bound.jobCompany.at<=120000) connection.jobCompany={...bound.jobCompany};
     if (bound.peopleSearch) connection.peopleSearch = {...bound.peopleSearch};
     nextCount = saved.nextCount; profileCount = saved.profileCount;
   } catch {
-    connection = null;
+    await closeLeadPeopleSource(bound);connection = null;
     if (bound.kind === 'hr') await closeHROwnedTabs();
     await persist();
   }
@@ -518,6 +520,12 @@ async function closeOwned(id, expected) {
   if (viewed.get(id) === expected) viewed.delete(id);
 }
 
+async function closeLeadPeopleSource(bound) {
+  const state=bound?.leadPeople;if(!state || state.released)return;
+  try {const tab=await chrome.tabs.get(bound.source);
+    if(!tab.active && hrSearchKey(tab.url)===state.key && (!tab.pendingUrl || hrSearchKey(tab.pendingUrl)===state.key))await chrome.tabs.remove(tab.id);
+  } catch {}
+}
 async function closeHROwnedTabs() {
   // The app may already be gone before its pagehide message can arrive. Exact
   // ownership/current-or-pending URL checks still protect user-taken-over tabs.
@@ -600,6 +608,7 @@ async function pair(tab) {
 }
 function removed(id) { return event(async () => {
   const appRemoved=connection?.tabId === id, hrRemoved=appRemoved && connection.kind === 'hr';
+  if(appRemoved)await closeLeadPeopleSource(connection);
   const changed=appRemoved || owned.has(id) || viewed.has(id);
   if (appRemoved) connection=null;
   owned.delete(id);
@@ -618,8 +627,9 @@ function retainCompanyJobsTransition(id,url,tab) {
 }
 function updated(id,change) { return event(async () => {
   let changed = false;
+  if(connection?.leadPeople && id===connection.source && change.url && hrSearchKey(change.url)!==connection.leadPeople.key){connection.leadPeople.released=true;changed=true;}
   if (id === connection?.tabId && change.status === 'loading') {
-    const wasHR=connection.kind === 'hr'; connection = null; changed = true;
+    const wasHR=connection.kind === 'hr'; await closeLeadPeopleSource(connection);connection = null; changed = true;
     if (wasHR) await closeHROwnedTabs();
   }
   if ((owned.has(id) || viewed.has(id)) && change.url && !sameOwnedPage(change.url,owned.get(id) || viewed.get(id))) {
@@ -639,7 +649,7 @@ function updated(id,change) { return event(async () => {
   }
   return changed;
 }); }
-function activated(info) { return event(() => protectViewed(info.tabId)); }
+function activated(info) { return event(() => {if(connection?.leadPeople && connection.source===info.tabId){connection.leadPeople.released=true;return true;}return protectViewed(info.tabId);}); }
 async function readJobTab(bound, id, expected, companyOnly=false) {
   const verify = tab => {
     if(jobCapture?.cancelled)throw safeError('The job ad read was stopped.','HR_STOPPED');
@@ -775,7 +785,7 @@ async function handle(message, sender) {
     if(jobCapture?.bound!==connection || jobCapture.operation!==args.operation_id)return false;
     jobCapture.cancelled=true;return true;
   }
-  if (message.action === 'jobStatus') return {connected:true,job_read:true,full_ad_background_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_jobs_action_revision:1,company_jobs_group_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
+  if (message.action === 'jobStatus') return {connected:true,job_read:true,full_ad_background_revision:1,job_search:true,job_search_revision:1,job_search_company_revision:1,job_search_company_link_revision:1,company_jobs_action_revision:1,company_jobs_group_revision:1,company_hr_revision:1,hr_company_identity_revision:1,hr_company_filter_revision:1,hr_company_source_revision:1,hr_resilience_revision:1,hr_layout_revision:1,hr_apply_transition_revision:1,hr_joined_revision:1,hr_joined_loading_revision:1,hr_employment_revision:1,hr_date_check_revision:1,hr_experience_page_revision:1,hr_employment_shapes_revision:1,hr_keyword_revision:1,people_country_revision:1,people_country_ready_revision:1,people_results_revision:1,profile_browsing_revision:1,concurrent_scans_revision:1,companion_update_revision:1,lead_people_revision:1,version:chrome.runtime.getManifest().version,busy:!!connection.run || !!jobCapture};
   if (message.action === 'hrDate') {
     const bound=connection;
     if(bound.run || jobCapture) throw safeError('Wait for the current HR action to finish before checking employment.');
@@ -1031,6 +1041,20 @@ async function handle(message, sender) {
     return tabs.map(tab => ({id: tab.id, url: pendingPeopleSearch(tab) ? tab.pendingUrl : tab.url, title: String(tab.title || 'LinkedIn').slice(0, 160), status: tab.status,
       lastAccessed:Number.isFinite(tab.lastAccessed) ? tab.lastAccessed : 0,active:tab.active === true}));
   }
+  if (message.action === 'leadPeopleBegin') {
+    const bound=connection;
+    if(scope!=='leads' || !/^[a-f0-9]{32}$/.test(args.run_id || '') || typeof args.query!=='string' || !args.query.trim() || args.query.length>600 || /[\x00-\x1f\x7f]/.test(args.query))throw safeError('Choose a valid Lead Finder People query.');
+    if(bound.run===args.run_id && bound.kind==='leadpeople')return {tab_id:bound.source};
+    if(bound.run || jobCapture)throw safeError('Finish the current companion search first.');
+    const token={};jobCapture=token;let created=null;
+    try {
+      const url=new URL('https://www.linkedin.com/search/results/people/');url.searchParams.set('keywords',args.query.trim());
+      const tab=await chrome.tabs.create({url:url.href,active:false});created=tab;live(bound);
+      Object.assign(bound,{kind:'leadpeople',run:args.run_id,source:tab.id,pages:1,allowed:new Set(),leadPeople:{key:hrSearchKey(url.href),released:false,started:Date.now()}});
+      await persist();live(bound,args.run_id);return {tab_id:tab.id};
+    } catch(error){if(created){try{const tab=await chrome.tabs.get(created.id);if(!tab.active && hrSearchKey(tab.url)===hrSearchKey(created.url))await chrome.tabs.remove(tab.id);}catch{}}throw error;}
+    finally {if(jobCapture===token)jobCapture=null;}
+  }
   if (message.action === 'openPeopleSearch') {
     const bound = connection, token = {};
     if (bound.run || jobCapture) throw safeError('Stop the current browser action before opening a new People search.');
@@ -1060,6 +1084,7 @@ async function handle(message, sender) {
   }
   if (!connection.run || connection.run !== args.run_id) throw Error('The browser run has stopped or disconnected.');
   if (message.action === 'end') {
+    await closeLeadPeopleSource(connection);delete connection.leadPeople;
     connection.run = null;
     connection.kind = 'profiles'; delete connection.jobKey; delete connection.jobStarted; delete connection.jobScrolls; delete connection.jobInitial; delete connection.jobLocation;
     delete connection.hr;
@@ -1067,6 +1092,30 @@ async function handle(message, sender) {
     connection.allowed = new Set(); await persist();
     for (const [id, expected] of [...owned,...viewed]) await closeOwned(id, expected);
     await persist(); return true;
+  }
+  if(connection.kind==='leadpeople') {
+    const bound=connection,run=args.run_id,state=bound.leadPeople;
+    if(message.action!=='leadPeopleRead' || args.tab_id!==bound.source)throw safeError('This action does not belong to the Lead Finder People search.');
+    if(jobCapture)throw safeError('Wait for the current companion action.');
+    const token={};jobCapture=token;
+    try {
+      if(Date.now()-state.started>120000)throw safeError('The People search timed out.');
+      const tab=await chrome.tabs.get(bound.source);live(bound,run);
+      if(linkedinAccessPage(tab.url) || linkedinAccessPage(tab.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in the browser, then retry.');
+      if(hrSearchKey(tab.url)!==state.key){
+        if(tab.status==='loading' && hrSearchKey(tab.pendingUrl)===state.key)return {loading:true};
+        state.released=true;await persist();throw safeError('The People search tab changed.');
+      }
+      if(tab.pendingUrl && hrSearchKey(tab.pendingUrl)!==state.key){state.released=true;await persist();throw safeError('The People search tab changed.');}
+      if(tab.status!=='complete')return {loading:true};
+      await jobScript({target:{tabId:tab.id},files:['reader.js']},'LinkedIn People results could not be read.');
+      const [{result}]=await jobScript({target:{tabId:tab.id},func:()=>globalThis.SourcerReader.readSearch('standard')},'LinkedIn People results could not be read.');
+      live(bound,run);const current=await chrome.tabs.get(tab.id);live(bound,run);
+      if(hrSearchKey(current.url)!==state.key || current.pendingUrl && hrSearchKey(current.pendingUrl)!==state.key){state.released=true;await persist();throw safeError('The People search changed while being read.');}
+      if(!result || hrSearchKey(result.url)!==state.key || !Array.isArray(result.profiles) || result.profiles.length>40)throw safeError('LinkedIn People results could not be confirmed.');
+      if(!result.profiles.length && !result.empty)return {loading:true};
+      return result;
+    } finally {if(jobCapture===token)jobCapture=null;}
   }
   if (connection.kind === 'hr') {
     const bound = connection, hr = bound.hr, run = args.run_id;

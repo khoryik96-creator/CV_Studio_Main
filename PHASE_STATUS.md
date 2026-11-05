@@ -4,6 +4,12 @@
 
 ## Release state
 
+- v24.6.572 verifies JobStreet employer and expiry evidence before adding ads,
+  and uses companion-observed LinkedIn cards for DeepSeek Find people. Claude's
+  existing mechanism stays intact. Search tabs group with CV Studio and close
+  after completion/failure/Stop unless the user takes control. App and companion
+  updates required. See [current QA](docs/QA.md) and the PR for review/CI status.
+
 - v24.6.571 fixes missing timedelta/ast imports in Lead Finder enrichment.
   The screenshot error is reproduced through the search route; relative dates,
   numeric date backfill and dictionary-response recovery have regressions.

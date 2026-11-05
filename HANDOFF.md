@@ -7,6 +7,20 @@ file). The owner runs a **local source build** at `localhost:5000` and uses
 **DeepSeek** for all AI providers. Several conventions below are non-obvious
 traps that the code alone won't warn you about.
 
+**Current source change: v24.6.572 Lead Finder ad evidence and DeepSeek people**
+- JobStreet employers come from the matching ad, with explicit expiry checks.
+  Expired and unconfirmed ads are omitted, including after AI refinement. Public
+  reads are bounded; selected Tavily can make one basic Extract batch (up to 12
+  ads) when a public page cannot be read. This can consume Tavily credits.
+- DeepSeek Find people uses the connected LinkedIn companion to read observed
+  search cards and reviews those IDs only. Claude retains its existing web-search
+  request. App-created search tabs join CV Studio's group and close after reads,
+  failures or Stop; tabs the user activates or navigates are preserved.
+- Both app and companion updates are required. No new permissions or routes.
+  See [current QA](docs/QA.md) and the associated PR for review/CI/merge status.
+  No live provider calls or signed-in LinkedIn testing; the two reported live
+  JobStreet ads could not be verified from this environment.
+
 **Current work: v24.6.571 Lead Finder dependency fixes**
 on `codex/leadfinder-relative-date-fix`, from merged570 / PR303.
 - Reproduced the reported `name 'timedelta' is not defined` through the actual
