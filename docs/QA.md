@@ -1,5 +1,17 @@
 # Current validation record
 
+## v24.6.574 — Automated review corrections (includes v572/v573)
+
+PR305's fresh review identified two regressions, reproduced by failing tests:
+valid JobStreet split-view URLs / the Philippines host never reached detail
+verification, and a rejected tabs.remove could falsely report successful cleanup.
+Aliases now resolve to bounded detail reads, with ambiguous/non-ad URLs rejected.
+A failed close retains the run and persisted ownership, prevents another search,
+and can retry after worker suspension. A tab already removed manually is done.
+
+Focused Python and worker regressions pass after correction. Final review and
+Windows/macOS CI results are recorded against the PR's current head.
+
 ## v24.6.573 — Review corrections (includes v572)
 
 Local review reproduced late Stop discarding a completed paid review response.

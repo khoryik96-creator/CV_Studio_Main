@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.574 fixes both PR305 review findings: JobStreet split-view aliases and
+  the Philippines host now reach detail verification; failed tab cleanup keeps
+  ownership and reports failure instead of opening more tabs. Cleanup can retry
+  after worker suspension. Includes v572/v573, plus the documentation cleanup.
+
 - v24.6.573 includes v572 and fixes two fresh local-review findings: completed
   DeepSeek review output/usage survives a late Stop, and an empty provider result
   retains expiry/verification warnings. PR305 records the final review/CI state.

@@ -522,9 +522,16 @@ async function closeOwned(id, expected) {
 
 async function closeLeadPeopleSource(bound) {
   const state=bound?.leadPeople;if(!state || state.released)return;
-  try {const tab=await chrome.tabs.get(bound.source);
-    if(!tab.active && hrSearchKey(tab.url)===state.key && (!tab.pendingUrl || hrSearchKey(tab.pendingUrl)===state.key))await chrome.tabs.remove(tab.id);
-  } catch {}
+  const missing=error=>/no tab with id|invalid tab id|missing tab/i.test(String(error?.message || ''));
+  let tab;
+  try {tab=await chrome.tabs.get(bound.source);}catch(error){if(missing(error))return;throw safeError('The companion could not confirm search-tab cleanup.');}
+  if(tab.active || hrSearchKey(tab.url)!==state.key || tab.pendingUrl && hrSearchKey(tab.pendingUrl)!==state.key)return;
+  try {await chrome.tabs.remove(tab.id);}catch {
+    // A concurrent manual close is success. A still-live tab keeps its run and
+    // persisted ownership so end can be retried, including after suspension.
+    try {await chrome.tabs.get(tab.id);}catch(error){if(missing(error))return;}
+    throw safeError('The search tab could not be closed. Close it and refresh CV Studio before retrying.');
+  }
 }
 async function closeHROwnedTabs() {
   // The app may already be gone before its pagehide message can arrive. Exact

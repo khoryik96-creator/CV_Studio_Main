@@ -14,6 +14,18 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source correction: v24.6.574 (includes v572/v573 below)**
+- PR305's fresh review reproduced valid split-view JobStreet aliases being
+  dropped before verification. Normalize /jobs?jobId= (including supported key
+  variants) to a bounded /job/<id> detail read, include the Philippines host,
+  and reject account/ambiguous identities.
+- A synthetic tab-removal failure also reproduced a false successful cleanup.
+  A failed close now reports failure and retains the run/ownership, surviving
+  worker suspension so end can retry. A concurrent manual close counts as done.
+- Both regressions failed before the fix and pass afterwards. The PR records
+  final fresh review/CI. Markdown cleanup removes 187 superseded snapshots;
+  README links their Git archive and maintained guidance. No installed update.
+
 **Current source correction: v24.6.573 (includes v572 below)**
 - Fresh local review reproduced Stop discarding a completed paid DeepSeek review
   response. Once the request has begun, its returned output/usage is retained for

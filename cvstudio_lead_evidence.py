@@ -5,13 +5,14 @@ from html import unescape
 from time import monotonic
 import json
 import re
-from urllib.parse import urlsplit, urljoin
+from urllib.parse import urlsplit, urljoin, parse_qsl
 
 from bs4 import BeautifulSoup
 import requests
 
 HOSTS = {'my.jobstreet.com','sg.jobstreet.com','id.jobstreet.com','ph.jobstreet.com',
-         'www.jobstreet.com.my','www.jobstreet.com.sg','jobstreet.com','www.jobstreet.com'}
+         'www.jobstreet.com.my','www.jobstreet.com.sg','www.jobstreet.com.ph','www.jobstreet.co.id',
+         'jobstreet.com','www.jobstreet.com'}
 MAX_BYTES = 2 * 1024 * 1024
 
 
@@ -21,9 +22,17 @@ def jobstreet_id(url):
         if u.scheme!='https' or u.hostname not in HOSTS or u.username or u.password or u.port:
             return ''
         m=re.fullmatch(r'/job/([0-9]{1,24})/?',u.path)
-        return m[1] if m else ''
+        ids=[value for key,value in parse_qsl(u.query,keep_blank_values=True) if re.fullmatch(r'job[_-]?id',key,re.I)]
+        if ids and (any(not re.fullmatch(r'[0-9]{1,24}',value) for value in ids) or len(set(ids))!=1):return ''
+        if m:return m[1] if not ids or ids[0]==m[1] else ''
+        return ids[0] if u.path.rstrip('/')=='/jobs' and ids else ''
     except ValueError:
         return ''
+
+
+def jobstreet_detail_url(url):
+    ident=jobstreet_id(url)
+    return 'https://'+urlsplit(url).hostname+'/job/'+ident if ident else ''
 
 
 def is_jobstreet(url):
@@ -121,7 +130,8 @@ def parse_extracted_jobstreet(raw, url):
 
 def fetch_jobstreet(url):
     """No credentials, redirects, arbitrary hosts or unbounded response bodies."""
-    if not jobstreet_id(url):return ''
+    url=jobstreet_detail_url(url)
+    if not url:return ''
     response=None
     try:
         response=requests.get(url,timeout=(3,6),allow_redirects=False,stream=True,
@@ -144,7 +154,7 @@ class JobstreetVerifier:
         self.provider=provider;self.fetch=fetch;self.extract=extract;self.cache={};self.calls=0
 
     def check_many(self, urls):
-        wanted={jobstreet_id(url):url for url in urls if jobstreet_id(url) and jobstreet_id(url) not in self.cache}
+        wanted={jobstreet_id(url):jobstreet_detail_url(url) for url in urls if jobstreet_id(url) and jobstreet_id(url) not in self.cache}
         # At most 12 unique ads per request; unknown/unverified ads are excluded.
         wanted=dict(list(wanted.items())[:max(0,12-len(self.cache))])
         def check(item):

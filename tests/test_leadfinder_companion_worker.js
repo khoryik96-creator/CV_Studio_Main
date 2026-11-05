@@ -14,5 +14,12 @@ const assert=require('assert/strict');const {fixture}=require('./test_linkedin_j
   assert.equal(f.tabs.has(id),['viewed','changed'].includes(mode),'cleanup respects user control');assert(f.tabs.has(2) && f.tabs.has(3));
  }
  const f=fixture();await f.arm();assert((await f.rpc('leadPeopleBegin',{run_id:'d'.repeat(32),query:'Elitez'},undefined,'profiles')).error);
+ const failedClose=fixture({configureChrome(chrome){const remove=chrome.tabs.remove;let first=true;chrome.tabs.remove=async id=>{if(first){first=false;throw Error('Synthetic removal failure');}return remove(id);};}});
+ await failedClose.arm();const run='e'.repeat(32),opened=await failedClose.rpc('leadPeopleBegin',{run_id:run,query:'Elitez HR'},undefined,'leads');
+ assert((await failedClose.rpc('end',{run_id:run},undefined,'leads')).error,'failed close must not report cleanup success');
+ assert(failedClose.tabs.has(opened.result.tab_id));assert.equal((await failedClose.rpc('jobStatus',{},undefined,'leads')).result.busy,true,'ownership retained after close fails');
+ assert((await failedClose.rpc('leadPeopleBegin',{run_id:'f'.repeat(32),query:'Other employer'},undefined,'leads')).error,'failed cleanup prevents another search');
+ failedClose.boot();assert.equal((await failedClose.rpc('end',{run_id:run},undefined,'leads')).result,true,'retained ownership survives worker suspension for cleanup retry');
+ assert(!failedClose.tabs.has(opened.result.tab_id));
  console.log('Lead Finder companion: scoped source, read, cleanup, suspension and viewed/changed-tab protection passed');
 })().catch(e=>{console.error(e);process.exitCode=1});

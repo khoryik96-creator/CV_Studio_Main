@@ -99,3 +99,25 @@ def test_structured_employer_without_post_identity_or_matching_header_is_not_tru
     post={k:v for k,v in POST.items() if k!='url'}
     assert parse_jobstreet(html(post),URL)['state']=='unverified'
     assert parse_jobstreet(html({**post,'identifier':{'value':'95258471'}}),URL)['state']=='active'
+
+
+@pytest.mark.parametrize('alias,detail',[
+    ('https://my.jobstreet.com/jobs?jobId=95258471&type=standard','https://my.jobstreet.com/job/95258471'),
+    ('https://www.jobstreet.com.ph/jobs?job_id=95258471','https://www.jobstreet.com.ph/job/95258471'),
+])
+def test_supported_individual_ad_aliases_are_verified_at_the_detail_url(alias,detail):
+    fetch=mock.Mock(return_value=html({**POST,'url':detail}))
+    verifier=JobstreetVerifier({},fetch=fetch)
+    rows,_=verifier.results([{'url':alias}])
+    fetch.assert_called_once_with(detail)
+    assert rows[0]['company_name']=='Elitez'
+
+
+@pytest.mark.parametrize('url',[
+    'https://my.jobstreet.com/login?jobId=95258471',
+    'https://my.jobstreet.com/jobs?jobId=95258471&jobId=94790829',
+    'https://my.jobstreet.com/jobs?jobId=not-a-number',
+])
+def test_non_ad_or_ambiguous_jobstreet_aliases_do_not_authorize_reads(url):
+    fetch=mock.Mock();verifier=JobstreetVerifier({},fetch=fetch)
+    rows,_=verifier.results([{'url':url}]);assert not rows;fetch.assert_not_called()
