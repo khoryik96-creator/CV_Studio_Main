@@ -24,6 +24,7 @@
     if(linkAccount!==currentLinkAccount()){savedLinks.clear();linkAccount='';}
     if(ready){++generation;current=null;account='';review='';priorUnconfirmed=false;recoveryAccount='';recoveryToken='';hideLinks();el('Dialog').close();lock(false);}
     redrawContacts();
+    window.cvStudioApollo?.jobAdderAccountChanged?.();
   }
   const hideLinks=()=>{el('Open').hidden=true;el('Open').href='';el('Matches').replaceChildren();el('Matches').hidden=true;};
   const msg=value=>{el('Message').textContent=value;hideLinks();};

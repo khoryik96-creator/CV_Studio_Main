@@ -4,6 +4,11 @@
 
 ## Release state
 
+- v24.6.581 fixes two regressions found in fresh post-merge review: dates inside
+  controlled Word table cells being dropped, and startup/account-change timing
+  hiding saved JobAdder links. Both were reproduced before correction. HR-link
+  re-review is clean. The corrective PR records final fresh review and CI.
+
 - v24.6.580 adds visible LinkedIn profile links to saved HR dashboard rows and
   per-ad HR cards, including existing records. Uses captured URLs, with no extra
   crawl/unlock/write. The PR records fresh review and CI status.

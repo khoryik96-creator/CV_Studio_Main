@@ -1,6 +1,7 @@
 """Nested layout-table CVs retain content before any provider call (fictional data)."""
 import io
 import json
+import pytest
 from unittest import mock
 from docx import Document
 from docx.oxml import OxmlElement
@@ -47,6 +48,34 @@ def test_real_extract_route_retains_nested_cv_sections_before_ai_parsing():
     response=client.post('/extract-text',data={'file':(io.BytesIO(source()),'fictional-nested-cv.docx')},headers=HEADERS)
     assert response.status_code==200,response.get_json()
     assert_complete(response.get_json()['text'])
+
+
+@pytest.mark.parametrize('tag',['sdt','customXml','ins','moveTo'])
+def test_visible_cell_containers_keep_dates_paragraphs_and_nested_tables(tag):
+    doc=Document(io.BytesIO(source()))
+    # Encapsulate both the date box and the nested employer table as real Word
+    # content-control/custom-XML/revision blocks do. Deleted revisions stay out.
+    date=doc.element.body.xpath('.//w:tc/w:p[w:r/w:pict/w:txbxContent]')[0]
+    employer=doc.element.body.xpath('.//w:tbl')[4]
+    for child in [date,employer]:
+        parent=child.getparent();wrapper=OxmlElement('w:'+tag)
+        container=OxmlElement('w:sdtContent') if tag=='sdt' else wrapper
+        if container is not wrapper:wrapper.append(container)
+        parent.replace(child,wrapper);container.append(child)
+    payload=io.BytesIO();doc.save(payload)
+    assert_complete(app._extract_docx_text_preserve_tables(payload.getvalue()))
+    response=app.app.test_client().post('/extract-text',data={'file':(io.BytesIO(payload.getvalue()),'fictional-contained.docx')},headers=HEADERS)
+    assert response.status_code==200,response.get_json();assert_complete(response.get_json()['text'])
+
+
+def test_content_control_depth_fails_explicitly_instead_of_recursing_unbounded():
+    doc=Document();cell=doc.add_table(rows=1,cols=1).cell(0,0);cell.text='Fictional CV text'
+    child=cell.paragraphs[0]._p
+    for _ in range(34):
+        parent=child.getparent();wrapper=OxmlElement('w:sdt');content=OxmlElement('w:sdtContent');wrapper.append(content)
+        parent.replace(child,wrapper);content.append(child);child=wrapper
+    with pytest.raises(ValueError,match='too deeply nested'):
+        app._docx_cell_content_lines(cell,lambda p:p.text)
 
 
 def test_nested_source_survives_parse_and_actual_word_generation():

@@ -55,8 +55,11 @@ The upload route and shared DOCX reader walk tables inside cells in XML order.
 This matters for CV templates that put the name, skills, employers and duties
 inside nested tables. Anchored date textboxes stay beside their own cell;
 root-level summary shapes keep the established ABOUT HIM / HER ordering.
-Repeated merged cells and exact textbox fallback groups are read once. Layouts
-deeper than 32 nested tables fail visibly. Tests use synthetic documents through
+Visible content-control, custom-XML and inserted/moved block containers inside
+cells are traversed before their paragraphs/tables. This keeps anchored dates
+beside the employer even when Word wraps a cell block in a control. Repeated
+merged cells and exact textbox fallback groups are read once. Layouts
+deeper than 32 combined table/container levels fail visibly. Tests use synthetic documents through
 extract, simulated parse and real Word generation; private source CVs stay out
 of Git. A browser holding an old truncated extraction needs the original file
 uploaded again after an update.

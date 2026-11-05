@@ -26,5 +26,25 @@ const createButtons=f=>f.el('ApolloContactsRows').querySelectorAll('button').fil
  await restored.init();await tick();await restored.el('ApolloContactsTab').click();await tick();
  assert.equal(openLinks(restored)[0].href,url,'a fresh dashboard renders protected-history links without recreating the contact');
  restored.window.cvStudioJAContacts.setLinks(scope,[{contact_key:key,state:'created',contact_id:45,contact_url:'https://attacker.invalid/contacts/45'}],restored.window.cvStudioJAContacts.linkVersion());restored.apollo.redrawContacts();assert.equal(openLinks(restored).length,0,'unsafe links never render');
+ for(const changes of [[scope],[scope,'c'.repeat(64)]]){
+  const cold=fixture({apollo:true,jobAdderContacts:true});let releaseFirst,reads=0,activeScope=scope;
+  cold.state.onJA=()=>{throw Error('Account-link refresh must not contact JobAdder');};
+  cold.state.onApollo=async data=>{
+   if(data?.action!=='contacts')return reply({available:false,connected:false});
+   const seen=activeScope,id=seen===scope?45:55;reads++;
+   if(reads===1)await new Promise(resolve=>releaseFirst=resolve);
+   return reply({contacts:[row],jobadder_account:seen,jobadder_links:[{contact_key:key,state:'created',contact_id:id,contact_url:'https://au3.jobadder.com/contacts/'+id}]});
+  };
+  await cold.init();await tick();cold.el('ApolloContactsTab').click();await tick();
+  for(const next of changes){activeScope=next;cold.window._jaAccountCacheNamespace='ja'+next;cold.window.cvStudioJAContacts.accountChanged();}
+  releaseFirst();for(let i=0;i<20 && !openLinks(cold).length;i++)await tick();
+  assert.equal(reads,2,'account changes during a pending read coalesce into one fresh local snapshot');
+  assert.equal(openLinks(cold)[0].href,'https://au3.jobadder.com/contacts/'+(activeScope===scope?45:55),'startup timing cannot leave a saved contact labelled Create');
+  activeScope='d'.repeat(64);cold.window._jaAccountCacheNamespace='ja'+activeScope;cold.window.cvStudioJAContacts.accountChanged();
+  assert.equal(openLinks(cold).length,0,'old-account links disappear before the new snapshot');
+  for(let i=0;i<20 && !openLinks(cold).length;i++)await tick();
+  assert.equal(reads,3);assert.equal(openLinks(cold)[0].href,'https://au3.jobadder.com/contacts/55','an idle account switch refreshes existing contacts automatically');
+  cold.pagehide();
+ }
  f.pagehide();restored.pagehide();console.log('JobAdder dashboard links: immediate create result, persisted reload, stale refresh/account isolation and safe anchors passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

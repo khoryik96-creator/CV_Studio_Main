@@ -14,6 +14,26 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source correction: v24.6.581 fresh post-merge review**
+on `codex/fresh-review-cv-contact-links`, from merged v580 / PR309.
+- A new requested GitHub review of merged d9a5a70 found no HR-link issues.
+  A fresh manual review also examined the recent CV/JobAdder changes and
+  reproduced two earlier regressions before correcting them.
+- Table-cell textboxes inside Word content controls were excluded from the
+  root fallback but skipped by the cell walker. The pre-v579 route retained
+  their date; v580 dropped it. Visible content-control/custom-XML/inserted block
+  wrappers are now traversed in place, with a combined nesting bound. Synthetic
+  tests cover exact dates, employer tables and explicit depth failure.
+- Account information arriving during a contacts read invalidated its link
+  snapshot without starting a fresh one. Account changes now queue/coalesce
+  one local contacts refresh, retaining epoch/account isolation. No JobAdder
+  request, create or paid lookup is repeated. Startup and idle-switch races
+  are tested, including a real Chromium held-response check.
+- All 104 JS fixtures, 265 focused Python checks and 2,331 subtests pass.
+  The previously corrected private CV extraction remains byte-for-byte text
+  identical. No private source data in Git, live provider call or installed
+  update. Current QA and the corrective PR record final review/CI status.
+
 **Current source change: v24.6.580 visible HR LinkedIn profile links**
 on `codex/hr-linkedin-profile-links`, from merged v579 / PR308.
 - Each per-ad HR result card and saved HR dashboard row now includes an explicit
