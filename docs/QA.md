@@ -1,5 +1,26 @@
 # Current validation record
 
+## v24.6.582 — Protected frontend helper isolation
+
+Separate javascript-obfuscator CLI invocations reused the `a0_` global helper
+namespace. A fresh v581-style transformation reproduced a real decoder-name
+collision between AI Routing and LinkedIn Sourcer. Which functions fail depends
+on the generated aliases; HTTP 200 and syntax-only checks do not detect it.
+Every transformed module, inline script and Node generator now receives a
+filename-derived, injective namespace. The builder rejects cross-script helper
+collisions before packaging. Original browser handler/global names stay intact.
+
+The real protected UI is exercised in Chromium with entirely fictional local
+responses: all 14 routing selectors, saved routes, key Save/Test, secure-slot
+recovery after reload, Format CV's parse payload and Doctor's key:SET report.
+The check intercepts every network request and never uses real keys or provider
+calls. Regular Windows CI runs a fresh frontend protection pass; the protected
+build workflow also checks the actual colleague ZIP's web assets before upload.
+Unit coverage checks namespace/path independence and safe collision failures.
+Local Chromium and focused packaging/version tests passed. Native compilation
+was not performed on Linux; the native protected build remains the required
+path to a replacement colleague ZIP. The PR records final review and full CI.
+
 ## v24.6.581 — Fresh post-merge review corrections
 
 A new manual-request GitHub review of merged v580 (d9a5a70) found no HR-link

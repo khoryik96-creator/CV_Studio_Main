@@ -40,8 +40,8 @@ except ModuleNotFoundError:  # Direct `python owner_build_tools/build_protected.
         find_pinned_checkout_action,
     )
 
-VERSION = "v24.6.581"
-VERSION_SLUG = "v24_6_581"
+VERSION = "v24.6.582"
+VERSION_SLUG = "v24_6_582"
 PRODUCT = "TheGuoLab-CVStudio"
 RECEIPT_SCHEMA = 2
 TOTP_MASK = bytes([147,57,36,83,116,245,122,57,165,162,176,168,249,50,204,128,45,174,232,56])
@@ -483,10 +483,28 @@ def find_obfuscator(root: Path) -> Path | None:
 def obfuscate_args(src: Path, dst: Path, rename_globals: bool) -> list[str]:
     return [str(src),"--output",str(dst),"--compact","true","--control-flow-flattening","false",
             "--dead-code-injection","false","--debug-protection","false","--disable-console-output","false",
-            "--identifier-names-generator","hexadecimal","--log","false","--numbers-to-expressions","false",
+            "--identifier-names-generator","hexadecimal",
+            "--identifiers-prefix","cvs_"+src.name.encode("utf-8").hex()+"_","--log","false","--numbers-to-expressions","false",
             "--rename-globals","true" if rename_globals else "false","--self-defending","false","--simplify","true",
             "--split-strings","false","--string-array","true","--string-array-encoding","base64",
             "--string-array-threshold","0.45","--transform-object-keys","false","--unicode-escape-sequence","false"]
+
+
+def validate_obfuscated_helpers(scripts: dict[str, Path]) -> None:
+    """Reject helper aliases shared by separately transformed classic scripts.
+
+    Each CLI invocation otherwise starts with the same a0_ prefix. Its random
+    decoder names can collide across files even with rename-globals disabled.
+    The source filename supplies an injective, path-independent namespace.
+    """
+    owners: dict[str, str] = {}
+    for label, path in scripts.items():
+        aliases = set(re.findall(r"\b(?:cvs_[0-9a-f]+_|a[0-9]+_)0x[0-9a-f]+\b",
+                                 path.read_text(encoding="utf-8")))
+        for alias in aliases:
+            previous = owners.setdefault(alias, label)
+            if previous != label:
+                raise RuntimeError(f"Protected JavaScript helper collision: {previous} / {label}")
 
 
 def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,Path,dict]:
@@ -510,6 +528,7 @@ def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,Pa
         html=source_index.read_text(encoding="utf-8-sig")
         pat=re.compile(r"(?is)(<script([^>]*)>)(.*?)(</script>)")
         pieces=[]; cursor=0; block=0
+        protected_scripts={"generate.js":out_generate}
         for m in pat.finditer(html):
             pieces.append(html[cursor:m.start()]); open_tag,attrs,body,close=m.group(1),m.group(2),m.group(3),m.group(4)
             if "src=" in attrs.lower() or len(body.strip())<1000:
@@ -518,6 +537,7 @@ def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,Pa
                 block+=1; src=work/f"inline_{block}.source.js"; dst=work/f"inline_{block}.protected.js"
                 src.write_text(body,encoding="utf-8")
                 run([str(ob)]+obfuscate_args(src,dst,False),cwd=root,timeout=300)
+                protected_scripts[f"inline_{block}"]=dst
                 pieces.append(open_tag+dst.read_text(encoding="utf-8")+close)
             cursor=m.end()
         pieces.append(html[cursor:]); out_index.write_text("".join(pieces),encoding="utf-8")
@@ -528,7 +548,9 @@ def protect_javascript(root: Path, work: Path, skip: bool) -> tuple[Path,Path,Pa
                 cwd=root,
                 timeout=300,
             )
-        report.update(mode="javascript-obfuscator-conservative",inline_blocks=block)
+            protected_scripts[filename]=out_modules/filename
+        validate_obfuscated_helpers(protected_scripts)
+        report.update(mode="javascript-obfuscator-conservative",inline_blocks=block,helper_namespaces_verified=True)
         report["frontend_modules"]["mode"]="javascript-obfuscator-conservative"
     # Non-JS vendor assets (e.g. app.css) are copied verbatim regardless of the
     # obfuscation mode; they carry no logic so they are never node --check'd.

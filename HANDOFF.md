@@ -14,6 +14,21 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source correction: v24.6.582 protected AI controls**
+on `codex/protected-ai-controls`, from merged v581 / PR310.
+- User reports empty AI Routing and broken Save/Test/format key detection in a
+  protected v581 install on a new Windows laptop. Fresh transformations exposed
+  a real cross-script decoder collision: each separate obfuscator CLI call used
+  `a0_` globals. Filename-derived injective namespaces now isolate every script;
+  a build-time collision gate checks transformed inline/modules/generator files.
+- Chromium checks use real protected bytes and fictional intercepted APIs to
+  verify routing selectors, save/reload, secure key Save/Test, Format's key slot
+  and Doctor. CI runs this on fresh protection; protected builds check ZIP web
+  assets before upload. No user key, live paid call or source storage change.
+- Local protected-browser and focused checks pass; PR records final review/CI.
+  The affected laptop needs a newly compiled protected ZIP after merge. Linux
+  validation does not claim native Windows compilation or an installed update.
+
 **Current source correction: v24.6.581 fresh post-merge review**
 on `codex/fresh-review-cv-contact-links`, from merged v580 / PR309.
 - A new requested GitHub review of merged d9a5a70 found no HR-link issues.

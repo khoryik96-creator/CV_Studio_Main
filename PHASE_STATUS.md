@@ -4,6 +4,10 @@
 
 ## Release state
 
+- v24.6.582 isolates generated globals across protected scripts to fix a
+  confirmed obfuscation collision class affecting AI controls. Fresh Chromium
+  checks cover routing, keys, Format and Doctor; native packaging CI checks the
+  colleague ZIP before upload. A replacement native build is still required.
 - v24.6.581 fixes two regressions found in fresh post-merge review: dates inside
   controlled Word table cells being dropped, and startup/account-change timing
   hiding saved JobAdder links. Both were reproduced before correction. HR-link
