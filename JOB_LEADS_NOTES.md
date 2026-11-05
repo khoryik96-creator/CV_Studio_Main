@@ -1362,3 +1362,14 @@ search point to Companion. This display state never starts work, selects paid
 consent, saves records or alters scan/Stop/recovery behavior. Sourcer has matching
 guidance for its brief, explicit consent, limits, tab/setup and Start; interrupted
 runs point to Stop. See the526 QA report for native DOM/focus/keyboard evidence.
+
+
+## LinkedIn company links
+
+Saved Job Ads company names open the employer page when its URL was captured.
+Older ads can use their saved HR company link when the employer names match.
+Search, full-ad, public, manual-fill, companion Add and followed-client captures
+retain optional company_url metadata in the existing record payload. Regular
+edits preserve it for the same job/employer; changing either clears stale links.
+Unknown employer pages stay as text until a later capture supplies a link.
+Company names are never transformed into guessed LinkedIn URLs.

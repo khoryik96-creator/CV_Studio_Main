@@ -225,6 +225,22 @@ def job_url(value):
         return ""
 
 
+def company_url(value):
+    """Canonical employer page only; never an external website or search link."""
+    if not isinstance(value, str) or len(value) > 2048 or '\\' in value or re.search(r'[\x00-\x20\x7f]', value):
+        return ''
+    try:
+        parsed = urlsplit(value)
+        match = re.fullmatch(r'/company/([A-Za-z0-9_-]+)(?:/(?:about|jobs|people))?/?', parsed.path)
+        if (parsed.scheme == 'https' and parsed.hostname in {'www.linkedin.com', 'linkedin.com', 'my.linkedin.com', 'sg.linkedin.com'}
+                and not parsed.username and not parsed.password and not parsed.port and match):
+            result = 'https://www.linkedin.com/company/' + match[1] + '/'
+            return result if len(result) <= 300 else ''
+    except ValueError:
+        return ''
+    return ''
+
+
 def clean_record(raw):
     if not isinstance(raw, dict):
         raise JobLeadsError("Enter the job details first.")
@@ -239,6 +255,11 @@ def clean_record(raw):
         raise JobLeadsError("Paste a LinkedIn job ad link, such as https://www.linkedin.com/jobs/view/1234567890.")
     if not result["company"] or not result["role"]:
         raise JobLeadsError("Enter both the company and role before saving.")
+    if 'company_url' in raw:
+        value = raw['company_url']
+        if not isinstance(value, str) or value and not company_url(value):
+            raise JobLeadsError('The employer LinkedIn company link is invalid.')
+        result['company_url'] = company_url(value)
     if result["status"] not in STATUSES:
         raise JobLeadsError("Choose a valid lead status.")
     result['folder'] = clean_folder(result['folder'], allow_unfiled=True)
@@ -603,6 +624,9 @@ class JobLeadsStore:
                 data.pop('hr', None)
                 if 'favorite' not in raw:
                     data['favorite'] = previous.get('favorite', False)
+                if ('company_url' not in raw and previous['company'] == data['company']
+                        and previous['url'] == data['url'] and previous.get('company_url')):
+                    data['company_url'] = previous['company_url']
                 if previous['company'] == data['company'] and previous['url'] == data['url'] and previous.get('hr'):
                     data['hr'] = previous['hr']
                 # Ordinary edits do not send the client an ad was pulled for.

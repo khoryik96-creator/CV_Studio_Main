@@ -14,6 +14,22 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source change: v24.6.577 LinkedIn employer hyperlinks**
+on `codex/job-ad-company-links`, from merged v576 / PR305.
+- Saved Job Ads company names open captured LinkedIn company pages in a new
+  tab. Existing matching HR company evidence provides links for older ads.
+- Company URLs now survive search-card/full-ad/public reads, manual fills,
+  direct companion Add and followed-client saves. Optional metadata stays in
+  the existing JSON payload; there is no database-schema or route change.
+- Public extraction uses the posting's organization or its matching top-card
+  employer link, discarding ambiguous/conflicting pages and external websites.
+  A missing employer URL leaves the company name as text; names never create
+  guessed company slugs. No extra crawl, browser tab or paid request is needed.
+- Ordinary edits preserve a known link for the same job/employer; changing
+  employer or job clears stale metadata. Backups preserve the optional field.
+  Existing native-link tab grouping applies. See current QA and the PR for
+  focused tests, browser checks, fresh review and CI. No installed update.
+
 **Current source change: v24.6.576 Job Leads numbered pages**
 - Search results now have numbered pages and a visible range directly below
   the scrollable card list, inside its column. Jump between groups of 20 without

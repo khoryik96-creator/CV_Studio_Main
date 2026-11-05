@@ -14,13 +14,22 @@
     } catch { return ''; }
   }
   // The checked fields of one results page; anything unexpected is skipped.
+  function companyLink(value) {
+    try {
+      if (typeof value !== 'string' || value.length > 2048 || /[\\\x00-\x20\x7f]/.test(value)) return '';
+      const u = new URL(value), match = u.pathname.match(/^\/company\/([A-Za-z0-9_-]+)(?:\/(?:about|jobs|people))?\/?$/);
+      const result = match ? 'https://www.linkedin.com/company/'+match[1]+'/' : '';
+      return u.protocol === 'https:' && ['www.linkedin.com','linkedin.com','my.linkedin.com','sg.linkedin.com'].includes(u.hostname) &&
+        !u.username && !u.password && !u.port && result.length <= 300 ? result : '';
+    } catch { return ''; }
+  }
   function rows(snapshot) {
     if (!snapshot || !Array.isArray(snapshot.jobs) || snapshot.jobs.length > 40) throw Error('The job-search results could not be confirmed.');
     const result = [];
     for (const raw of snapshot.jobs) {
       const url = jobLink(raw?.url || '');
       if (!url || url !== raw.url || typeof raw.company !== 'string' || !raw.company.trim() || typeof raw.role !== 'string' || !raw.role.trim()) continue;
-      result.push({url,company:raw.company.slice(0,200),role:raw.role.slice(0,240),location:typeof raw.location === 'string' ? raw.location.slice(0,240) : '',
+      result.push({url,company:raw.company.slice(0,200),...(companyLink(raw.company_url)?{company_url:companyLink(raw.company_url)}:{}),role:raw.role.slice(0,240),location:typeof raw.location === 'string' ? raw.location.slice(0,240) : '',
         date_posted:typeof raw.date_posted === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date_posted) ? raw.date_posted : '',
         date_posted_estimate:typeof raw.date_posted_estimate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date_posted_estimate) ? raw.date_posted_estimate : '',
         description:typeof raw.description === 'string' ? raw.description.slice(0,6500) : ''});
@@ -58,5 +67,5 @@
       if (!await rpc('read',{run_id:run,tab_id:tab,method:'nextJobSearch',values:[previous]})) break;
     }
   }
-  window.cvStudioJobSearch = {jobLink, rows, walk};
+  window.cvStudioJobSearch = {jobLink, companyLink, rows, walk};
 })();
