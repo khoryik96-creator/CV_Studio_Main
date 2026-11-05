@@ -1,5 +1,6 @@
 """DeepSeek reviews observed companion cards; it never invents web results."""
 import json
+import hashlib
 import re
 from urllib.parse import urlsplit
 
@@ -72,7 +73,7 @@ def selected_people(parsed,cards):
         if not tokens or not re.search(r'\b'+re.escape(tokens[0])+r'\b',card['text'],re.I):continue
         title=card['title'] or str(match.get('title') or '').strip()
         if not title or title.casefold() not in card['text'].casefold():continue
-        seen.add(card['url']);people.append({'id':'pe_companion_'+str(len(people)+1),'name':card['name'],'title':title,
+        seen.add(card['url']);people.append({'id':'pe_companion_'+hashlib.sha256(card['url'].encode('utf-8')).hexdigest()[:24],'name':card['name'],'title':title,
           'company':card['company'],'country':card['location'],'profile_url':card['url'],'source_url':card['url'],
           'contact_type':str(match.get('contact_type') or '')[:100],'notes':str(match.get('reason') or '')[:700],
           'email':'','email_confidence':'','email_source':'','verification_status':'Needs review','status':'New'})

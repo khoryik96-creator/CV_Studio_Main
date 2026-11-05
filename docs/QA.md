@@ -1,5 +1,14 @@
 # Current validation record
 
+## v24.6.575 — Cross-run people selection correction
+
+Follow-up review found new DeepSeek responses reused sequential person IDs
+across runs. A failing regression reproduced distinct profiles receiving the
+same selection ID. IDs now derive from canonical observed profile URLs; the test
+checks both distinct people across runs and stable IDs for repeat observations.
+This preserves independent selection before email enrichment. PR305 contains
+review/CI status for the final head, including the earlier corrections below.
+
 ## v24.6.574 — Automated review corrections (includes v572/v573)
 
 PR305's fresh review identified two regressions, reproduced by failing tests:

@@ -26,3 +26,12 @@ def test_wrong_company_and_unobserved_title_cannot_gain_authority():
 @pytest.mark.parametrize('patch',[{'url':'https://evil.invalid/in/person'},{'company':'Other Employer'},{'name':''},{'text':'tiny'}])
 def test_invalid_observations_rejected_before_ai(patch):
     with pytest.raises(ValueError):observations([{**CARD,**patch}],COMPANIES)
+
+
+def test_person_ids_are_stable_per_profile_and_distinct_across_runs():
+    match={'matches':[{'id':'observed_1'}]}
+    first=selected_people(match,observations([CARD],COMPANIES))[0]
+    second=selected_people(match,observations([{**CARD,'url':CARD['url']+'-another'}],COMPANIES))[0]
+    repeated=selected_people(match,observations([CARD],COMPANIES))[0]
+    assert first['id']!=second['id'],'distinct people from separate runs must be independently selectable'
+    assert first['id']==repeated['id']

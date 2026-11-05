@@ -4,6 +4,10 @@
 
 ## Release state
 
+- v24.6.575 corrects PR305's follow-up review finding: DeepSeek people IDs are
+  stable per profile and distinct across runs, preventing shared selection IDs.
+  Includes v572–v574 and the Markdown cleanup. See PR305 for final review/CI.
+
 - v24.6.574 fixes both PR305 review findings: JobStreet split-view aliases and
   the Philippines host now reach detail verification; failed tab cleanup keeps
   ownership and reports failure instead of opening more tabs. Cleanup can retry

@@ -14,6 +14,14 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source correction: v24.6.575 (includes v572–v574 below)**
+- Follow-up PR305 review found people IDs restarted at one on every DeepSeek
+  run, so distinct accumulated people could share a selection/enrichment ID.
+  IDs now derive from the canonical observed profile URL, stable for that person
+  and distinct across runs. A cross-run regression failed before the fix.
+- PR305 records the current head's fresh review and CI, not an earlier commit's
+  result. The owner also requested numbered Job Leads pages as follow-up work.
+
 **Current source correction: v24.6.574 (includes v572/v573 below)**
 - PR305's fresh review reproduced valid split-view JobStreet aliases being
   dropped before verification. Normalize /jobs?jobId= (including supported key
