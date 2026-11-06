@@ -46,7 +46,8 @@
   }
   async function api(body){
     const response=await fetch('/jobadder/contact_actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const data=await response.json();if(!response.ok || !data.ok)throw Error(data.error || 'JobAdder could not complete this action.');return data;
+    const data=await response.json();data.request_id=data.request_id || response.headers?.get?.('X-CV-Studio-Request-ID') || '';
+    if(!response.ok || !data.ok)throw Object.assign(Error(data.error || 'JobAdder could not complete this action.'),{code:data.code,requestId:data.request_id,httpStatus:response.status});return data;
   }
   function lock(value){working=value;for(const name of ['Close','Search','CompanyQuery','Company','First','Last','Position','Review','Create','Check','Recovery','RecoveryConfirm'])el(name).disabled=value;
     for(const name of ['Owner','RecruiterFilter','SelectAll','ClearRecruiters','Remember'])el(name).disabled=value || !assignmentsReady;
@@ -118,12 +119,13 @@
         data.message='Similar names are already in JobAdder. Open the records first. Create only if these are different people.';
       }
       if(data.state==='review' && similar && ['unavailable','incomplete'].includes(similar.state))data.message+=' The name check was incomplete; search JobAdder before creating.';
+      if(['unconfirmed','rejected'].includes(data.state))window.cvStudioSupport?.recordIssue?.({module:'Job Leads',operation:'JobAdder contact '+action,code:'JOBADDER_CONTACT_'+data.state.toUpperCase(),request_id:data.request_id,http_status:data.http_status,result_reason:data.result_reason});
       rememberLink(current,request.account,data);
       recoveryToken=/^[a-f0-9]{64}$/.test(data.recovery_token || '')?data.recovery_token:'';el('RecoveryPanel').hidden=!recoveryToken;el('RecoveryConfirm').checked=false;
       review=data.review_token || '';priorUnconfirmed=data.state==='unconfirmed';recoveryAccount=priorUnconfirmed?request.account:'';el('Review').hidden=priorUnconfirmed;el('Create').hidden=data.state!=='review';el('Check').hidden=!priorUnconfirmed;
       msg(data.message+(data.state==='review'?' Company: '+data.company:'')+(data.contact_id?' Contact #'+data.contact_id:'')+(data.matches?.length?' Company: '+data.matches.map(row=>row.company || 'Existing company').join(', '):''));
       contactLink(data);if(data.state==='not_started')el('Review').focus();guide(data.state==='review'?['Create']:data.state==='unconfirmed'?(recoveryToken?['RecoveryConfirm']:['Check']):['rejected','not_started'].includes(data.state)?['Review']:[]);
-    }catch(error){if(token===generation){review='';recoveryToken='';el('RecoveryPanel').hidden=true;el('Create').hidden=true;if(action==='create'){priorUnconfirmed=true;recoveryAccount=request.account;}el('Check').hidden=!priorUnconfirmed;el('Review').hidden=priorUnconfirmed;msg(error.message+(action==='create'?' Check the previous result before starting another request.':''));}}
+    }catch(error){window.cvStudioSupport?.recordIssue?.({module:'Job Leads',operation:'JobAdder contact '+action,code:error.code || 'JOBADDER_CONTACT_FAILED',request_id:error.requestId,http_status:error.httpStatus});if(token===generation){review='';recoveryToken='';el('RecoveryPanel').hidden=true;el('Create').hidden=true;if(action==='create'){priorUnconfirmed=true;recoveryAccount=request.account;}el('Check').hidden=!priorUnconfirmed;el('Review').hidden=priorUnconfirmed;msg(error.message+(action==='create'?' Check the previous result before starting another request.':''));}}
     finally{if(token===generation)lock(false);}
   }
   function init(){

@@ -4,6 +4,13 @@
 
 ## Release state
 
+- v24.6.584 adds reviewed screenshot/Doctor/runtime issue reports through each
+  user's Outlook, explicit send confirmation and offline downloads. It also
+  accepts valid JobAdder HTTP 201 contact Location responses without requiring
+  JSON contactId, preserving unknown-write protection. No live sends or writes
+  were used in validation; a matching native rebuild is required for protected
+  installations. Current QA and the PR record fresh review and CI.
+
 - v24.6.583 adds read-only JobAdder name/company suggestions before email
   unlock, a free current-page scan, conservative bulk skip/stop behaviour and
   explicit individual override. Exact-email matches found during Review now

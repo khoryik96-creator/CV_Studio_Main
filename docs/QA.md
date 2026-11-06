@@ -1,5 +1,47 @@
 # Current validation record
 
+## v24.6.584 — Outlook issue reports and JobAdder Created responses
+
+The compressed private recording was inspected locally; it shows repeated
+unconfirmed Create in JobAdder results after review. The API response itself is
+not visible. A real-client fictional transport reproduces a separate confirmed
+bug: HTTP 201 with contact Location and no JSON contactId was discarded. The
+fix accepts only valid contact locations, rejects conflicts/foreign resources,
+and preserves no replay and manual recovery. HTTP status and a bounded reason
+are recorded without contact details.
+
+Issue reports use an independent early-loaded frontend and an app-independent
+collector. The existing support route retains its legacy ZIP behavior and adds
+paired actions. Users capture/upload/paste a screenshot, review redacted Doctor
+and allowlisted runtime data, and explicitly confirm sending through their own
+Outlook to the configured support inbox. No AI call or automatic send occurs.
+Prepared content is immutable, memory bounded and expires after 15 minutes.
+The shared durable Outlook ledger pins the reviewed sender and prevents replay.
+Offline Doctor and prepared ZIP downloads provide a fallback.
+
+Validation:
+- 196 focused Python checks passed: report validation/redaction/image metadata,
+  pairing/origin/body limits, preview proofs, account/destination changes,
+  concurrent sending, durable Graph receipts, JobAdder Location handling,
+  existing email/create/recovery/name checks and modularization contracts.
+- All 106 JavaScript fixtures passed, including Doctor extraction, confirmation
+  cancellation, double-send prevention, lost response recovery and offline ZIP.
+- Real Chromium with the actual app/support route and fictional Graph passed:
+  capture/track stop, normalized screenshot, Doctor/console privacy, ZIP contents,
+  confirmation cancel, one accepted send, lost HTTP response then status recovery
+  without resend, disconnected Outlook, mobile width and Settings navigation.
+- Full Linux run: 2549 passed, 23 skipped, 8398 subtests; two existing platform
+  limitations (native Antiword extraction returns 424, Windows startup fixture
+  uses a POSIX temporary path) and a transient concurrent-save failure. The
+  concurrent-save case passes on isolated rerun; the two platform cases remain.
+  Native Windows full regression is required in CI; no bypass was added.
+- Repository byte consistency, source validation, tracked syntax, 24 source smoke
+  assertions and fresh protected-JavaScript Chromium controls passed. Native
+  dependency preflight correctly refuses the Windows Antiword runtime on Linux.
+- Native protected compilation/installation was not performed on this host.
+  No live email, JobAdder write, paid AI call, or private video/frame entered Git.
+  The PR records final fresh automatic review and complete CI results.
+
 ## v24.6.583 — Existing JobAdder contacts before email credits
 
 The prior duplicate check only searched exact email, so a different email or a
