@@ -22,6 +22,7 @@ import secrets
 import threading
 import time
 import urllib.error
+import urllib.parse
 from typing import Any, Callable
 
 
@@ -142,6 +143,30 @@ class JobAdderContactService:
         return matches
 
     @staticmethod
+    def _created_contact_id(result, headers):
+        """Accept only a confirmed contact id from JSON or a Created Location."""
+        identity=result.get('contactId') if isinstance(result,dict) else None
+        identity=identity if type(identity) is int and 0<identity<=2147483647 else None
+        location=next((str(value) for key,value in dict(headers or {}).items() if str(key).lower()=='location'),'')
+        located=None
+        if location and len(location)<=2000:
+            try:
+                uri=urllib.parse.urlsplit(location)
+                allowed=(not uri.netloc and not uri.scheme or
+                         uri.scheme=='https' and bool(uri.hostname) and
+                         (uri.hostname=='jobadder.com' or uri.hostname.endswith('.jobadder.com')) and
+                         not uri.username and not uri.password and uri.port in (None,443))
+                match=re.fullmatch(r'/?(?:v2/)?contacts/([1-9]\d*)/?',uri.path)
+                if allowed and not uri.query and not uri.fragment and match and int(match[1])<=2147483647:
+                    located=int(match[1])
+            except (ValueError,TypeError):
+                pass
+        if identity and located and identity!=located:
+            return None,'conflicting_contact_ids'
+        return ((identity,'created_json') if identity else (located,'created_location') if located
+                else (None,'missing_contact_id'))
+
+    @staticmethod
     def _assignments(body):
         owner, recruiters = body.get("owner_user_id"), body.get("recruiter_user_ids")
         valid_id=lambda value: type(value) is int and 0<value<=2147483647
@@ -249,6 +274,7 @@ class JobAdderContactService:
                     nonce=secrets.token_hex(32)
                     previous["recovery"]={"proof":hashlib.sha256(nonce.encode()).hexdigest(),"expires":self.clock()+600}
                     self._write(store);result["recovery_token"]=nonce
+                result.update(http_status=previous.get('http_status'),result_reason=previous.get('result_reason'))
                 return result
             if action=="resolve_not_created":
                 raise JobAdderContactError("Check the previous result before confirming a new request.","JOBADDER_CONTACT_RECOVERY",409)
@@ -309,26 +335,28 @@ class JobAdderContactService:
                 previous["assignments"]={"owner_user_id":owner,"recruiter_user_ids":recruiters}
             self._write(store)
             try:
-                status, result = self.client().request_json("contacts",method="POST",body=encoded,
-                    headers={"Content-Type":"application/json"},token=token,timeout=20,
-                    safe_to_retry=False,retries=0,refresh_on_401=False,fallback=None)
-                identity = result.get("contactId") if isinstance(result,dict) else None
-                if status==201 and type(identity) is int and identity>0:
+                response = self.client().request_raw("contacts",method="POST",body=encoded,
+                    headers={"Content-Type":"application/json","Accept":"application/json"},token=token,timeout=20,
+                    safe_to_retry=False,retries=0,refresh_on_401=False)
+                status, result = response.status, response.json({})
+                identity, reason = self._created_contact_id(result,response.headers)
+                previous.update(http_status=status,result_reason=reason if status==201 else 'unexpected_status')
+                if status==201 and identity:
                     previous.update(state="created",contact_id=identity)
                 else:
                     previous.update(state="unconfirmed")
             except urllib.error.HTTPError as exc:
                 status=exc.code;exc.close()
-                previous.update(state="rejected" if status in {400,401,403,409,422} else "unconfirmed")
+                previous.update(state="rejected" if status in {400,401,403,409,422} else "unconfirmed",http_status=status,result_reason="http_rejected")
                 if status==409:previous["reason"]="duplicate_rejected"
             except Exception:
-                previous.update(state="unconfirmed")
+                previous.update(state="unconfirmed",result_reason="transport_unconfirmed")
             if previous["state"]=="created" and "assignments" in previous:
                 store["assignment_defaults"]={"account":scope,**previous.pop("assignments")}
             if previous["state"]=="rejected":previous.pop("assignments",None)
             self._write(store)
             state=previous["state"]
-            return {"state":state,"contact_id":previous.get("contact_id"),"message":{
+            return {"state":state,"contact_id":previous.get("contact_id"),"http_status":previous.get("http_status"),"result_reason":previous.get("result_reason"),"message":{
                 "created":"Contact created in JobAdder.",
                 "rejected":"JobAdder rejected this request because the email already exists. Search for that email in JobAdder; no duplicate override was used." if previous.get("reason")=="duplicate_rejected" else "JobAdder rejected the details or permissions. Check the required contact fields and connection before reviewing again.",
                 "unconfirmed":"JobAdder did not confirm the result. Check the previous request; it will not be repeated."}[state]}

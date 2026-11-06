@@ -1086,8 +1086,11 @@ class OutlookService:
         except (sqlite3.Error,OSError):return self._jsonify({'error':'Could not save or read email templates. Your message has been kept.'}),503
 
     def send_job_leads_email(self):
+        """Keep the existing request endpoint on the shared non-replay sender."""
+        return self.send_email_message(self._request_json())
+
+    def send_email_message(self, data):
         """One confirmed attempt per durable request ID; never replay a send."""
-        data = self._request_json()
         if data.get('confirmed') is not True:
             return self._jsonify({'retry_safe': True, 'error': 'Review and confirm the email before sending.'}), 400
         request_id = data.get('request_id')

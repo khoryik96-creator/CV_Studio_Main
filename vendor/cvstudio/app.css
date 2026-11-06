@@ -1903,3 +1903,15 @@ body.cv-caret-guard #jobLeadsEmailEditor[contenteditable="true"], body.cv-caret-
 .job-leads-ja-match{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:7px;max-width:360px}
 .job-leads-ja-match small{display:block;flex-basis:100%;font-size:10.5px;line-height:1.45;color:var(--text3)}
 .job-leads-ja-match a{white-space:normal;overflow-wrap:anywhere}
+
+/* Reviewable support capture, independent of the main page's state. */
+.cv-support-badge{position:fixed;right:112px;bottom:16px;z-index:2147483644;background:#1463f3;color:white;border:0;border-radius:18px;padding:8px 13px;font:600 12px system-ui,sans-serif;cursor:pointer}
+#cvSupportDialog{width:min(740px,94vw);max-height:90vh;box-sizing:border-box;border:1px solid var(--border,#cfd8e6);border-radius:14px;padding:20px;color:var(--text1,#172b4d);background:var(--card,#fff);overflow:auto}
+#cvSupportDialog::backdrop{background:rgba(17,36,61,.38)}
+.cv-support-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.cv-support-head h2{margin:0;font-size:20px}
+#cvSupportDialog label{display:block;font-size:12px;font-weight:600;margin:12px 0 5px}#cvSupportDialog input:not([type=file]),#cvSupportDialog textarea{display:block;width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border,#cfd8e6);border-radius:8px;color:inherit;background:var(--surface,#f9fbff);font:13px system-ui,sans-serif;margin-top:5px}
+#cvSupportDialog textarea{resize:vertical}.cv-support-actions{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+#cvSupportDialog img{max-width:100%;max-height:360px;object-fit:contain;border-radius:8px;border:1px solid var(--border,#cfd8e6)}
+#cvSupportDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;background:var(--surface,#f5f8fc);padding:12px;border-radius:8px;max-height:320px;overflow:auto}
+#cvSupportDialog details{margin-top:10px}#cvSupportMessage{font-size:13px;line-height:1.5}
+@media(max-width:520px){#cvSupportDialog{padding:14px}.cv-support-badge{right:104px;max-width:160px}}

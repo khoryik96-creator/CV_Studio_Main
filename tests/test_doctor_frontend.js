@@ -7,7 +7,7 @@ const vm = require('vm');
 
 const html = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
 const start = html.indexOf('var _externalScriptIds = null;');
-const end = html.indexOf('function buildReport()', start);
+const end = html.indexOf('function buildReport(', start);
 if (start < 0 || end < 0) throw new Error('Doctor element scanner source was not found');
 const scannerSource = html.slice(start, end);
 

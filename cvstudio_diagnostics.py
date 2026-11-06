@@ -385,8 +385,8 @@ class DiagnosticsService:
             }
         )
 
-    def support_bundle(self):
-        body = self._request_json() or {}
+    def support_bundle(self, body=None):
+        body = (self._request_json() or {}) if body is None else body
         browser = self._sanitize_browser(body.get("browser"))
         version = self._version()
         generated = self._archive_timestamp()

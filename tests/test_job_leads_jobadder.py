@@ -16,6 +16,10 @@ class Client:
     def __init__(self):
         self.calls=[];self.matches=[];self.total=None;self.fail=None;self.company=12;self.before_post=None
         self.users=[{'userId':7,'firstName':'Example','lastName':'Owner'}, {'userId':8,'firstName':'Example','lastName':'Recruiter'}]
+    def request_raw(self,path,**kw):
+        from cvstudio_clients import ExternalResponse
+        status,data=self.request_json(path,**kw)
+        return ExternalResponse(status,{},json.dumps(data).encode(),'https://api.jobadder.com/v2/'+path)
     def request_json(self,path,**kw):
         self.calls.append((path,copy.deepcopy(kw)))
         if kw.get('method')=='POST':

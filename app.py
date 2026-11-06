@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.583"
+_INSTALL_RECEIPT_VERSION = "v24.6.584"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.583"
+_CVSTUDIO_VERSION = "v24.6.584"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -5027,9 +5027,53 @@ def cvstudio_clear_preview_cache():
     return _CVSTUDIO_DIAGNOSTICS_SERVICE.clear_preview()
 
 
+from cvstudio_support import SupportReports, SupportReportError
+
+
+def _send_support_email(payload):
+    response=app.make_response(_OUTLOOK_SERVICE.send_email_message(payload))
+    return response.get_json(silent=True) or {},response.status_code
+
+
+_CVSTUDIO_SUPPORT=SupportReports(
+    recipient=lambda:os.environ.get('CVSTUDIO_SUPPORT_EMAIL','guok.khoryik@hyppies.com'),
+    version=lambda:_CVSTUDIO_VERSION, runtime=_cvstudio_runtime_diagnostics_payload,
+    redact=_cvstudio_redact_support_text, outlook_info=lambda:_OUTLOOK_SERVICE.public_info(),
+    send_email=_send_support_email)
+
+
 @app.route("/diagnostics/support_bundle", methods=["POST"])
 def cvstudio_support_bundle():
-    return _CVSTUDIO_DIAGNOSTICS_SERVICE.support_bundle()
+    try:
+        if request.content_length and request.content_length>SupportReports.MAX_INPUT_BYTES:
+            raise SupportReportError('This report is too large. Use a smaller screenshot.',413)
+        raw=request.stream.read(SupportReports.MAX_INPUT_BYTES+1)
+        if len(raw)>SupportReports.MAX_INPUT_BYTES:
+            raise SupportReportError('This report is too large. Use a smaller screenshot.',413)
+        try:body=json.loads(raw) if request.is_json and raw else {}
+        except (ValueError,UnicodeError):body={}
+        if not isinstance(body,dict):raise SupportReportError('Choose a valid support action.')
+        action=body.get('action')
+        # Keep the existing diagnostic ZIP contract when no issue action is used.
+        if not action:return _CVSTUDIO_DIAGNOSTICS_SERVICE.support_bundle(body)
+        if not _ai_spend_session_allowed():
+            return _cvstudio_error_payload('SUPPORT_SESSION_REQUIRED','Reload CV Studio before preparing or sending an issue report.',403,retryable=False,action='reload_browser')
+        if action=='issue_status':result=_CVSTUDIO_SUPPORT.status()
+        elif action=='issue_prepare':result=_CVSTUDIO_SUPPORT.prepare(body)
+        elif action=='issue_result':result=_CVSTUDIO_SUPPORT.report_status(body)
+        elif action=='issue_discard':result=_CVSTUDIO_SUPPORT.discard(body)
+        elif action=='issue_send':
+            result,status=_CVSTUDIO_SUPPORT.send(body)
+            return jsonify(result),status
+        elif action=='issue_download':
+            content,filename=_CVSTUDIO_SUPPORT.download(body)
+            return send_file(io.BytesIO(content),mimetype='application/zip',as_attachment=True,download_name=filename)
+        else:raise SupportReportError('Choose a supported report action.')
+        return jsonify({'ok':True,**result})
+    except SupportReportError as exc:
+        return _cvstudio_error_payload('SUPPORT_REPORT_INPUT',str(exc),exc.status,retryable=False,action='review_support_report')
+    except Exception:
+        return _cvstudio_error_payload('SUPPORT_REPORT_FAILED','The issue report could not be completed. Nothing was resent; check Outlook Sent Items if sending was attempted.',503,retryable=False,action='review_support_report')
 
 
 def _spider_candidate_attachment_records(

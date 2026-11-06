@@ -14,6 +14,31 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source feature: v24.6.584 reviewable Outlook issue reports**
+on `codex/issue-reports-outlook`, from merged v583 / PR312.
+- Report issue is independent of module/AI initialization, with a global badge,
+  Doctor entry and JobAdder dialog entry. Users capture, attach or paste a
+  screenshot, then review automatically collected redacted Doctor/runtime data.
+  Each user's connected Outlook sends to guok.khoryik@hyppies.com only after
+  explicit confirmation. `CVSTUDIO_SUPPORT_EMAIL` overrides the destination.
+  No AI key is needed and no email is sent automatically.
+- The existing paired support ZIP endpoint accepts bounded issue actions without
+  adding routes. Prepared packets expire after 15 minutes, stay in bounded
+  memory and bind the reviewed sender/content/recipient. Shared durable Outlook
+  send receipts prevent replay. Lost results offer status checking; ZIP/Doctor
+  downloads work without an Outlook connection. Screenshots are normalized with
+  metadata removed; users review their visible content before sharing.
+- The supplied recording shows repeated unconfirmed JobAdder contact results.
+  A reproduced response-handling gap now accepts HTTP 201 Created with a valid
+  JobAdder contact Location when JSON has no contactId. Conflicts/non-201 stay
+  unconfirmed, with no POST retry. Safe HTTP status/reason enters support data.
+  This case is verified offline; the recording does not establish the live
+  server response. No live contact creation or email was performed.
+- Focused Python, 106 JS fixtures and real Chromium desktop/mobile checks pass.
+  Native protected compilation/installation is not tested on this Linux host;
+  users of protected packages require a newly built matching native package.
+  Current QA and the PR record fresh review/full CI results.
+
 **Current source correction: v24.6.583 JobAdder name checks before email unlock**
 on `codex/jobadder-contact-name-checks`, from merged v582 / PR311.
 - JobAdder checks now use saved HR observations or protected unlocked-contact
