@@ -34,6 +34,7 @@ function fixture(rows,{answers={},confirm=true}={}){
     async unlockSaved(source,person,previous,notify,complete,options){
       unlocks.push({url:person.url,previous,options:{...options}});
       const answer=answers[person.url] || {state:'found',email:person.url.split('/').pop()+'@example.test',message:'Email found.'};
+      if(answer==='jobadder_match' || answer==='jobadder_unchecked'){notify(answer==='jobadder_match'?'Skipped possible JobAdder match.':'JobAdder check incomplete.');return answer;}
       if(answer==='lost'){notify('The result could not be confirmed.');return false;}
       complete(answer);served=served.map(row=>row.url===person.url?{...row,email_result:answer}:row);notify(answer.message || '');return true;
     }};
@@ -42,13 +43,22 @@ function fixture(rows,{answers={},confirm=true}={}){
     URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},setTimeout,crypto:{randomUUID:()=>'00000000-0000-4000-8000-000000000000'}});
   vm.runInContext(source,context);
   const names=()=>el('HRRows').children.map(tr=>tr.children[0].children[0].textContent);
-  return {el,posts,unlocks,confirms,names,apollo};
+  return {el,posts,unlocks,confirms,names,apollo,window};
 }
 
 (async()=>{
   const done={state:'found',email:'known@example.test'},empty={state:'not_found',message:'No email from Apollo.'},pending={state:'unconfirmed',message:'Check the previous lookup.'};
   const rows=[hr(1,done),hr(2),hr(3,empty),hr(4,pending),hr(5)];
   const f=fixture(rows);await f.el('HRTab').click();await settle();
+  const scan=fixture([hr(71),hr(72)]);let checks=0;
+  scan.window.cvStudioJAContacts={matchConnected:()=>true,matchVersion:()=>0,async checkPerson(){checks++;return {state:'matches',matches:[{contact_id:31}]};}};
+  await scan.el('HRTab').click();await settle();await scan.el('HRCheckJobAdder').click();await settle();
+  assert.equal(checks,2);assert.equal(scan.unlocks.length,0);assert.match(scan.el('HRMessage').textContent,/2 with possible JobAdder matches/);assert.match(scan.el('HRMessage').textContent,/No email credits used/);
+  const skipped=fixture([hr(81),hr(82)],{answers:{[hr(81).url]:'jobadder_match'}});await skipped.el('HRTab').click();await settle();await skipped.el('HRUnlockAll').click();await settle();
+  assert.match(skipped.el('HRMessage').textContent,/1 skipped because of possible JobAdder matches/);assert.match(skipped.el('HRMessage').textContent,/1 email unlocked/);
+  const unchecked=fixture([hr(91),hr(92)],{answers:{[hr(91).url]:'jobadder_unchecked'}});await unchecked.el('HRTab').click();await settle();await unchecked.el('HRUnlockAll').click();await settle();
+  assert.equal(unchecked.unlocks.length,1);assert.match(unchecked.el('HRMessage').textContent,/Stopped/);assert(unchecked.el('HRNextStep').hidden,'a failed free check does not expose an email result');
+
   // Email filter: No email yet / Has email.
   f.el('HREmail').value='none';await f.el('HREmail').dispatch('change');
   assert.deepEqual(f.names(),['Fictional Person 2','Fictional Person 3','Fictional Person 4','Fictional Person 5']);

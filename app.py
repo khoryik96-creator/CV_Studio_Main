@@ -24,7 +24,7 @@ import re as _receipt_re
 
 _INSTALL_RECEIPT_SCHEMA = 2
 _INSTALL_RECEIPT_PRODUCT = "TheGuoLab-CVStudio"
-_INSTALL_RECEIPT_VERSION = "v24.6.582"
+_INSTALL_RECEIPT_VERSION = "v24.6.583"
 _INSTALL_RECEIPT_MASK = bytes([147, 57, 36, 83, 116, 245, 122, 57, 165, 162, 176, 168, 249, 50, 204, 128, 45, 174, 232, 56])
 _INSTALL_RECEIPT_MASKED = bytes([49, 16, 244, 145, 19, 123, 118, 27, 71, 171, 180, 177, 120, 122, 255, 68, 100, 150, 118, 10])
 
@@ -347,7 +347,7 @@ from cvstudio_secrets import SecretsService
 from cvstudio_jobadder_read import JobAdderReadService
 from cvstudio_jobadder_write import JobAdderWriteService
 
-_CVSTUDIO_VERSION = "v24.6.582"
+_CVSTUDIO_VERSION = "v24.6.583"
 _CVSTUDIO_ROOT = _install_package_root()
 _CVSTUDIO_ROOT_HASH = hashlib.sha256(_CVSTUDIO_ROOT.encode("utf-8", errors="surrogatepass")).hexdigest()
 _CVSTUDIO_INSTANCE_ID = _CVSTUDIO_ROOT_HASH[:24]
@@ -15176,11 +15176,27 @@ def apollo_connection():
 _EMAIL_VERIFIER = EmailVerifier()
 
 
-from cvstudio_jobadder_write import JobAdderContactService, JobAdderContactError
+from cvstudio_jobadder_write import JobAdderContactService, JobAdderContactError, JobAdderContactMatcher
 
 _JOB_LEADS_JA = JobAdderContactService(client=lambda:_JOBADDER_CLIENT,
     account=lambda:_ja_public_info(), contact=lambda key:_APOLLO.contacts.get(key),
     load=lambda:_cv_secure_load("jobadder_contacts"), save=lambda data:_cv_secure_save("jobadder_contacts",data))
+
+
+def _jobadder_contact_match_source(body):
+    if body.get('contact_key'):
+        return _APOLLO.contacts.get(body['contact_key'])
+    try:
+        row=_JOB_LEADS.hr_record(body.get('id'),body.get('revision'))
+        person=next((person for person in row['hr']['people'] if person['url']==body.get('url')),None)
+        if not person:raise ValueError()
+        return {'name':person['name'],'company':row['company'],'profile_url':person['url']}
+    except (JobLeadsError, KeyError, ValueError, TypeError):
+        raise JobAdderContactError('This saved HR result changed. Refresh it before checking JobAdder.', 'JOBADDER_CONTACT_SOURCE',409) from None
+
+
+_JOB_LEADS_JA_MATCHES=JobAdderContactMatcher(client=lambda:_JOBADDER_CLIENT,
+    account=lambda:_ja_public_info(),source=_jobadder_contact_match_source)
 
 
 @app.route("/jobadder/contact_actions",methods=["POST"])
@@ -15197,7 +15213,8 @@ def jobadder_contact_actions():
         if not isinstance(data,dict):
             raise JobAdderContactError("Choose a valid contact action.")
         token=_ja_refresh_access_token(force=False)
-        result=_JOB_LEADS_JA.perform(data,token)
+        result=(_JOB_LEADS_JA_MATCHES.find(data,token) if data.get("action")=="find_contacts"
+                else _JOB_LEADS_JA.perform(data,token))
         contact_id=result.get('contact_id')
         if result.get('state') in {'created','exists'} and type(contact_id) is int and contact_id>0:
             result['contact_url']=_jobadder_web_base()+'/contacts/'+str(contact_id)

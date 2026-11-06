@@ -1,5 +1,37 @@
 # Current validation record
 
+## v24.6.583 — Existing JobAdder contacts before email credits
+
+The prior duplicate check only searched exact email, so a different email or a
+LinkedIn surname initial could miss an existing contact. The new read-only
+`find_contacts` action on the existing contact-actions route resolves its source
+from a saved HR observation (id/revision/profile) or protected contact key. It
+returns possible names/company matches and regional contact links, never emails.
+It checks account scope before/after reads, bounds queries/results, flags partial
+searches and never treats name similarity as identity proof.
+
+HR people can scan the current 40-row page with Stop. Individual HR cards and
+unlocked contacts have a check. Bulk unlock skips possible matches without an
+Apollo credit and stops on incomplete/error responses; an individual can make an
+explicit paid override. Source/account changes or Stop during a free preflight
+prevent the subsequent paid request. Cached negative results are refreshed at the
+paid boundary; previous Apollo lookup recovery stays a free re-check.
+
+An exact-email duplicate found during contact Review was linked in the dialog but
+not saved for the dashboard. A unique, company-identified match now uses existing
+protected link history. Multiple matches remain visible without selecting the
+first. Pending/unconfirmed create markers and manual recovery proofs are retained;
+the recovery message now points explicitly to Review contact, then Create contact.
+
+Local validation: 210 focused Python checks; all 105 JS fixtures; Chromium with
+fully fictional HTTP replies verifies the no-credit page scan, name/company links,
+bulk skip, a fresh negative re-check and exactly one explicitly confirmed reveal
+for the remaining person. Mobile layout has no document overflow and no JS errors.
+Unit cases cover initials, casing/accents, spelling differences, company ranking,
+malformed/partial pages, query/result bounds, stale accounts, paid confirmation,
+Stop during preflight, callback state and persisted exact-email links. No live
+JobAdder/Apollo access or native installed update. The PR records final review/CI.
+
 ## v24.6.582 — Protected frontend helper isolation
 
 Separate javascript-obfuscator CLI invocations reused the `a0_` global helper

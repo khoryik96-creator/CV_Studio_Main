@@ -197,21 +197,37 @@
   // the caller at the end instead of after each email.
   async function unlock(person, source=row, prior, notify=message, complete, options={}) {
     if(working || appBusy || !account.connected || !source) return false;
-    const current=source, token=sequence, previous=prior===undefined?cache[person.url]:prior;
-    if(!previous && !options.confirmed && !window.confirm('Unlock the business email for '+person.name+' using your Apollo account? This sends their LinkedIn profile, name and company to Apollo and may use an Apollo credit even if only profile data is returned.')) return;
-    working=true;notify(previous?'Checking the previous lookup without spending another credit…':'Looking up this person in Apollo…');controls();
+    const current=source, token=sequence, previous=prior===undefined?cache[person.url]:prior, jaVersion=window.cvStudioJAContacts?.matchVersion?.();
+    working=true;let attempted=false;controls();
     try {
+      let duplicate=null;
+      if(!previous && window.cvStudioJAContacts?.matchConnected?.()){
+        notify('Checking existing JobAdder contacts before using an email credit…');
+        const cached=window.cvStudioJAContacts.cachedMatch?.(current,person);
+        duplicate=await window.cvStudioJAContacts.checkPerson(current,person,{force:cached?.state==='no_matches'});
+        if(token!==sequence)return false;
+        if(options.batch && duplicate.matches?.length){notify('Skipped: possible JobAdder contacts already exist. Open the matching records first.');return 'jobadder_match';}
+        if(options.batch && (duplicate.partial || ['unavailable','incomplete','disconnected'].includes(duplicate.state))){notify(duplicate.message || 'JobAdder could not be checked. No email was unlocked.');return 'jobadder_unchecked';}
+      }
+      if(!previous && (!options.confirmed || duplicate?.matches?.length && !options.batch)){
+        const matches=(duplicate?.matches || []).slice(0,5).map(match=>match.name+(match.company?' — '+match.company:''));
+        const warning=matches.length?'Possible JobAdder contacts already exist:\n'+matches.join('\n')+'\n\nOpen the matching records to verify the person. Unlock an email anyway?\n\n':
+          duplicate && (duplicate.partial || ['unavailable','incomplete'].includes(duplicate.state))?'JobAdder could not be checked completely. Unlock an email anyway?\n\n':'';
+        if(!window.confirm(warning+'Unlock the business email for '+person.name+' using your Apollo account? This sends their LinkedIn profile, name and company to Apollo and may use an Apollo credit even if only profile data is returned.')){notify(matches.length?'No email unlocked. Review the possible JobAdder contacts first.':'Email unlock cancelled.');return matches.length?'jobadder_match':false;}
+      }
+      if(options.shouldContinue?.()===false){notify('Stopped before starting the email unlock.');return 'jobadder_stopped';}
+      if(token!==sequence || jaVersion!==window.cvStudioJAContacts?.matchVersion?.()){notify('The connection or selected person changed. Check again before unlocking.');return 'jobadder_unchecked';}
+      notify(previous?'Checking the previous lookup without spending another credit…':'Looking up this person in Apollo…');
+      attempted=true;
       const data=await api({action:'reveal',id:current.id,revision:current.revision,url:person.url,confirmed:!previous});
       if(token===sequence && row?.id===current.id) {cache[person.url]=data.result;}
       notify(data.contact_warning || data.result.message);complete?.(data.result);
       if(data.result.state==='found') {
-        window.cvStudioEmailVerifier?.autoCheck?.(data.result.email); // no email is sent
+        window.cvStudioEmailVerifier?.autoCheck?.(data.result.email);
         if(!options.batch && (contactsLoaded || !el('ContactsPanel').hidden)) await refreshContacts();
       }
     } catch(error) {
-      if(token===sequence && row?.id===current.id) {
-        // The response may have been lost after charging/saving. A follow-up
-        // reads the protected record; it never sends another paid operation.
+      if(attempted && token===sequence && row?.id===current.id) {
         cache[person.url]={state:'unconfirmed',message:'The result could not be confirmed. Check the previous lookup before trying again.'};
         await refreshEmails(current,token);
       }
@@ -264,7 +280,7 @@
       const saved=!!row?.hr?.people.some(p=>p.url===person.url);
       button.addEventListener('click',()=>unlock(person));
       copy.addEventListener('click',async()=>{try {await navigator.clipboard.writeText(cache[person.url].email);message('Email copied.');}catch{message('Select the email address and copy it manually.');}});
-      wrap.append(result,button,copy);card.append(wrap);views.push({card,person,result,button,copy,saved});controls();
+      wrap.append(result,button,copy);card.append(wrap);if(saved)window.cvStudioJAContacts?.decoratePerson?.(card,row,person);views.push({card,person,result,button,copy,saved});controls();
     }
   };
 })();

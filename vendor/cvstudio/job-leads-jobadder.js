@@ -20,7 +20,7 @@
     savedLinks.set(row.contact_key,{contact_id:data.contact_id,contact_url:data.contact_url,state:data.state});redrawContacts();
   }
   function accountChanged(){
-    ++linkEpoch;
+    ++linkEpoch;++matchEpoch;matchCache.clear();matchRequests.clear();repaintMatches();
     if(linkAccount!==currentLinkAccount()){savedLinks.clear();linkAccount='';}
     if(ready){++generation;current=null;account='';review='';priorUnconfirmed=false;recoveryAccount='';recoveryToken='';hideLinks();el('Dialog').close();lock(false);}
     redrawContacts();
@@ -40,7 +40,7 @@
     if(!own && others.length===1){el('Open').href=others[0].url;el('Open').hidden=false;return;}
     for(const row of others){
       const link=document.createElement('a');link.href=row.url;link.target='_blank';link.rel='noopener noreferrer';
-      link.textContent='Open '+(row.company || 'existing contact')+' · #'+row.contact_id;el('Matches').append(link);
+      link.textContent='Open '+(row.name || row.company || 'existing contact')+' · #'+row.contact_id;el('Matches').append(link);
     }
     el('Matches').hidden=!others.length;
   }
@@ -108,12 +108,21 @@
     if(action==='create' && !review){msg('Review the contact before creating it.');guide(['Review'],true);return;}
     const token=generation,request=body(action);lock(true);guide();msg(action==='create'?'Creating contact in JobAdder…':recovering?'Checking the previous request…':'Checking details and existing contacts…');
     try{
+      let similar=null;
+      if(action==='review' && matchConnected()){
+        similar=await checkPerson(current,current,{force:true});if(token!==generation)return;
+      }
       const data=await api(request);if(token!==generation)return;
+      if(data.state==='review' && similar?.matches?.length){
+        data.matches=similar.matches;
+        data.message='Similar names are already in JobAdder. Open the records first. Create only if these are different people.';
+      }
+      if(data.state==='review' && similar && ['unavailable','incomplete'].includes(similar.state))data.message+=' The name check was incomplete; search JobAdder before creating.';
       rememberLink(current,request.account,data);
       recoveryToken=/^[a-f0-9]{64}$/.test(data.recovery_token || '')?data.recovery_token:'';el('RecoveryPanel').hidden=!recoveryToken;el('RecoveryConfirm').checked=false;
       review=data.review_token || '';priorUnconfirmed=data.state==='unconfirmed';recoveryAccount=priorUnconfirmed?request.account:'';el('Review').hidden=priorUnconfirmed;el('Create').hidden=data.state!=='review';el('Check').hidden=!priorUnconfirmed;
       msg(data.message+(data.state==='review'?' Company: '+data.company:'')+(data.contact_id?' Contact #'+data.contact_id:'')+(data.matches?.length?' Company: '+data.matches.map(row=>row.company || 'Existing company').join(', '):''));
-      contactLink(data);guide(data.state==='review'?['Create']:data.state==='unconfirmed'?(recoveryToken?['RecoveryConfirm']:['Check']):['rejected','not_started'].includes(data.state)?['Review']:[]);
+      contactLink(data);if(data.state==='not_started')el('Review').focus();guide(data.state==='review'?['Create']:data.state==='unconfirmed'?(recoveryToken?['RecoveryConfirm']:['Check']):['rejected','not_started'].includes(data.state)?['Review']:[]);
     }catch(error){if(token===generation){review='';recoveryToken='';el('RecoveryPanel').hidden=true;el('Create').hidden=true;if(action==='create'){priorUnconfirmed=true;recoveryAccount=request.account;}el('Check').hidden=!priorUnconfirmed;el('Review').hidden=priorUnconfirmed;msg(error.message+(action==='create'?' Check the previous result before starting another request.':''));}}
     finally{if(token===generation)lock(false);}
   }
@@ -133,12 +142,57 @@
     const names=row.name.trim().split(/\s+/);el('First').value=names.shift() || '';el('Last').value=names.join(' ');el('Position').value=row.position || '';el('Email').value=row.email;el('CompanyQuery').value=row.company || '';
     el('Company').replaceChildren(new Option('Choose company',''));msg('Choose the existing JobAdder company and check the name before creating.');lock(false);el('Dialog').showModal();guide(['Search']);
   }
-  window.cvStudioJAContacts={linkVersion:()=>linkEpoch,setLinks,accountChanged,decorate(parent,row){
+  const matchCache=new Map(),matchRequests=new Map(),matchViews=[];let matchEpoch=0;
+  const matchConnected=()=>/^[a-f0-9]{64}$/.test(currentLinkAccount());
+  function matchKey(source,person){return [currentLinkAccount(),source?.contact_key || source?.id,source?.revision,person?.url || person?.profile_url,person?.name,source?.company].join('|');}
+  function cachedMatch(source,person){const entry=matchCache.get(matchKey(source,person));return entry && Date.now()-entry.at<120000?entry.data:null;}
+  function paintMatch(view,fallback=null){
+    const {host,source,person}=view;host.replaceChildren();
+    const button=document.createElement('button');button.type='button';button.className='sec';button.textContent='Check JobAdder';button.disabled=!matchConnected();
+    const status=document.createElement('small');status.setAttribute('role','status');
+    const data=cachedMatch(source,person) || fallback;status.textContent=data?.message || (matchConnected()?'Check existing contacts before using an email credit.':'Connect JobAdder to check existing contacts.');
+    button.addEventListener('click',async()=>{button.disabled=true;status.textContent='Checking names in JobAdder…';const result=await checkPerson(source,person,{force:true});paintMatch(view,result);});
+    host.append(button,status);
+    for(const match of data?.matches || []){
+      const link=document.createElement('a');link.href=match.url;link.target='_blank';link.rel='noopener noreferrer';link.className='sec';
+      link.textContent=match.name+(match.company?' · '+match.company:'')+' ↗';host.append(link);
+      const reason=document.createElement('small');reason.textContent=match.reason+(match.company_matches?' · company also matches':' · verify company');host.append(reason);
+    }
+  }
+  function repaintMatches(){for(const view of matchViews)if(view.host.isConnected!==false)paintMatch(view);}
+  async function checkPerson(source,person,options={}){
+    if(!matchConnected())return {state:'disconnected',matches:[],message:'JobAdder is not connected; existing contacts were not checked.'};
+    const key=matchKey(source,person),saved=cachedMatch(source,person);
+    if(saved && !options.force)return saved;
+    if(matchRequests.has(key))return matchRequests.get(key);
+    const epoch=matchEpoch,scope=currentLinkAccount();
+    const task=(async()=>{
+      try{
+        const body=source?.contact_key?{contact_key:source.contact_key}:{id:source?.id,revision:source?.revision,url:person?.url};
+        const data=await api({action:'find_contacts',account:scope,...body});
+        if(epoch!==matchEpoch || scope!==currentLinkAccount() || data.account!==scope)throw Error('The JobAdder account changed. Check again.');
+        if(!Array.isArray(data.matches) || !['matches','no_matches','incomplete'].includes(data.state))throw Error('JobAdder did not confirm the name check.');
+        if(data.matches.some(row=>!linkable(row.contact_id,row.url)))throw Error('JobAdder did not return usable contact links. Check again.');
+        matchCache.set(key,{at:Date.now(),data});while(matchCache.size>500)matchCache.delete(matchCache.keys().next().value);
+        repaintMatches();return data;
+      }catch(error){return {state:'unavailable',matches:[],message:error.message || 'JobAdder could not be checked. No email was unlocked.'};}
+      finally{if(matchRequests.get(key)===task)matchRequests.delete(key);}
+    })();
+    matchRequests.set(key,task);return task;
+  }
+  function decoratePerson(parent,source,person){
+    if(!source || !person)return;
+    const host=document.createElement('div');host.className='job-leads-ja-match';const view={host,source,person};
+    matchViews.push(view);if(matchViews.length>500)matchViews.splice(0,matchViews.length-500);
+    parent.append(host);paintMatch(view);
+  }
+
+  window.cvStudioJAContacts={checkPerson,cachedMatch,decoratePerson,matchConnected,matchVersion:()=>matchEpoch,linkVersion:()=>linkEpoch,setLinks,accountChanged,decorate(parent,row){
     if(!row.contact_key)return;
     const saved=linkAccount===currentLinkAccount()?savedLinks.get(row.contact_key):null;
     if(saved && linkable(saved.contact_id,saved.contact_url)){
       const link=document.createElement('a');link.href=saved.contact_url;link.target='_blank';link.rel='noopener noreferrer';link.className='sec';link.textContent='Open in JobAdder';parent.append(link);return;
     }
-    const button=document.createElement('button');button.type='button';button.className='sec';button.textContent='Create in JobAdder';button.addEventListener('click',()=>open(row));parent.append(button);
+    const button=document.createElement('button');button.type='button';button.className='sec';button.textContent='Create in JobAdder';button.addEventListener('click',()=>open(row));parent.append(button);decoratePerson(parent,row,row);
   }};
 })();

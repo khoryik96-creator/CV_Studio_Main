@@ -4,6 +4,10 @@
 
 ## Release state
 
+- v24.6.583 adds read-only JobAdder name/company suggestions before email
+  unlock, a free current-page scan, conservative bulk skip/stop behaviour and
+  explicit individual override. Exact-email matches found during Review now
+  retain dashboard links. Unknown create requests remain protected from replay.
 - v24.6.582 isolates generated globals across protected scripts to fix a
   confirmed obfuscation collision class affecting AI controls. Fresh Chromium
   checks cover routing, keys, Format and Doctor; native packaging CI checks the

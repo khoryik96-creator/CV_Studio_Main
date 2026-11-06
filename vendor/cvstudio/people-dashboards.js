@@ -99,10 +99,12 @@
     }
     if(kind==='HR') {
       const connected=!!window.cvStudioApollo?.connected();
-      for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !!unlockRun || !connected;
-      el('HRUnlockAll').hidden=!connected || !!unlockRun;el('HRUnlockAll').disabled=appBusy || dateBusy || b.loading || !rows.some(unlockable);
+      for(const button of el('HRRows').querySelectorAll('[data-unlock]'))button.disabled=appBusy || dateBusy || !!unlockRun || !!matchRun || !connected;
+      el('HRUnlockAll').hidden=!connected || !!unlockRun;el('HRUnlockAll').disabled=appBusy || dateBusy || !!matchRun || b.loading || !rows.some(unlockable);
       el('HRUnlockStop').hidden=!unlockRun;el('HRUnlockStop').disabled=!!unlockRun?.stopped;
-      el('HRDateAll').disabled=el('HRDateAll').disabled || !!unlockRun;el('HREmail').disabled=!!unlockRun;
+      el('HRDateAll').disabled=el('HRDateAll').disabled || !!unlockRun || !!matchRun;el('HREmail').disabled=!!unlockRun || !!matchRun;
+      el('HRCheckJobAdder').disabled=appBusy || dateBusy || b.loading || !!unlockRun || !!matchRun || !rows.length || !window.cvStudioJAContacts?.matchConnected?.();
+      el('HRCheckJobAdderStop').hidden=!matchRun;el('HRCheckJobAdderStop').disabled=!!matchRun?.stopped;
       el('HRConnect').hidden=!!window.cvStudioApollo?.connected();el('HRConnect').disabled=appBusy || dateBusy;
     }
   }
@@ -113,24 +115,53 @@
   // never replayed, as does Stop.
   const MAX_UNLOCK=25;
   let unlockRun=null;
+  let matchRun=null;
+  async function checkJobAdderShown(){
+    if(matchRun || unlockRun || appBusy || dateBusy)return;
+    const service=window.cvStudioJAContacts;
+    if(!service?.matchConnected?.()){el('HRMessage').textContent='Connect JobAdder in Settings to check existing contacts.';return;}
+    const b=boards.HR,people=filtered('HR').slice(b.page*40,(b.page+1)*40);
+    if(!people.length)return;
+    const run=matchRun={stopped:false,version:service.matchVersion()};let checked=0,matched=0,incomplete=0;
+    controls('HR');
+    try{
+      for(const row of people){
+        if(run.stopped || run.version!==service.matchVersion())break;
+        el('HRMessage').textContent=`Checking JobAdder ${checked+1} of ${people.length}: ${row.name}…`;
+        const source=personSource(row);source.id=row.email_id || row.id;source.revision=row.email_revision || row.revision;
+        const result=await service.checkPerson(source,row,{force:true});
+        if(run.version!==service.matchVersion())break;
+        checked++;if(result.matches?.length)matched++;
+        if(result.partial || ['unavailable','incomplete','disconnected'].includes(result.state))incomplete++;
+        if(['unavailable','disconnected'].includes(result.state))break;
+      }
+    }finally{
+      matchRun=null;draw('HR');
+      el('HRMessage').textContent=(run.stopped?'Stopped. ':'')+`${checked} checked · ${matched} with possible JobAdder matches`+(incomplete?` · ${incomplete} checks incomplete`:'')+'. No email credits used.'+(run.version!==service.matchVersion()?' JobAdder account changed; old results were discarded.':'');
+    }
+  }
+
   const unlockable=row=>!row.email_result || ['pending','unconfirmed'].includes(row.email_result.state);
   async function unlockAll() {
-    if(unlockRun || appBusy || dateBusy || !window.cvStudioApollo?.connected())return;
+    if(unlockRun || matchRun || appBusy || dateBusy || !window.cvStudioApollo?.connected())return;
     const shown=filtered('HR').filter(unlockable),people=shown.slice(0,MAX_UNLOCK);
     if(!people.length){el('HRMessage').textContent='Everyone shown already has an email or a finished lookup.';return;}
     const credits=people.filter(row=>!row.email_result).length,checks=people.length-credits,later=shown.length-people.length;
     if(!window.confirm(`Unlock business emails for ${people.length===1?'1 person':people.length+' people'} shown, using your Apollo account?\n\nThis sends each person's LinkedIn profile, name and company to Apollo and may use up to ${plural(credits,'Apollo credit')} (one per person, even if only profile data comes back).`+
+      (window.cvStudioJAContacts?.matchConnected?.()?'\nPossible JobAdder name matches will be skipped without an email credit.':'\nJobAdder is not connected, so existing contacts cannot be checked.')+
       (checks?`\n${plural(checks,'earlier lookup')} ${checks===1?'is':'are'} checked without a credit.`:'')+(later?`\nThe first ${MAX_UNLOCK} are unlocked now; run it again for the other ${later}.`:'')))return;
-    const run=unlockRun={stopped:false};let found=0,none=0,reason='';
+    const run=unlockRun={stopped:false,jaVersion:window.cvStudioJAContacts?.matchVersion?.()};let found=0,none=0,skipped=0,reason='';
     controls('HR');
     try {
       for(const row of people) {
         if(run.stopped)break;
-        el('HRMessage').textContent=`Unlocking ${found+none+1} of ${people.length}: ${row.name}…`;
+        if(run.jaVersion!==window.cvStudioJAContacts?.matchVersion?.()){reason='JobAdder account changed; check existing contacts again.';break;}
+        el('HRMessage').textContent=`Unlocking ${found+none+skipped+1} of ${people.length}: ${row.name}…`;
         const source=personSource(row);source.id=row.email_id || row.id;source.revision=row.email_revision || row.revision;
         let note='';
-        const success=await window.cvStudioApollo.unlockSaved(source,row,row.email_result || null,message=>{note=message;},value=>{row.email_result=value;},{confirmed:true,batch:true});
-        if(success!==true){reason=note || 'Apollo is busy or disconnected.';if(!row.email_result)row.email_result={state:'unconfirmed',message:'Check the previous lookup before trying again.'};break;}
+        const success=await window.cvStudioApollo.unlockSaved(source,row,row.email_result || null,message=>{note=message;},value=>{row.email_result=value;},{confirmed:true,batch:true,shouldContinue:()=>!run.stopped});
+        if(success==='jobadder_match'){skipped++;continue;}
+        if(success!==true){reason=note || 'Apollo is busy or disconnected.';break;}
         // Only a finished answer counts. A pending, unconfirmed, reconnect or
         // account-limit result stops the run so no further credit is spent.
         const state=row.email_result?.state;
@@ -143,7 +174,7 @@
       await refresh('HR');
       try{await window.cvStudioApollo?.contactsChanged?.();}catch{}
       if(found)el('HRNextStep').hidden=false; // next step: Unlocked contacts
-      el('HRMessage').textContent=(run.stopped?'Stopped. ':reason?'Stopped: '+reason+' ':'Finished. ')+`${plural(found,'email')} unlocked, ${none} without an email.`+(found?' Emails are checked automatically.':'');
+      el('HRMessage').textContent=(run.stopped?'Stopped. ':reason?'Stopped: '+reason+' ':'Finished. ')+`${plural(found,'email')} unlocked, ${none} without an email.`+(skipped?` ${skipped} skipped because of possible JobAdder matches.`:'')+(found?' Emails are checked automatically.':'');
       controls('HR');
     }
   }
@@ -284,11 +315,12 @@
             const note=message=>{el('HRMessage').textContent=message;};
             const source=personSource(row);source.id=row.email_id || row.id;source.revision=row.email_revision || row.revision;
             const success=await window.cvStudioApollo?.unlockSaved(source,row,row.email_result || null,note,value=>{row.email_result=value;});
-            if(success===false && !row.email_result)row.email_result={state:'unconfirmed',message:'Check the previous lookup before trying again.'};
             if(row.email_result?.state==='found')el('HRNextStep').hidden=false; // next step: Unlocked contacts
             const message=el('HRMessage').textContent;await refresh('HR');el('HRMessage').textContent=message;
           });email.append(button);
         }
+        const duplicateSource=personSource(row);duplicateSource.id=row.email_id || row.id;duplicateSource.revision=row.email_revision || row.revision;
+        window.cvStudioJAContacts?.decoratePerson?.(email,duplicateSource,row);
         tr.append(email);const source=document.createElement('td');source.append(link(row.ads+' ad'+(row.ads===1?'':'s'),row.job_url));tr.append(source);
       } else {
         tr.append(text('td',row.title || '—'),text('td',row.location || '—'),text('td',row.score+' / 100'),text('td',row.read),expandCell(row.evidence),expandCell(row.unknowns));
@@ -444,6 +476,8 @@
   });
   el('HRConnect').addEventListener('click',()=>window.cvStudioApollo?.openSettings());
   el('HREmail').addEventListener('change',()=>{boards.HR.page=0;draw('HR');});
+  el('HRCheckJobAdder').addEventListener('click',checkJobAdderShown);
+  el('HRCheckJobAdderStop').addEventListener('click',()=>{if(matchRun){matchRun.stopped=true;controls('HR');el('HRMessage').textContent='Stopping after the current JobAdder check…';}});
   el('HRUnlockAll').addEventListener('click',unlockAll);
   el('HRUnlockStop').addEventListener('click',()=>{if(unlockRun){unlockRun.stopped=true;controls('HR');el('HRMessage').textContent='Stopping after the current lookup…';}});
   el('HRGoContacts').addEventListener('click',()=>{el('HRNextStep').hidden=true;document.getElementById('jobLeadsApolloContactsTab')?.click();});
