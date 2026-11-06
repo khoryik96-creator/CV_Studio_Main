@@ -14,6 +14,31 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current source correction: v24.6.583 JobAdder name checks before email unlock**
+on `codex/jobadder-contact-name-checks`, from merged v582 / PR311.
+- JobAdder checks now use saved HR observations or protected unlocked-contact
+  keys, never arbitrary browser-supplied identity fields. At most two safe
+  name queries read 100 records each; initial/name variants are suggestions,
+  ranked with company agreement and linked to the connected JobAdder region.
+  Partial/bad reads cannot claim a clean negative. No email is returned by this
+  name check, no record is created, and no Apollo credit is used.
+- HR people has Check JobAdder shown / Stop (current page, up to 40). Cards and
+  unlocked contacts have per-person checks. Possible matches are shown as links.
+  Bulk email unlock skips possible matches and stops on an incomplete check;
+  individual override still requires explicit paid confirmation. Account/source
+  changes and Stop during the read prevent the subsequent paid operation.
+  Positive/display results have an account-bound two-minute memory cache;
+  cached negative results are refreshed before spending a credit. Free recovery
+  of an earlier Apollo lookup is not blocked or repeated as a new paid lookup.
+- One exact-email match found during Review is now saved in the existing
+  protected history, so Open in JobAdder survives dashboard reload. Multiple
+  email matches remain separate choices; no first result is silently linked.
+  Manual unknown-write recovery is unchanged; its next Review / Create step is
+  explained and focused. Names never create a confirmed identity or auto-retry.
+- Focused Python, all JS fixtures and fictional Chromium desktop/mobile checks
+  pass. No live JobAdder/Apollo access, contact write or installed-app update.
+  Current QA and the PR record final fresh review/full CI.
+
 **Current source correction: v24.6.582 protected AI controls**
 on `codex/protected-ai-controls`, from merged v581 / PR310.
 - User reports empty AI Routing and broken Save/Test/format key detection in a

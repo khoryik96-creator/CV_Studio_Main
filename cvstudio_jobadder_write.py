@@ -243,7 +243,7 @@ class JobAdderContactService:
                     archived["confirmed_not_created_at"]=self.clock()
                     store["operations"][key]={"state":"rejected","reason":"user_confirmed_not_created","company_id":previous["company_id"],"attempts":[*attempts,archived]}
                     self._write(store)
-                    return {"state":"not_started","message":"The previous attempt was kept. Review the details, then explicitly create a new request."}
+                    return {"state":"not_started","message":"The previous attempt is recorded as not created. Click Review contact, then Create contact to start a new request. Nothing has been resent."}
                 result={"state":"unconfirmed","message":"A matching email exists in JobAdder, but the previous company could not be confirmed. Check the existing record; no request was repeated.","matches":matches} if matches else {"state":"unconfirmed","message":"No matching contact was found. Check JobAdder before confirming that the previous request was not created."}
                 if action=="check" and not matches:
                     nonce=secrets.token_hex(32)
@@ -276,7 +276,15 @@ class JobAdderContactService:
                     raise JobAdderContactError("This company could not be confirmed. Search again.", "JOBADDER_CONTACT_COMPANY", 409)
                 matches = self._duplicates(email,token)
                 if matches:
-                    return {"state":"exists","matches":matches,"message":"A JobAdder contact already uses this email. No new record was created."}
+                    result={"state":"exists","matches":matches,"message":"A JobAdder contact already uses this email. No new record was created."}
+                    match=matches[0] if len(matches)==1 else None
+                    if (match and type(match.get('company_id')) is int and match['company_id']>0
+                            and (key in store['operations'] or len(store['operations'])<5000)):
+                        entry={'state':'exists','company_id':match['company_id'],'contact_id':match['contact_id']}
+                        if previous and previous.get('attempts'):entry['attempts']=previous['attempts']
+                        store['operations'][key]=entry;self._write(store)
+                        result['contact_id']=match['contact_id']
+                    return result
                 if key not in store["operations"] and len(store["operations"]) >= 5000:
                     raise JobAdderContactError("Local contact-create history is full. No contact was created.", "JOBADDER_CONTACT_LIMIT", 409)
                 nonce = secrets.token_hex(32)
@@ -291,8 +299,11 @@ class JobAdderContactService:
             self._validate_users(token,owner,recruiters)
             matches = self._duplicates(email,token)
             if matches:
-                previous.update(state="exists",contact_id=matches[0]["contact_id"]);self._write(store)
-                return {"state":"exists","matches":matches,"message":"This email already exists in JobAdder. No new record was created."}
+                result={"state":"exists","matches":matches,"message":"This email already exists in JobAdder. No new record was created."}
+                if len(matches)==1:
+                    previous.update(state="exists",contact_id=matches[0]["contact_id"]);self._write(store)
+                    result['contact_id']=matches[0]['contact_id']
+                return result
             previous.update(state="pending")
             if body.get("remember_assignments") is True:
                 previous["assignments"]={"owner_user_id":owner,"recruiter_user_ids":recruiters}
@@ -323,6 +334,113 @@ class JobAdderContactService:
                 "unconfirmed":"JobAdder did not confirm the result. Check the previous request; it will not be repeated."}[state]}
         finally:
             self.lock.release()
+
+
+class JobAdderContactMatcher:
+    """Bounded, read-only possible-contact checks from saved observations.
+
+    Similar names are suggestions, never identity proof or permission to write.
+    No Apollo request, contact write, result persistence or email return occurs.
+    """
+    def __init__(self, *, client, account, source):
+        self.client, self.account, self.source = client, account, source
+
+    @staticmethod
+    def _tokens(value):
+        import unicodedata
+        text = ''.join(c for c in unicodedata.normalize('NFKD', str(value or '').casefold())
+                       if not unicodedata.combining(c))
+        return [word for word in re.findall(r'[^\W_]+', text, re.UNICODE)
+                if word not in {'mr', 'mrs', 'ms', 'miss', 'dr', 'prof'}]
+
+    @classmethod
+    def _company_match(cls, first, second):
+        stop = {'sdn','bhd','pte','ltd','limited','inc','llc','plc','berhad','malaysia','singapore','my','sg','the'}
+        a, b = set(cls._tokens(first))-stop, set(cls._tokens(second))-stop
+        return bool(a and b and len(a & b)/min(len(a),len(b)) >= .8)
+
+    @classmethod
+    def _name_match(cls, source, candidate, same_company):
+        from difflib import SequenceMatcher
+        a, b = cls._tokens(source), cls._tokens(candidate)
+        if not a or not b or len(a)>8 or len(b)>8:
+            return None
+        if sorted(a)==sorted(b):
+            return (100, 'Exact name')
+        if min(len(a),len(b))==1:
+            word = a[0] if len(a)==1 else b[0]
+            return (65, 'First name only; verify') if same_company and len(word)>=3 and word in a and word in b else None
+        short, long = (a,b) if len(a)<=len(b) else (b,a)
+        used=set(); exact=0; initial=False; spelling=False
+        for word in sorted(short,key=lambda part:(len(part)==1,-len(part))):
+            choices=[]
+            for index, other in enumerate(long):
+                if index in used:continue
+                if word==other:choices.append((3,index,'exact'))
+                elif min(len(word),len(other))==1 and word[0]==other[0]:choices.append((2,index,'initial'))
+                elif min(len(word),len(other))>=5 and SequenceMatcher(None,word,other).ratio()>=.8:
+                    choices.append((1,index,'spelling'))
+            if not choices:return None
+            _, index, kind=max(choices);used.add(index)
+            exact+=kind=='exact';initial|=kind=='initial';spelling|=kind=='spelling'
+        if not exact:return None
+        return (80 if spelling else 85 if initial else 90,
+                'Similar spelling' if spelling else 'Name and initial' if initial else 'Name components match')
+
+    def find(self, body, token):
+        info=self.account();scope=info.get('account_cache_namespace','')
+        if not token or not info.get('connected') or not re.fullmatch(r'[a-f0-9]{64}',str(scope)):
+            raise JobAdderContactError('Connect JobAdder in Settings to check existing contacts.', 'JOBADDER_CONTACT_AUTH',401)
+        if body.get('account')!=scope:
+            raise JobAdderContactError('The JobAdder account changed. Check again.', 'JOBADDER_CONTACT_ACCOUNT',409)
+        source=self.source(body)
+        if not isinstance(source,dict):raise JobAdderContactError('Refresh the saved HR person before checking.', 'JOBADDER_CONTACT_SOURCE',409)
+        name=JobAdderContactService._text(source.get('name',''),'saved name',150,True)
+        company=JobAdderContactService._text(source.get('company',''),'saved company',200)
+        parts=self._tokens(name)
+        words=[word for word in parts if len(word)>=3]
+        queries=list(dict.fromkeys(([words[0],words[-1]] if words else [])))
+        if not queries:
+            return {'account':scope,'state':'incomplete','matches':[],'partial':True,
+                    'message':'The saved name is too abbreviated to check reliably. Search JobAdder manually.'}
+        matches={};partial=False
+        reader=JobAdderContactService(client=self.client,account=self.account,contact=lambda _:None,
+                                      load=lambda:None,save=lambda _:None)
+        for query in queries[:2]:
+            status,data=reader._request('contacts',token,params={'Name':query,'Limit':100})
+            if (status!=200 or not isinstance(data,dict) or not isinstance(data.get('items'),list)
+                    or type(data.get('totalCount')) is not int or data['totalCount']<len(data['items'])):
+                raise JobAdderContactError('JobAdder did not confirm the name check. No email was unlocked.', 'JOBADDER_CONTACT_CHECK',502)
+            partial|=data['totalCount']>len(data['items']) or len(data['items'])>100
+            for row in data['items'][:100]:
+                if not isinstance(row,dict) or type(row.get('contactId')) is not int or not 0<row['contactId']<=2147483647:
+                    partial=True;continue
+                if any(row.get(field) is not None and not isinstance(row[field],str) for field in ('firstName','lastName','name','position')):
+                    partial=True;continue
+                candidate=' '.join(str(row.get(field) or '').strip() for field in ('firstName','lastName')).strip()
+                if not candidate:candidate=str(row.get('name') or '').strip()
+                organization=row.get('company') or {}
+                if (not isinstance(organization,dict) or not candidate or len(candidate)>200
+                        or organization.get('name') is not None and not isinstance(organization['name'],str)):
+                    partial=True;continue
+                other=str(organization.get('name') or '')[:200]
+                same_company=self._company_match(company,other)
+                found=self._name_match(name,candidate,same_company)
+                if not found:continue
+                score,reason=found
+                matches[row['contactId']]={'contact_id':row['contactId'],'name':candidate,
+                    'company':other,'position':str(row.get('position') or '')[:300],
+                    'company_matches':same_company,'reason':reason,'score':min(100,score+(5 if same_company else 0))}
+        current=self.account()
+        if not current.get('connected') or current.get('account_cache_namespace')!=scope:
+            raise JobAdderContactError('The JobAdder account changed. Results were discarded.', 'JOBADDER_CONTACT_ACCOUNT',409)
+        found=sorted(matches.values(),key=lambda row:(-row['score'],-int(row['company_matches']),row['name'].casefold(),row['contact_id']))
+        partial|=len(found)>10
+        return {'account':scope,'state':'matches' if found else 'incomplete' if partial else 'no_matches',
+                'matches':found[:10],'partial':partial,
+                'message':('Possible contacts already in JobAdder. Open the records to verify the person.' if found
+                           else 'The check was incomplete. Search JobAdder before using an email credit.' if partial
+                           else 'No matching names found in this check.')}
 
 
 _JOBADDER_EMAIL_RE = re.compile(

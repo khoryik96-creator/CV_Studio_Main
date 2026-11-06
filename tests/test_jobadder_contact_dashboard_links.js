@@ -11,13 +11,13 @@ const createButtons=f=>f.el('ApolloContactsRows').querySelectorAll('button').fil
  const f=fixture({apollo:true,jobAdderContacts:true});f.window._jaAccountCacheNamespace='ja'+scope;
  const snapshot=()=>({contacts:[row],jobadder_account:scope,jobadder_links:confirmed?[{contact_key:key,state:'created',contact_id:45,contact_url:url}]:[]});
  f.state.onApollo=async data=>{if(data?.action!=='contacts')return reply({available:false,connected:false});const dataBefore=snapshot();if(hold)await new Promise(resolve=>release=resolve);return reply(dataBefore);};
- f.state.onJA=async data=>{calls++;if(data.action==='companies')return reply({account:scope,companies:[{id:12,name:'Example Company'}]});if(data.action==='review')return reply({state:'review',review_token:'fictional',company:'Example Company',message:'Review'});if(data.action==='create'){confirmed=true;return reply({state:'created',contact_id:45,contact_url:url,message:'Created'});}throw Error('Unexpected request');};
+ f.state.onJA=async data=>{calls++;if(data.action==='find_contacts')return reply({account:scope,state:'no_matches',matches:[],partial:false,message:'No matching names found in this check.'});if(data.action==='companies')return reply({account:scope,companies:[{id:12,name:'Example Company'}]});if(data.action==='review')return reply({state:'review',review_token:'fictional',company:'Example Company',message:'Review'});if(data.action==='create'){confirmed=true;return reply({state:'created',contact_id:45,contact_url:url,message:'Created'});}throw Error('Unexpected request');};
  await f.init();await tick();await f.el('ApolloContactsTab').click();await tick();assert.equal(calls,0);
  await createButtons(f)[0].click();await f.el('JASearch').click();f.el('JACompany').value='12';await f.el('JAReview').click();
  hold=true;const pending=f.el('ApolloContactsRefresh').click();await tick();
  await f.el('JACreate').click();assert.equal(openLinks(f)[0].href,url);assert.equal(createButtons(f).length,0,'created contact immediately replaces Create with its record link');
  release();await pending;hold=false;assert.equal(openLinks(f)[0].href,url,'an older contact refresh cannot erase a newly confirmed link');
- await f.el('ApolloContactsRefresh').click();assert.equal(openLinks(f)[0].href,url);assert.equal(calls,3,'refreshing links performs no extra JobAdder request');
+ const beforeRefresh=calls;await f.el('ApolloContactsRefresh').click();assert.equal(openLinks(f)[0].href,url);assert.equal(calls,beforeRefresh,'refreshing links performs no extra JobAdder request');
  assert.equal(openLinks(f)[0].target,'_blank');assert.equal(openLinks(f)[0].rel,'noopener noreferrer');
  f.window._jaAccountCacheNamespace='ja'+'c'.repeat(64);f.window.cvStudioJAContacts.accountChanged();assert.equal(openLinks(f).length,0);
  await f.el('ApolloContactsRefresh').click();assert.equal(openLinks(f).length,0,'late results from another account do not expose old links');
