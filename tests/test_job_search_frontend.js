@@ -225,6 +225,16 @@ if(require.main===module)(async()=>{
   }
   Object.assign(f.state,{connected:true,searchCapable:true,searchRevision:1,oldConcurrent:false,busy:false});
   await f.el('SearchStart').click();assert(!f.el('SearchPanel').classList.contains('has-error'),'successful retry clears search failure');
+  const duplicated=fixture();await duplicated.init();
+  duplicated.state.onRPC=(message,reply)=>{
+    if(message.action==='read'&&message.args.method==='readJobSearch'&&duplicated.state.page===1){
+      reply(null,'The job-search page did not finish changing. The ads already found are kept. Ads already found are kept.');return true;
+    }
+  };
+  await duplicated.el('SearchStart').click();
+  assert.equal((duplicated.el('SearchStatus').textContent.match(/ads already found are kept/gi)||[]).length,1);
+  assert.match(duplicated.el('SearchCount').textContent,/2 found/);assert(!duplicated.el('SearchStart').disabled);
+  assert(duplicated.calls.some(c=>c.action==='end'),'failed paging releases the companion without deleting results');
   const stopped=fixture();await stopped.init();stopped.state.hold=true;const running=stopped.el('SearchStart').click();
   for(let attempt=0;attempt<50&&!stopped.state.held;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
   assert(stopped.state.held);assert.equal(stopped.el('SearchResults')['aria-busy'],'true');assert(stopped.el('SearchStatus').classList.contains('is-running'));assert(!stopped.el('SearchStop').disabled);await stopped.el('SearchStop').click();stopped.state.held();await running;assert.equal(stopped.el('SearchResults')['aria-busy'],'false');assert(!stopped.el('SearchStatus').classList.contains('is-running'));

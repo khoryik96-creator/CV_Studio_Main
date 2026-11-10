@@ -11,15 +11,15 @@ function card(id,patch={}){
       selector.startsWith('[componentkey')?(state.nested?[{getAttribute:()=> 'job-card-component-ref-999'}]:[]):[]});
 }
 const first=card('1234567890'),duplicate=card('1234567890'),bad=card('not-an-id'),ambiguous=card('7777777777',{nested:true}),wrong=card('8888888888',{wrongLink:true});
-const state={cards:[first,duplicate,bad,ambiguous,wrong],next:0,scroll:0,about:true,stale:false,companyConflict:false,locations:['Malaysia'],filters:[]};
-const pageButton=visible('1'),pager={querySelector:selector=>selector==='ul button[aria-label^="Page "]'?pageButton:null};
+const state={cards:[first,duplicate,bad,ambiguous,wrong],next:0,scroll:0,about:true,stale:false,companyConflict:false,locations:['Malaysia'],filters:[],page:1,busy:false};
+const pageButton=visible('1',{getAttribute:name=>name==='aria-current'?'page':name==='aria-label'?'Page '+state.page:null}),pager={querySelector:selector=>selector==='ul button[aria-label^="Page "]'?pageButton:null};
 const next=visible('Next',{disabled:false,parentElement:pager,click:()=>state.next++});
 const decoy=visible('Next',{parentElement:{querySelector:()=>null},click:()=>{throw Error('Clicked unrelated next')}});
 const scope=visible('Current job search',{scrollTop:0,clientHeight:500,scrollHeight:1800,contains:el=>el===scope,
   querySelector:selector=>state.cards.find(card=>selector.includes('job-card-component-ref-'+card.state.id+'"')) || null,
-  getAttribute:name=>name==='componentkey'?'SearchResultsMainContent':null,
+  getAttribute:name=>name==='componentkey'?'SearchResultsMainContent':name==='aria-busy'&&state.busy?'true':null,
   scrollBy:()=>{scope.scrollTop+=500;state.scroll++},
-  querySelectorAll:selector=>selector==='button'?[decoy,next]:selector.startsWith('[role="button"]')?state.cards.filter(card=>!selector.includes('componentkey="job-card-component-ref-') || selector.includes('job-card-component-ref-'+card.state.id+'"')):[]});
+  querySelectorAll:selector=>selector==='ul button[aria-label^="Page "]'?[pageButton]:selector==='button'?[decoy,next]:selector.startsWith('[role="button"]')?state.cards.filter(card=>!selector.includes('componentkey="job-card-component-ref-') || selector.includes('job-card-component-ref-'+card.state.id+'"')):[]});
 const company=visible('Example Finance',{href:'https://www.linkedin.com/company/example/life/'}),companyOther=visible('Other Company'),companyP=visible('Example Finance',{querySelectorAll:()=>[company]}),titleP=visible('Finance Manager'),locationP=visible('Penang · 2 weeks ago · 20 applicants');
 titleP.closest=selector=>selector==='p'?titleP:null;
 titleP.querySelector=()=>null;
@@ -51,6 +51,8 @@ const context=vm.createContext({document,location,URL,URLSearchParams,Date,Numbe
 vm.runInContext(source,context);const reader=context.SourcerReader;
 let snapshot=reader.readJobSearch();assert.equal(snapshot.jobs.length,1,'canonical component identity, duplicates, malformed and mixed-job cards');
 assert.equal(reader.jobTargets().length,1,'direct-add targets use only confirmed card identities');
+assert.equal(snapshot.page,1);state.page=2;assert.equal(reader.readJobSearch().page,2);state.page=1;
+state.busy=true;assert.equal(reader.readJobSearch().loading,true);state.busy=false;
 assert.equal(reader.jobSearchContext().location,'Malaysia');state.locations=['Malaysia','Singapore'];assert.equal(reader.jobSearchContext().location,'','ambiguous locations cannot authorize initial normalization');state.locations=['Malaysia'];
 state.filters=['Date posted','Company','How promoted jobs are ranked','How AI search works'];
 assert.equal(reader.jobSearchContext().location,'Malaysia','other expandable filters/help controls cannot obscure the labelled location');

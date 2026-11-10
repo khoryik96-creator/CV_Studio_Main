@@ -39,18 +39,39 @@
   const pause = () => new Promise(resolve => setTimeout(resolve,350));
   // keep(snapshot) receives every read page; check() throws to stop; page(i)
   // reports a finished page; full() ends paging early.
-  async function walk({rpc, run, tab, pages, check, keep, page, full}) {
-    const read = async (previous = '') => {
-      for (let attempt=0;attempt<35;attempt++) {
+  async function walk({rpc, run, tab, pages, check, keep, page, full, waiting}) {
+    const number = snapshot => Number.isInteger(snapshot?.page) && snapshot.page > 0 && snapshot.page <= 10000 ? snapshot.page : 0;
+    const read = async (previous = null, currentPage = 0) => {
+      let settled = '';
+      const deadline = Date.now() + 45000;
+      // Bound elapsed time and reads; an in-flight RPC keeps its own timeout.
+      // Retry only observations:
+      // a slow/unchanged page must never cause a second Next click.
+      for (let attempt=0;attempt<130 && Date.now()<deadline;attempt++) {
         check();
         const result = await rpc('read',{run_id:run,tab_id:tab,method:'readJobSearch',values:[]});
         check();
-        if (!result?.loading && (!previous || result.empty || result.signature !== previous)) return result;
+        if (result && !result.loading) {
+          if (result.empty) return result;
+          const before = number(previous), after = number(result);
+          if (currentPage && after && after !== currentPage || before && after && after !== before && after !== before+1)
+            throw Error('The job results changed to a different page. Start a new search. Ads already found are kept.');
+          // Prefer the visible active-page marker. Card signatures alone cannot
+          // distinguish repeated promoted ads or a virtualized old-page redraw.
+          const ready = !previous || (before ? after === before+1 : result.signature !== previous.signature);
+          const key = after + '|' + result.signature;
+          if (ready && (!currentPage || after === currentPage)) {
+            if (!before || settled === key) return result;
+            settled = key; // let a changed pager/cards settle over two reads
+          } else settled = '';
+        } else settled = '';
+        if (attempt % 10 === 9) waiting?.(previous ? 'next' : 'results');
         await pause();
       }
-      throw Error('The job-search page did not finish changing. The ads already found are kept.');
+      throw Error(previous ? 'LinkedIn did not finish loading the next results page. Ads already found are kept.' :
+        'LinkedIn did not finish loading the job results. Ads already found are kept.');
     };
-    let previous = '';
+    let previous = null;
     for (let index=0;index<pages;index++) {
       let snapshot = await read(previous);
       if (snapshot.empty) break;
@@ -58,13 +79,22 @@
       for (let scroll=0;scroll<8 && !snapshot.atBottom;scroll++) {
         check();
         const moved = await rpc('read',{run_id:run,tab_id:tab,method:'scrollJobSearch',values:[snapshot.signature]});
-        check(); if (!moved) break;
-        await pause(); snapshot = await read(); keep(snapshot);
+        check();
+        if (typeof moved !== 'boolean') throw Error('LinkedIn is still loading before scrolling. Start the search again. Ads already found are kept.');
+        if (!moved) break;
+        await pause(); snapshot = await read(null, number(snapshot));
+        if (snapshot.empty) break;
+        keep(snapshot);
       }
       page?.(index);
       if (index+1 === pages || !snapshot.hasNext || full()) break;
-      previous = snapshot.signature; check();
-      if (!await rpc('read',{run_id:run,tab_id:tab,method:'nextJobSearch',values:[previous]})) break;
+      previous = snapshot; check();
+      const advanced = await rpc('read',{run_id:run,tab_id:tab,method:'nextJobSearch',values:[previous.signature]});
+      check();
+      // Older companions can return a loading envelope without dispatching the
+      // click. Never mistake that truthy object for successful navigation.
+      if (typeof advanced !== 'boolean') throw Error('LinkedIn is still loading before changing pages. Start the search again. Ads already found are kept.');
+      if (!advanced) break;
     }
   }
   window.cvStudioJobSearch = {jobLink, companyLink, rows, walk};

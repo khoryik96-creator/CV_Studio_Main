@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('ass
 const source=fs.readFileSync(path.join(__dirname,'../vendor/linkedin-companion/reader.js'),'utf8');
 const url='https://www.linkedin.com/jobs/view/1234567890';
 function fixture(){
-  const state={date:'2026-10-02T00:15:00+08:00',next:0,scrolls:0,scope:true,restricted:false,empty:false,pendingCards:false,countText:''};
+  const state={date:'2026-10-02T00:15:00+08:00',next:0,scrolls:0,scope:true,restricted:false,empty:false,pendingCards:false,countText:'',page:1,busy:false};
   const visible=(innerText,extra={})=>({innerText,getClientRects:()=>[{}],...extra});
   const role=visible('Finance Manager\nFinance Manager with verification'),company=visible('Example Finance'),where=visible('Penang');
   const card=visible('Finance Manager Example Finance Penang 2 weeks ago');
@@ -11,10 +11,11 @@ function fixture(){
   const evil=visible('Wrong origin',{href:'https://www.linkedin.com.attacker.invalid/jobs/view/222',closest:()=>card});
   const other=visible('Other',{href:'https://www.linkedin.com/jobs/view/999',closest:()=>({getClientRects:()=>[{}],querySelectorAll:()=>[link,other]})});
   card.querySelectorAll=selector=>selector==='a[href]'?[link,duplicate]:selector==='a[href*="/company/"]' && state.companyHref?[visible('Example Finance',{href:state.companyHref})]:selector.includes('job-card-list__title')?[role]:selector.includes('primary-description')?[company]:selector.includes('metadata-item')?[where]:selector==='time[datetime]'?[visible('',{getAttribute:()=>state.date})]:[];
-  const scope=visible(card.innerText,{scrollTop:0,clientHeight:500,scrollHeight:1500,contains:value=>value===scope,
+  const scope=visible(card.innerText,{getAttribute:name=>name==='aria-busy'&&state.busy?'true':null,scrollTop:0,clientHeight:500,scrollHeight:1500,contains:value=>value===scope,
     querySelectorAll:()=>state.empty||state.pendingCards?[]:[link,duplicate,evil,other],scrollBy:({top})=>{scope.scrollTop+=top;state.scrolls++}});
   const next=visible('Next',{disabled:false,getAttribute:()=> 'View next page',matches:()=>true,click:()=>state.next++});
-  const pager=visible('Pagination',{querySelectorAll:()=>[next]});
+  const current=visible('1',{getAttribute:name=>name==='aria-current'?'page':name==='aria-label'?'Page '+state.page:null,matches:()=>false});
+  const pager=visible('Pagination',{querySelectorAll:()=>[current,next]});
   const main=visible('Current job search');
   Object.defineProperty(main,'innerText',{get:()=>state.restricted?'You have reached the commercial search limit':state.countText|| (state.empty?'No matching jobs found':'Current job search')});
   Object.defineProperty(scope,'innerText',{get:()=>state.countText|| (state.empty?'No matching jobs found':card.innerText)});
@@ -27,7 +28,9 @@ const f=fixture();let result=f.reader.readJobSearch();
 assert.equal(result.jobs.length,1,'duplicates, hostile hosts and ambiguous multi-job cards are excluded');
 assert.equal(result.jobs[0].url,url);assert.equal(result.jobs[0].role,'Finance Manager');assert.equal(result.jobs[0].company,'Example Finance');
 assert.equal(result.jobs[0].date_posted,'2026-10-02');assert(result.jobs[0].description_truncated);
-assert.equal(result.hasNext,true);assert.equal(result.atBottom,false);
+assert.equal(result.hasNext,true);assert.equal(result.atBottom,false);assert.equal(result.page,1);
+f.state.page=2;const repeated=f.reader.readJobSearch();assert.equal(repeated.page,2);assert.equal(repeated.signature,result.signature,'page identity is independent of repeated ads');f.state.page=1;
+f.state.busy=true;assert.equal(f.reader.readJobSearch().loading,true,'old cards are not ready while the results region is busy');f.state.busy=false;
 f.state.companyHref='https://www.linkedin.com/company/example/?trk=jobs';
 assert.equal(f.reader.readJobSearch().jobs[0].company_url,'https://www.linkedin.com/company/example/','search cards retain their matching employer page');
 f.state.companyHref='https://www.linkedin.com.evil.invalid/company/example/';

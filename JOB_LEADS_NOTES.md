@@ -1,5 +1,16 @@
 # Job Leads module
 
+## Job-search readiness (v24.6.585)
+
+Job search and client pulls share a bounded45-second observation window (up to
+130 reads; the current RPC also keeps its own timeout). When the results pager
+has an active number, Next waits for that exact following page and two stable
+observations, so repeated promoted ads do not look like a stuck page. aria-busy
+keeps stale cards pending. Older readers without page numbers keep the existing
+changed-signature fallback. An unexpected page jump or non-boolean navigation
+reply stops visibly; Next is never automatically replayed. Found ads are kept.
+Update both app and companion to receive the page/region reader changes.
+
 ## Followed-client link refresh (v24.6.533)
 
 **Refresh from JobAdder** beside Followed clients rereads the registered LinkedIn
