@@ -14,6 +14,27 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current local correction: v24.6.585 Jobs page readiness (unmerged)**
+on `codex/job-search-page-readiness` from merged584 / `ea64e5e`.
+- Shared Job Leads/client pulls formerly allowed only35 observations (~12s)
+  and used changed job links alone to confirm Next. A slow page or repeated
+  promoted ads could therefore time out. Polling now allows130 observations,
+  with a45-second elapsed deadline and the existing per-RPC timeout. Only
+  observations are retried; navigation is not replayed.
+- Readers expose a unique visible active page from the results pager and honor
+  the region's aria-busy state. Known page markers require exactly the next
+  page and two stable reads. Old-page virtual-card redraws cannot advance a
+  known page; jumps stop. Unnumbered older companions keep signature fallback.
+  A non-boolean navigation/loading reply cannot count as a successful click.
+- Search shows waiting progress and normalizes the retained-ads suffix once.
+  Found ads, filters, source/run checks, cancellation, budgets and stores stay.
+- Local Windows validation:2571 Python/4 skipped/8418 subtests;107 JS fixtures;
+  actual isolated Chrome using fictional classic/keyed LinkedIn DOM, delayed
+  hydration, repeated ads, progress and exactly one Next click;24 source smoke
+  and byte consistency pass. No live signed-in search, paid request, owner app/
+  extension update or hosted change. Exact owner live trigger is unconfirmed.
+  Update app AND companion after merge; PR257 remains held. See docs/QA.md.
+
 **Current source feature: v24.6.584 reviewable Outlook issue reports**
 on `codex/issue-reports-outlook`, from merged v583 / PR312.
 - Report issue is independent of module/AI initialization, with a global badge,

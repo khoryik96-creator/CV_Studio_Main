@@ -4,6 +4,14 @@
 
 ## Release state
 
+- v24.6.585 is local/unmerged on `codex/job-search-page-readiness`, from584.
+  Shared Jobs walks tolerate slower hydration, prefer the visible sequential
+  page marker over repeated-card signatures, honor aria-busy and reject false
+  navigation acknowledgements. The retained-ads message appears once. No Next
+  replay or storage/route change.2571 Python,107 JS and fictional Chrome checks
+  pass; live signed-in acceptance remains unverified. App+companion update is
+  needed after merge. See docs/QA.md; held PR257 stays excluded.
+
 - v24.6.584 adds reviewed screenshot/Doctor/runtime issue reports through each
   user's Outlook, explicit send confirmation and offline downloads. It also
   accepts valid JobAdder HTTP 201 contact Location responses without requiring

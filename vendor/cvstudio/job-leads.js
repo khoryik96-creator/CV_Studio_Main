@@ -1393,9 +1393,14 @@
       const source = await rpc('jobSearchBegin',{run_id:discoveryRun,query,location:where,max_pages:pages,use_open:useOpen,source_tab_id:Number(el('SearchSource').value)});
       checkDiscovery();
       await window.cvStudioJobSearch.walk({rpc,run:discoveryRun,tab:source.tab_id,pages,check:checkDiscovery,keep:rememberJobs,
+        waiting:stage => searchStatus(`Waiting for LinkedIn${stage === 'next' ? ' to change pages' : ' results'}… ${discovered.length} ads found so far.`),
         page:index => searchStatus(`Reviewed ${index+1} of ${pages} pages. ${discovered.length} unique ads found.`),full:() => discovered.length >= 600});
       checkDiscovery(); searchStatus(`Found ${discovered.length} ads.`);
-    } catch (error) { failed=!discoveryStopped;searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : error.message + ' Ads already found are kept.'); }
+    } catch (error) {
+      failed=!discoveryStopped;
+      const message=String(error?.message || 'The job search stopped.').replace(/(?:\s*(?:The )?Ads already found are kept\.)+$/i,'');
+      searchStatus(discoveryStopped ? `Stopped. ${discovered.length} ads found so far are kept for review.` : message + ' Ads already found are kept.');
+    }
     finally {
       if (discoveryRun) { try { await rpc('end',{run_id:discoveryRun}); } catch { prefetch=false; } }
       discoveryFailed=failed; discoveryRun = ''; discovering = false; lock(false); drawDiscovery();

@@ -1,5 +1,41 @@
 # Current validation record
 
+## v24.6.585 — LinkedIn Jobs page readiness
+
+From merged584/ea64e5e, local branch `codex/job-search-page-readiness`.
+The reported error string is traced to the shared Jobs walk's35-read limit
+(~12 seconds of polling) and duplicate suffix appended by Job Leads. Offline
+regressions reproduce slow initial/next-page failures and a legitimate next
+page repeating the same promoted ad IDs. The former code fails the new test.
+The exact signed-in page state behind the owner's message is not captured.
+
+The walk now bounds130 observation attempts by45 seconds elapsed (an in-flight
+RPC retains its existing timeout). Visible active-page markers, when present,
+require exactly the next page and two stable observations; unchanged old-page
+redraws and temporarily missing markers cannot advance. Results-region aria-busy
+is respected. Older companions retain signature fallback. Loading envelopes
+cannot masquerade as successful scrolling/Next. No navigation retry is added,
+including after a transport error; all existing source/filter/run checks remain.
+Waiting progress is visible and the retained-ads sentence is rendered once.
+
+Validation on native Windows, isolated state and entirely fictional data:
+- Full Python:2571 passed,4 skipped,8418 subtests; three existing utcnow
+  deprecation warnings in email-draft tests. No test assertion failures.
+- All107 root JavaScript fixtures pass, including new slow startup/paging,
+  repeated ads, stale/missing page markers, page jumps, bounded attempt/elapsed
+  timeout, Stop, empty/legacy pages, false click acknowledgements, same-page
+  scrolling and retained-result/error-cleanup tests. Relevant final fixtures
+  were repeated after the elapsed-deadline and boolean acknowledgement changes.
+- Actual isolated Chrome executes the shipped reader and walk against both
+  classic and keyed fictional Jobs DOMs:45 busy reads at startup and after
+  Next, active page changes before card hydration, same promoted ad on both
+  pages, exactly one Next click, progress and no browser errors.
+-24 source smoke assertions, single-source version stamping, repository byte
+  consistency and diff whitespace checks pass. No live LinkedIn/JobAdder/
+  provider call, private data fixture, installed-app/extension update or native
+  protected package was produced. No PR/merge is performed for this correction.
+  Update app and companion together after merge.
+
 ## v24.6.584 — Outlook issue reports and JobAdder Created responses
 
 The compressed private recording was inspected locally; it shows repeated

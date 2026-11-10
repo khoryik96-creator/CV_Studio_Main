@@ -469,6 +469,18 @@
     }
     return null;
   }
+  function jobPage(scope) {
+    const modern = scope?.getAttribute?.('componentkey') === 'SearchResultsMainContent';
+    const containers = modern ? [scope] : [...document.querySelectorAll('.jobs-search-pagination, .jobs-search-results-list .artdeco-pagination, .scaffold-layout__list .artdeco-pagination')].filter(visible);
+    const pages = new Set();
+    for (const container of containers) for (const button of container.querySelectorAll(modern ? 'ul button[aria-label^="Page "]' : 'button')) {
+      if (!visible(button) || !(['page','true'].includes(button.getAttribute('aria-current')) ||
+          button.matches?.('.jobs-search-pagination__indicator-button--active, .artdeco-pagination__indicator--number.active button'))) continue;
+      const match = compact(button.getAttribute('aria-label') || button.innerText).match(/^(?:Page\s+)?([1-9]\d{0,3})$/i);
+      if (match) pages.add(Number(match[1]));
+    }
+    return pages.size === 1 ? [...pages][0] : 0;
+  }
   function readJobSearch() {
     const scope = jobScope(), jobs = [], seen = new Set();
     const mainText = text(scope || document.querySelector('main')).slice(0,3000);
@@ -516,7 +528,8 @@
       if (jobs.length >= 40) break;
     }
     const scroller = jobScroller(scope), next = jobNextButton(scope);
-    return {url:location.href,jobs,empty:!jobs.length && empty,loading:!jobs.length && !empty,signature:jobs.map(row => row.url).join('|'),
+    const busy = scope.getAttribute?.('aria-busy') === 'true';
+    return {url:location.href,jobs,page:jobPage(scope),empty:!busy && !jobs.length && empty,loading:busy || !jobs.length && !empty,signature:jobs.map(row => row.url).join('|'),
       hasNext:!!next && !disabled(next),atBottom:!scroller.clientHeight || scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 5};
   }
   function scrollJobSearch(signature) {
