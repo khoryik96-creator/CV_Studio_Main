@@ -577,35 +577,46 @@ function leadPeopleMergeKey(p) {
   return ['person', String(p.name || '').trim().toLowerCase(), String(p.company || '').trim().toLowerCase(), String(p.title || '').trim().toLowerCase()].join('|');
 }
 
-// Every identity one person can be recognised by. A row found first by its
-// profile link and later given an email is still the same person.
-function leadPeopleMergeKeys(p) {
+// The link a row was found through. It can be a personal profile, but also a
+// company or team page that several different people share.
+function leadPeopleUrlKey(p) {
   p = p || {};
-  var keys = [];
-  var email = String(p.email || '').trim().toLowerCase();
-  if (email) keys.push('email:' + email);
   var profile = String(p.profile_url || p.source_url || '').trim().toLowerCase().replace(/\/$/, '');
-  if (profile) keys.push('url:' + profile);
-  if (!keys.length) keys.push(leadPeopleMergeKey(p));
-  return keys;
+  return profile ? 'url:' + profile : '';
+}
+
+// Two rows that share a link are the same person only when nothing they state
+// about themselves disagrees: different emails or different names are two people.
+function leadPeopleCompatible(a, b) {
+  function same(field) {
+    var x = String((a || {})[field] || '').trim().toLowerCase(), y = String((b || {})[field] || '').trim().toLowerCase();
+    return !x || !y || x === y;
+  }
+  return same('email') && same('name');
 }
 
 function leadMergePeople(existing, incoming) {
   var out = [];
   var byKey = {};
+  var byUrl = {};
   function addOrMerge(p) {
     p = p || {};
     var key = leadPeopleMergeKey(p);
     if (!key || key === 'person|||') return;
-    var keys = leadPeopleMergeKeys(p);
-    var found = keys.filter(function(k){ return byKey[k] !== undefined; });
-    if (!found.length) {
-      keys.forEach(function(k){ byKey[k] = out.length; });
+    var index = byKey[key];
+    var url = leadPeopleUrlKey(p);
+    // A row found first by its link and later given an email is still that
+    // person, so a people search after an email search adds no second copy.
+    if (index === undefined && url && byUrl[url] !== undefined && leadPeopleCompatible(out[byUrl[url]], p)) index = byUrl[url];
+    if (index === undefined) {
+      byKey[key] = out.length;
+      if (url && byUrl[url] === undefined) byUrl[url] = out.length;
       out.push(Object.assign({}, p));
       return;
     }
-    var cur = out[byKey[found[0]]];
-    keys.forEach(function(k){ if (byKey[k] === undefined) byKey[k] = byKey[found[0]]; });
+    if (byKey[key] === undefined) byKey[key] = index;
+    if (url && byUrl[url] === undefined) byUrl[url] = index;
+    var cur = out[index];
     Object.keys(p).forEach(function(k){
       if ((cur[k] === undefined || cur[k] === null || cur[k] === '') && p[k] !== undefined && p[k] !== null && p[k] !== '') cur[k] = p[k];
     });

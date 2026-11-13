@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('ass
 const source=fs.readFileSync(path.join(__dirname,'../vendor/cvstudio/lead-finder.js'),'utf8');
 const grab=name=>{const start=source.indexOf('function '+name+'(');assert(start>=0,name);let depth=0;for(let i=source.indexOf('{',start);i<source.length;i++){if(source[i]==='{')depth++;else if(source[i]==='}'&&--depth===0)return source.slice(start,i+1);}throw Error(name);};
 const context=vm.createContext({});
-vm.runInContext(['leadPeopleMergeKey','leadPeopleMergeKeys','leadMergePeople'].map(grab).join('\n'),context);
+vm.runInContext(['leadPeopleMergeKey','leadPeopleUrlKey','leadPeopleCompatible','leadMergePeople'].map(grab).join('\n'),context);
 const merge=(a,b)=>JSON.parse(JSON.stringify(vm.runInContext('leadMergePeople',context)(a,b)));
 const link='https://www.linkedin.com/in/sample-person';
 // Found by profile link, then given an email, then found again without one.
@@ -17,6 +17,15 @@ assert.equal(merge([{name:'A',email:'One@Example.com',profile_url:link}],[{name:
 rows=merge([{name:'A',profile_url:link}],[{name:'A',email:'a@example.com',profile_url:link},{name:'A',email:'a@example.com'}]);
 assert.equal(rows.length,1);assert.equal(rows[0].email,'a@example.com');
 // Different people stay separate, with or without links.
+// A shared company or team page is evidence, not identity: people with
+// different emails or different names who share it are never merged.
+const team='https://example.com/about/team';
+rows=merge([],[{name:'Alice Sample',email:'alice@example.com',source_url:team,title:'HR Director'},{name:'Bob Sample',email:'bob@example.com',source_url:team,title:'TA Lead'}]);
+assert.deepEqual(rows.map(row=>[row.name,row.email,row.title]),[['Alice Sample','alice@example.com','HR Director'],['Bob Sample','bob@example.com','TA Lead']]);
+rows=merge([{name:'Alice Sample',email:'alice@example.com',source_url:team}],[{name:'Bob Sample',source_url:team}]);
+assert.equal(rows.length,2,'a different name on the same page is a different person');
+rows=merge([{name:'Alice Sample',email:'alice@example.com',source_url:team}],[{name:'alice sample',source_url:team,title:'HR Director'}]);
+assert.equal(rows.length,1,'the same name on the same page, with no conflicting email, is the same person');assert.equal(rows[0].title,'HR Director');
 assert.equal(merge([{name:'A',profile_url:link}],[{name:'B',profile_url:link+'-other'}]).length,2);
 assert.equal(merge([{name:'A',company:'X',title:'HR'}],[{name:'A',company:'X',title:'HR'},{name:'A',company:'Y',title:'HR'}]).length,2,'rows without email or link still match on name, company and title only');
 assert.equal(merge([{}],[{name:''}]).length,0,'empty rows are ignored');
