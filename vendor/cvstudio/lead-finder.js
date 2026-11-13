@@ -577,19 +577,46 @@ function leadPeopleMergeKey(p) {
   return ['person', String(p.name || '').trim().toLowerCase(), String(p.company || '').trim().toLowerCase(), String(p.title || '').trim().toLowerCase()].join('|');
 }
 
+// The link a row was found through. It can be a personal profile, but also a
+// company or team page that several different people share.
+function leadPeopleUrlKey(p) {
+  p = p || {};
+  var profile = String(p.profile_url || p.source_url || '').trim().toLowerCase().replace(/\/$/, '');
+  return profile ? 'url:' + profile : '';
+}
+
+// Two rows that share a link are the same person only when nothing they state
+// about themselves disagrees: different emails or different names are two people.
+function leadPeopleCompatible(a, b) {
+  function same(field) {
+    var x = String((a || {})[field] || '').trim().toLowerCase(), y = String((b || {})[field] || '').trim().toLowerCase();
+    return !x || !y || x === y;
+  }
+  return same('email') && same('name');
+}
+
 function leadMergePeople(existing, incoming) {
   var out = [];
   var byKey = {};
+  var byUrl = {};
   function addOrMerge(p) {
     p = p || {};
     var key = leadPeopleMergeKey(p);
     if (!key || key === 'person|||') return;
-    if (byKey[key] === undefined) {
+    var index = byKey[key];
+    var url = leadPeopleUrlKey(p);
+    // A row found first by its link and later given an email is still that
+    // person, so a people search after an email search adds no second copy.
+    if (index === undefined && url && byUrl[url] !== undefined && leadPeopleCompatible(out[byUrl[url]], p)) index = byUrl[url];
+    if (index === undefined) {
       byKey[key] = out.length;
+      if (url && byUrl[url] === undefined) byUrl[url] = out.length;
       out.push(Object.assign({}, p));
       return;
     }
-    var cur = out[byKey[key]];
+    if (byKey[key] === undefined) byKey[key] = index;
+    if (url && byUrl[url] === undefined) byUrl[url] = index;
+    var cur = out[index];
     Object.keys(p).forEach(function(k){
       if ((cur[k] === undefined || cur[k] === null || cur[k] === '') && p[k] !== undefined && p[k] !== null && p[k] !== '') cur[k] = p[k];
     });
@@ -712,14 +739,16 @@ async function runLeadEmailSearch() {
     var n = normalizeLeadData({ people: d.people || _leadPeople, companies: _leadCompanies, summary: _leadSummary, warning: d.warning || '' });
     _leadPeople = n.people;
     _leadLastWarning = d.warning || _leadLastWarning;
-    _leadCosts.email_usd = leadCostFromResponse(d);
-    _leadCosts.email_tokens = d.cost_details ? (Number(d.cost_details.total_tokens) || 0) : leadUsageTokens(d.usage);
+    var emailRunCost = leadCostFromResponse(d);
+    var emailRunTokens = d.cost_details ? (Number(d.cost_details.total_tokens) || 0) : leadUsageTokens(d.usage);
+    _leadCosts.email_usd = (Number(_leadCosts.email_usd) || 0) + emailRunCost;
+    _leadCosts.email_tokens = (Number(_leadCosts.email_tokens) || 0) + emailRunTokens;
     _leadCosts.model = d.model || _leadCosts.model || route.model;
     leadRefreshTotalCost();
     renderLeadFinder();
     status.className = 'lead-status ok';
-    status.textContent = 'Email search done. ' + _leadPeople.filter(function(p){ return !!p.email; }).length + ' public business-domain emails recorded. Additional cost: ' + leadCostLabel(_leadCosts.email_usd) + ' / ' + leadMyrLabel(_leadCosts.email_usd) + '. Total Lead Finder cost: ' + leadCostLabel(_leadCosts.total_usd) + ' / ' + leadMyrLabel(_leadCosts.total_usd) + (d.warning ? '\nNote: ' + d.warning : '');
-    statsRecord('Lead Finder Email Search', 'lead', _leadCosts.email_usd || 0, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
+    status.textContent = 'Email search done. ' + _leadPeople.filter(function(p){ return !!p.email; }).length + ' public business-domain emails recorded. Additional cost: ' + leadCostLabel(emailRunCost) + ' / ' + leadMyrLabel(emailRunCost) + '. Total Lead Finder cost: ' + leadCostLabel(_leadCosts.total_usd) + ' / ' + leadMyrLabel(_leadCosts.total_usd) + (d.warning ? '\nNote: ' + d.warning : '');
+    statsRecord('Lead Finder Email Search', 'lead', emailRunCost || 0, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
     showToast('Email search completed', 'ok');
     markTabDone('leadfinder', _tabRun);
   } catch(e) {

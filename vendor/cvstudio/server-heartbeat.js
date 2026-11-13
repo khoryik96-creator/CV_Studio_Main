@@ -15,6 +15,7 @@
   var _inFlight        = false;  // only one heartbeat request in flight at a time
   var _pingSeq         = 0;      // monotonic id assigned to each ping
   var _lastResolvedSeq = 0;      // highest ping whose completion we have applied
+  var _bootToken       = "";     // this server process, from its first healthy reply
   var PING_INTERVAL     = 20000;  // steady-state: ping every 20s (idle cost unchanged)
   var RECOVER_INTERVAL  = 2500;   // once a ping is missed, poll fast until healthy again
   var RECOVER_MAX_TRIES = 48;     // cap the fast burst at ~2 min, then fall back to slow
@@ -143,7 +144,22 @@
         _inFlight = false;
         if (!acceptCompletion(seq)) return;
         if (r.ok || r.status === 204) {
-          if (_serverLost && !_reloadQueued) {
+          // The server sends one random value per process. Seeing the same
+          // value after a gap proves it never restarted: the gap was this
+          // page's requests queueing (several slow requests at once), the
+          // machine sleeping or the server being busy. Nothing needs
+          // re-syncing then, and a reload would only destroy running scans
+          // and unsaved results.
+          var boot = null;
+          try { boot = r.headers && r.headers.get ? r.headers.get("X-CV-Studio-Boot") : null; } catch (e) { boot = null; }
+          var sameServer = !!boot && boot === _bootToken;
+          if (boot && !_bootToken) _bootToken = boot;
+          if (_serverLost && !_reloadQueued && sameServer) {
+            _serverLost  = false;
+            _missedPings = 0;
+            stopFastRecovery();
+            hideReconnectBanner();
+          } else if (_serverLost && !_reloadQueued) {
             // Server is reachable again — show green banner then auto-reload
             // (a reload re-syncs the loopback session cookie in case the
             // process actually restarted while we were unreachable).

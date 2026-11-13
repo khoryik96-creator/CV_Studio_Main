@@ -502,6 +502,10 @@ class JobLeadsStore:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA foreign_keys=ON")
             yield connection
+        except UnicodeEncodeError:
+            # A lone surrogate (half of an emoji pair) is not text SQLite can
+            # store. The transaction is rolled back below; nothing was written.
+            raise JobLeadsError("A job field contains a broken character (often half of an emoji). Remove it and save again. Your existing records were preserved.") from None
         except (sqlite3.Error, OSError) as error:
             code = getattr(error, "sqlite_errorcode", None)
             if isinstance(code, int) and (code & 0xFF) in {sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB, sqlite3.SQLITE_FORMAT}:
@@ -531,7 +535,7 @@ class JobLeadsStore:
         count, size = connection.execute("SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(payload AS BLOB))),0) FROM leads").fetchone()
         folders, folder_bytes = connection.execute('SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(name AS BLOB))),0) FROM folders').fetchone()
         if count > MAX_RECORDS or folders > MAX_FOLDERS or size + folder_bytes > MAX_BYTES:
-            raise JobLeadsError("Job Leads storage is full (5,000 leads or 8 MB). Export a backup before making further changes.")
+            raise JobLeadsError("Job Leads storage is full (5,000 leads or 8 MB, including ads in Trash). Empty Trash or export a backup before making further changes.")
 
     def list(self):
         return self.snapshot()['records']
@@ -718,6 +722,22 @@ class JobLeadsStore:
             self._check_capacity(connection)
             connection.commit()
         return {'changed': len(selection)}
+
+    def purge(self, selection):
+        """Permanently delete exact, unchanged ads that are already in Trash."""
+        expected = _selection(selection)
+        with self._connection() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            for identity, revision in expected.items():
+                current = connection.execute('SELECT * FROM leads WHERE id=?', (identity,)).fetchone()
+                if current is None or current['revision'] != revision:
+                    raise JobLeadsError("An ad in Trash changed in another window. Refresh before trying again.", 409, 'JOB_LEADS_CONFLICT')
+                if not self._record(current)['deleted']:
+                    raise JobLeadsError("Only ads in Trash can be deleted permanently. Move the ad to Trash first.", 409, 'JOB_LEADS_CONFLICT')
+            for identity in expected:
+                connection.execute('DELETE FROM leads WHERE id=?', (identity,))
+            connection.commit()
+        return {'deleted': len(expected)}
 
     def restore(self, payload):
         if (not isinstance(payload, dict) or payload.get("format") != "cvstudio-job-leads" or

@@ -26,7 +26,7 @@
       }); } catch { reject(Error('Reload this LinkedIn page and reconnect CV Studio.')); }
     });
     const publishFolders = names => {
-      if (!Array.isArray(names) || names.some(name => typeof name !== 'string' || !name || name.length > 80)) throw Error('CV Studio did not return its folders. Try Refresh folders.');
+      if (!Array.isArray(names) || names.some(name => typeof name !== 'string' || !name || [...name].length > 80)) throw Error('CV Studio did not return its folders. Try Refresh folders.');
       folderCatalog = [...new Set(names)];
       catalogError = '';
       if (preferredFolder && !folderCatalog.includes(preferredFolder)) preferredFolder = '';

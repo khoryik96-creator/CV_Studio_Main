@@ -14,6 +14,22 @@ Use [current QA](docs/QA.md) for validation and the PR for review/CI status. The
 retains them. Version-specific sections below are historical records, not active
 scope or current merge status. Do not add new per-release root Markdown files.
 
+**Current local correction: v24.6.586 scans survive other-tab work (unmerged)**
+on `claude/cv-studio-release-270-3byobv` from merged585 / `298d346`.
+- `server-heartbeat.js` reloaded the page after four missed pings even when the
+  server never restarted (six slow requests queue the ping). `/heartbeat` now
+  sends a per-process `X-CV-Studio-Boot`; the page reloads only if it changed.
+- Companion: `jobFromLink` no longer adopts a Jobs search tab; `HR_AD_CHANGED`
+  and `HR_BUSY` codes; pickJob waits for an ad read; a30-second recent-use rule
+  stops another app tab taking the connection; fixed messages use `safeError`.
+- Job Leads page: background loading auto-resumes, skips a changed ad, retries
+  busy, cancels a timed-out read; five-second companion checks with one retry.
+- Store: `purge` (Empty Trash), structured broken-character error; public
+  reader keeps plain text for oversized markup. Lead Finder merge and cost fixes.
+- Left as designed: viewed companion tabs stay open, per-read reader injection,
+  re-verification on worker start, long Retry-After. See JOB_LEADS_NOTES.md.
+- Linux validation only; see docs/QA.md. Update app AND companion after merge.
+
 **Current local correction: v24.6.585 Jobs page readiness (unmerged)**
 on `codex/job-search-page-readiness` from merged584 / `ea64e5e`.
 - Shared Job Leads/client pulls formerly allowed only35 observations (~12s)
