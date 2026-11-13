@@ -104,7 +104,7 @@ const SESSION_KEY = scope === 'profiles' ? 'cvstudioLinkedinSessionV1' : 'cvstud
 const TRUST_KEY = 'cvstudioLinkedinTrustedAppsV1';
 // Chrome session memory survives worker suspension, but not browser/extension
 // restarts. Never store credentials, captured content or provider requests here.
-let stateFailed = false, writes = Promise.resolve(), connections = Promise.resolve(), reloading = false;
+let stateFailed = false, writes = Promise.resolve(), connections = Promise.resolve(), reloading = false, lastUse = 0;
 function local(value) {
   try { const u = new URL(value); return u.protocol === 'http:' && !u.username && !u.password && ['127.0.0.1', 'localhost'].includes(u.hostname) && u.pathname === '/'; }
   catch { return false; }
@@ -139,6 +139,7 @@ function jobURL(value) {
     return /^[0-9]{1,24}$/.test(id) ? 'https://www.linkedin.com/jobs/view/' + id : '';
   } catch { return ''; }
 }
+function jobViewPage(value) { try { return /^\/jobs\/view\//.test(new URL(value).pathname); } catch { return false; } }
 function jobCompanyIDs(value) {
   if(typeof value!=='string')return [];
   const ids=value.split(',');
@@ -481,7 +482,7 @@ function event(change) {
   return ready.then(async () => { if (await change()) await persist(); }).catch(() => { stateFailed = true; connection = null; });
 }
 function live(bound, run) {
-  if (stateFailed || connection !== bound || run && bound.run !== run) throw Error('The companion connection changed.');
+  if (stateFailed || connection !== bound || run && bound.run !== run) throw safeError('The companion connection changed.');
 }
 function sameOwnedPage(value, expected) {
   // Job reads accept LinkedIn's canonical/title paths; retain cleanup authority
@@ -661,7 +662,8 @@ async function readJobTab(bound, id, expected, companyOnly=false) {
   const verify = tab => {
     if(jobCapture?.cancelled)throw safeError('The job ad read was stopped.','HR_STOPPED');
     if(linkedinAccessPage(tab.url) || linkedinAccessPage(tab.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in its browser tab before scanning again.','HR_ACCESS_REQUIRED');
-    if (connection !== bound || bound.run || jobURL(tab.url) !== expected || tab.pendingUrl && jobURL(tab.pendingUrl) !== expected) throw safeError('The selected job changed. Open its LinkedIn tab and try again.');
+    if (connection !== bound || bound.run) throw safeError('The selected job changed. Open its LinkedIn tab and try again.');
+    if (jobURL(tab.url) !== expected || tab.pendingUrl && jobURL(tab.pendingUrl) !== expected) throw safeError('The selected job changed. Open its LinkedIn tab and try again.','HR_AD_CHANGED');
     return tab.status==='complete' || !companyOnly && tab.status==='loading' && !tab.pendingUrl;
   };
   let injected=false, previousCompany='',hadCompany=false;
@@ -719,13 +721,19 @@ async function pickJob(message, sender) {
   await ready;
   const bound = connection, expected = jobURL(message.url), operation = message.operation === undefined ? 'add' : message.operation;
   if (!['add','remove','folders','create_folder'].includes(operation) || message.folder !== undefined &&
-      (typeof message.folder !== 'string' || message.folder.length > 80 || /[\x00-\x1f]/.test(message.folder))) throw safeError('Choose a valid folder or job-ad action.');
+      (typeof message.folder !== 'string' || [...message.folder].length > 80 || /[\x00-\x1f]/.test(message.folder))) throw safeError('Choose a valid folder or job-ad action.');
   if (operation === 'create_folder' && (typeof message.folder !== 'string' || !message.folder.trim())) throw safeError('Enter a folder name.');
   if (stateFailed || !bound) throw safeError('Open Job Leads in CV Studio in this browser. The companion connects automatically.');
   if (!expected || expected !== message.url || sender.frameId !== 0 || !sender.documentId || !Number.isInteger(sender.tab?.id) ||
       !(jobSearchKey(sender.url) || jobURL(sender.url))) throw safeError('Choose a visible LinkedIn job ad.');
   const foldersOnly = operation === 'folders';
-  if (!foldersOnly && (bound.run || jobCapture)) throw safeError('Wait for the current search or ad read to finish, then add this ad.');
+  if (!foldersOnly) {
+    // One ad read finishes within seconds. Wait for it, bounded, then take the
+    // next free turn; a running search still refuses at once.
+    for (let attempt=0;attempt<300 && jobCapture && !bound.run && connection === bound && !stateFailed;attempt++) await new Promise(resolve => setTimeout(resolve,150));
+    if (stateFailed || connection !== bound) throw safeError('Open Job Leads in CV Studio in this browser. The companion connects automatically.');
+    if (bound.run || jobCapture) throw safeError('Wait for the current search or ad read to finish, then add this ad.');
+  }
   const token = foldersOnly ? null : {}; if (token) jobCapture = token;
   try {
     const appTab = await chrome.tabs.get(bound.tabId);
@@ -765,7 +773,7 @@ async function handle(message, sender) {
     return {connected:true,version:chrome.runtime.getManifest().version};
   }
   if (stateFailed || !connection || sender.tab?.id !== connection.tabId || sender.documentId !== connection.documentId || !local(sender.url)) {
-    throw Error('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
+    throw safeError('In Chrome, open CV Studio and click the companion toolbar icon to connect this tab.');
   }
   const args = message.args || {};
   if (reloading && message.action !== 'jobStatus') throw safeError('The companion is updating. Refresh CV Studio and LinkedIn when ready.');
@@ -865,28 +873,28 @@ async function handle(message, sender) {
     return tabs.filter(tab => jobSearchKey(tab.url)).map(tab => ({id:tab.id, url:tab.url, title:String(tab.title || 'LinkedIn job search').slice(0,160)}));
   }
   if (message.action === 'jobSearchBegin') {
-    if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15) throw Error('Choose 1 to 15 job-search pages.');
+    if (!/^[a-f0-9]{32}$/.test(args.run_id || '') || !Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15) throw safeError('Choose 1 to 15 job-search pages.');
     if (connection.run === args.run_id && connection.kind === 'jobs') return {tab_id:connection.source};
-    if (connection.run || jobCapture) throw Error('Stop the current browser action first.');
+    if (connection.run || jobCapture) throw safeError('Stop the current browser action first.');
     let url;
     if (!args.use_open) {
       // One client can have an officially grouped company Jobs filter. Keep
       // all observed IDs; never silently choose the first member.
       let company = args.company_id === undefined ? '' : args.company_id;
-      if (company !== '' && (typeof company !== 'string' || !/^[0-9]{1,24}$/.test(company))) throw Error('Choose a valid LinkedIn company.');
+      if (company !== '' && (typeof company !== 'string' || !/^[0-9]{1,24}$/.test(company))) throw safeError('Choose a valid LinkedIn company.');
       if(args.company_ids!==undefined){
-        if(args.company_id!==undefined || !hrCompanyGroup(args.company_ids))throw Error('Choose a valid LinkedIn company group.');
+        if(args.company_id!==undefined || !hrCompanyGroup(args.company_ids))throw safeError('Choose a valid LinkedIn company group.');
         company=args.company_ids.join(',');
       }
       if (typeof args.query !== 'string' || !args.query.trim() && !company || args.query.length > 240 || /[\x00-\x1f]/.test(args.query) ||
-          typeof args.location !== 'string' || args.location.length > 160 || /[\x00-\x1f]/.test(args.location)) throw Error('Enter valid job keywords and location.');
+          typeof args.location !== 'string' || args.location.length > 160 || /[\x00-\x1f]/.test(args.location)) throw safeError('Enter valid job keywords and location.');
       const target = new URL('https://www.linkedin.com/jobs/search/');
       if (args.query.trim()) target.searchParams.set('keywords', args.query.trim());
       if (company) target.searchParams.set('f_C', company);
       if (args.location.trim()) target.searchParams.set('location', args.location.trim());
       url = target.href;
-      if (!jobSearchKey(url)) throw Error('Shorten the job keywords or location.');
-    } else if (!Number.isInteger(args.source_tab_id) || args.source_tab_id < 0) throw Error('Choose an open LinkedIn job search.');
+      if (!jobSearchKey(url)) throw safeError('Shorten the job keywords or location.');
+    } else if (!Number.isInteger(args.source_tab_id) || args.source_tab_id < 0) throw safeError('Choose an open LinkedIn job search.');
     const bound = connection, token = {}; jobCapture = token;
     try {
       // A newly requested search is kept open as a user-facing result. It is
@@ -894,7 +902,7 @@ async function handle(message, sender) {
       const tab = args.use_open ? await chrome.tabs.get(args.source_tab_id) : await chrome.tabs.create({url,active:false});
       live(bound);
       const key = jobSearchKey(url || tab.url);
-      if (!key) throw Error('Open a LinkedIn Jobs search first.');
+      if (!key) throw safeError('Open a LinkedIn Jobs search first.');
       Object.assign(bound, {kind:'jobs',run:args.run_id,source:tab.id,pages:args.max_pages,allowed:new Set(),jobKey:key,jobStarted:Date.now(),jobScrolls:0,jobInitial:!args.use_open,jobLocation:args.use_open ? '' : args.location.trim()});
       nextCount = 0; profileCount = 0;
       await persist(); live(bound, args.run_id); return {tab_id:tab.id};
@@ -1008,7 +1016,7 @@ async function handle(message, sender) {
   }
   if (message.action === 'jobRead' || message.action === 'jobFromLink') {
     const bound = connection, expected = jobURL(message.action === 'jobRead' ? args.expected_url : args.url);
-    if (!expected || bound.run || jobCapture) throw Error('Finish the current browser action before reading a job ad.');
+    if (!expected || bound.run || jobCapture) throw safeError('Finish the current browser action before reading a job ad.',expected && !bound.run ? 'HR_BUSY' : '');
     if(args.operation_id!==undefined && (typeof args.operation_id!=='string' || !/^[a-f0-9]{32}$/.test(args.operation_id)))throw safeError('The job read identifier is invalid.','HR_PAGE_CHANGED');
     const token = {bound,operation:args.operation_id}; jobCapture = token;
     let created = null;
@@ -1016,21 +1024,24 @@ async function handle(message, sender) {
       if (message.action === 'jobRead') return await readJobTab(bound, args.tab_id, expected);
       // Only a canonical job URL explicitly submitted by the bound app may be
       // opened. Never navigate or close any pre-existing user tab.
-      if (args.url !== expected) throw Error('Use a canonical LinkedIn job link.');
+      if (args.url !== expected) throw safeError('Use a canonical LinkedIn job link.');
       delete bound.jobCompany;
       for (const [id, value] of [...owned,...viewed]) if (jobURL(value)) await closeOwned(id, value);
       await persist();
       const tabs = await chrome.tabs.query({url:'https://www.linkedin.com/*'});
-      if (connection !== bound || bound.run) throw Error('The companion connection changed.');
-      let tab = tabs.find(value => jobURL(value.url) === expected && value.status === 'complete') || tabs.find(value => jobURL(value.url) === expected);
+      if (connection !== bound || bound.run) throw safeError('The companion connection changed.');
+      // A Jobs search also names its selected ad (currentJobId) and changes it
+      // with every click, so only a dedicated ad page is reused here.
+      const adPage = value => jobURL(value.url) === expected && jobViewPage(value.url);
+      let tab = tabs.find(value => adPage(value) && value.status === 'complete') || tabs.find(adPage);
       if (!tab) { tab = await chrome.tabs.create({url:expected, active:false}); created = tab.id; owned.set(created, expected); await persist(); }
       for (let attempt = 0; attempt < 40; attempt++) {
         if(token.cancelled)throw safeError('The job ad read was stopped.','HR_STOPPED');
-        if (connection !== bound || bound.run) throw Error('The companion connection changed.');
+        if (connection !== bound || bound.run) throw safeError('The companion connection changed.');
         const current = await chrome.tabs.get(tab.id);
         if(linkedinAccessPage(current.url) || linkedinAccessPage(current.pendingUrl))throw safeError('LinkedIn needs sign-in or a verification check. Resolve it in its browser tab before scanning again.','HR_ACCESS_REQUIRED');
         const starting=created===tab.id && current.status==='loading' && (!current.url || current.url==='about:blank') && (!current.pendingUrl || current.pendingUrl===expected);
-        if (jobURL(current.url) !== expected && !starting) throw safeError('The job left its expected LinkedIn page. Check the ad before trying again.');
+        if (jobURL(current.url) !== expected && !starting) throw safeError('The job left its expected LinkedIn page. Check the ad before trying again.','HR_AD_CHANGED');
         if (current.status === 'complete' || args.company_only!==true && jobURL(current.url)===expected && !current.pendingUrl) return await readJobTab(bound, tab.id, expected,args.company_only===true);
         await new Promise(resolve => setTimeout(resolve, 500));
       }
@@ -1076,20 +1087,20 @@ async function handle(message, sender) {
     } finally { if (jobCapture === token) jobCapture = null; }
   }
   if (message.action === 'begin') {
-    if (jobCapture) throw Error('Wait for the job ad to finish reading first.');
-    if (!/^[a-f0-9]{32}$/.test(args.run_id || '')) throw Error('Invalid sourcing run.');
-    if (connection.run && connection.run !== args.run_id) throw Error('Stop the current browser run first.');
+    if (jobCapture) throw safeError('Wait for the job ad to finish reading first.');
+    if (!/^[a-f0-9]{32}$/.test(args.run_id || '')) throw safeError('Invalid sourcing run.');
+    if (connection.run && connection.run !== args.run_id) throw safeError('Stop the current browser run first.');
     if (connection.run === args.run_id) return true;
-    if (!Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15 || !['standard', 'lite', 'recruiter'].includes(args.mode)) throw Error('Invalid browser run limits.');
+    if (!Number.isInteger(args.max_pages) || args.max_pages < 1 || args.max_pages > 15 || !['standard', 'lite', 'recruiter'].includes(args.mode)) throw safeError('Invalid browser run limits.');
     const bound = connection;
     const source = await chrome.tabs.get(args.source_tab_id);
-    if (connection !== bound || jobCapture || !linkedin(source.url) && !pendingPeopleSearch(source) || profile(source.url)) throw Error('Choose a LinkedIn search tab.');
+    if (connection !== bound || jobCapture || !linkedin(source.url) && !pendingPeopleSearch(source) || profile(source.url)) throw safeError('Choose a LinkedIn search tab.');
     connection.source = source.id; connection.pages = args.max_pages;
     connection.kind = 'profiles';
     connection.allowed = new Set();
     connection.run = args.run_id; nextCount = 0; profileCount = 0; await persist(); live(bound, args.run_id); return true;
   }
-  if (!connection.run || connection.run !== args.run_id) throw Error('The browser run has stopped or disconnected.');
+  if (!connection.run || connection.run !== args.run_id) throw safeError('The browser run has stopped or disconnected.');
   if (message.action === 'end') {
     await closeLeadPeopleSource(connection);delete connection.leadPeople;
     connection.run = null;
@@ -1358,7 +1369,7 @@ async function handle(message, sender) {
   if (connection.kind === 'jobs') {
     const bound = connection;
     if (message.action !== 'read' || args.tab_id !== bound.source || !['readJobSearch','nextJobSearch','scrollJobSearch'].includes(args.method) ||
-        !Array.isArray(args.values) || args.values.length > 1 || args.values.some(value => typeof value !== 'string' || value.length > 4096)) throw Error('Unsupported job-search action.');
+        !Array.isArray(args.values) || args.values.length > 1 || args.values.some(value => typeof value !== 'string' || value.length > 4096)) throw safeError('Unsupported job-search action.');
     const tab = await chrome.tabs.get(bound.source);
     if (bound.jobInitial) {
       if (Date.now() - bound.jobStarted > 600000) throw safeError('The job search timed out. Start a new search.');
@@ -1370,11 +1381,11 @@ async function handle(message, sender) {
     if (tab.status !== 'complete') return {loading:true};
     if (args.method === 'nextJobSearch') {
       nextCount++; await persist(); live(bound, args.run_id);
-      if (nextCount >= bound.pages) throw Error('The requested job-page limit was reached.');
+      if (nextCount >= bound.pages) throw safeError('The requested job-page limit was reached.');
     }
     if (args.method === 'scrollJobSearch') {
       bound.jobScrolls++; await persist(); live(bound, args.run_id);
-      if (bound.jobScrolls > bound.pages * 8) throw Error('The job-search scroll limit was reached.');
+      if (bound.jobScrolls > bound.pages * 8) throw safeError('The job-search scroll limit was reached.');
     }
     await jobScript({target:{tabId:tab.id},files:['reader.js']},jobReaderStartError);
     jobSearchLive(bound, args.run_id, await chrome.tabs.get(tab.id));
@@ -1386,7 +1397,7 @@ async function handle(message, sender) {
   }
   if (jobCapture) throw safeError('Wait for the current companion action to finish.');
   if (message.action === 'create') {
-    if (!profile(args.url) || !connection.allowed.has(args.url) || ++profileCount > 75) throw Error('The profile action is outside the run limits.');
+    if (!profile(args.url) || !connection.allowed.has(args.url) || ++profileCount > 75) throw safeError('The profile action is outside the run limits.');
     const bound = connection;
     await persist(); live(bound, args.run_id);
     const tab = await chrome.tabs.create({url: args.url, active: false}); owned.set(tab.id, args.url);
@@ -1395,15 +1406,15 @@ async function handle(message, sender) {
   }
   const bound = connection;
   const tab = owned.has(args.tab_id) || viewed.has(args.tab_id) ? await ownedTab(args.tab_id) : await chrome.tabs.get(args.tab_id);
-  if (connection?.run !== args.run_id) throw Error('The browser run has stopped.');
-  if (!linkedin(tab.url) && !((owned.has(tab.id) || viewed.has(tab.id)) && expectedLoading(tab,owned.get(tab.id) || viewed.get(tab.id))) && !(tab.id === connection.source && pendingPeopleSearch(tab))) throw Error('The selected tab left LinkedIn.');
+  if (connection?.run !== args.run_id) throw safeError('The browser run has stopped.');
+  if (!linkedin(tab.url) && !((owned.has(tab.id) || viewed.has(tab.id)) && expectedLoading(tab,owned.get(tab.id) || viewed.get(tab.id))) && !(tab.id === connection.source && pendingPeopleSearch(tab))) throw safeError('The selected tab left LinkedIn.');
   if (tab.id !== connection.source && !owned.has(tab.id) && !viewed.has(tab.id)) throw safeError('The scan profile tab changed or closed. Your candidate list is kept.');
   if (message.action === 'navigate') {
     if(args.fresh!==undefined && typeof args.fresh!=='boolean')throw safeError('The profile navigation request is invalid.');
     const search = args.url?.startsWith('https://www.linkedin.com/search/results/people/?');
     if ((!search && !profile(args.url)) || (search && tab.id !== connection.source) ||
-        (profile(args.url) && (!owned.has(tab.id) && !viewed.has(tab.id) || !connection.allowed.has(args.url)))) throw Error('This navigation is not supported.');
-    if (profile(args.url) && ++profileCount > 75) throw Error('The profile limit was reached.');
+        (profile(args.url) && (!owned.has(tab.id) && !viewed.has(tab.id) || !connection.allowed.has(args.url)))) throw safeError('This navigation is not supported.');
+    if (profile(args.url) && ++profileCount > 75) throw safeError('The profile limit was reached.');
     const previous = owned.get(tab.id) || viewed.get(tab.id);
     const replacement = async () => {
       // The viewed page is released before opening another exact observed URL.
@@ -1436,13 +1447,13 @@ async function handle(message, sender) {
   }
   if (message.action === 'read') {
     if (args.method==='setCountry') {
-      if (tab.id!==bound.source || !Array.isArray(args.values) || args.values.length!==1) throw Error('Invalid People location request.');
+      if (tab.id!==bound.source || !Array.isArray(args.values) || args.values.length!==1) throw safeError('Invalid People location request.');
       const token={};jobCapture=token;
       try { return await peopleCountry(bound,args.run_id,args.values[0]); }
       finally { if(jobCapture===token)jobCapture=null; }
     }
-    if (!['readSearch', 'readProfile', 'search', 'next'].includes(args.method)) throw Error('This browser action is not supported.');
-    if (args.method === 'readProfile' ? !owned.has(tab.id) && !viewed.has(tab.id) : tab.id !== connection.source) throw Error('This read does not belong to the sourcing run.');
+    if (!['readSearch', 'readProfile', 'search', 'next'].includes(args.method)) throw safeError('This browser action is not supported.');
+    if (args.method === 'readProfile' ? !owned.has(tab.id) && !viewed.has(tab.id) : tab.id !== connection.source) throw safeError('This read does not belong to the sourcing run.');
     if (tab.status !== 'complete') return {loading:true,wait_reason:args.method==='readProfile'?'profile':'search'};
     const readerError = 'LinkedIn results could not be read. Refresh LinkedIn, then reload and reconnect the latest companion.';
     const checkCountry=async()=>{
@@ -1469,10 +1480,10 @@ async function handle(message, sender) {
       if(selected?.cvstudioTransient)return loading('country');
       if (!selected?.result || !await checkCountry()) return {loading:true,wait_reason:'country'};
     }
-    if (connection?.run !== args.run_id) throw Error('The browser run has stopped.');
+    if (connection?.run !== args.run_id) throw safeError('The browser run has stopped.');
     if (args.method === 'readProfile') await ownedTab(tab.id);
     live(bound, args.run_id);
-    if (args.method === 'next') { nextCount++; await persist(); live(bound, args.run_id); if (nextCount >= connection.pages) throw Error('The requested page limit was reached.'); }
+    if (args.method === 'next') { nextCount++; await persist(); live(bound, args.run_id); if (nextCount >= connection.pages) throw safeError('The requested page limit was reached.'); }
     const [injection] = await jobScript({target: {tabId: tab.id},
       func: (method, values) => {
         try { return globalThis.SourcerReader[method](...values); }
@@ -1501,7 +1512,7 @@ async function handle(message, sender) {
     }
     return result;
   }
-  throw Error('Unsupported browser action.');
+  throw safeError('Unsupported browser action.');
 }
 return {ready,handle,pickJob,pair,connectApp,removed,updated,activated,publicError,
   creationGuard:()=>{
@@ -1509,6 +1520,7 @@ return {ready,handle,pickJob,pair,connectApp,removed,updated,activated,publicErr
     return ()=>{if(stateFailed || connection!==bound || connection?.run!==run || jobCapture!==capture || capture?.cancelled)throw safeError('The browser action was stopped before opening its tab.');};
   },
   binding:()=>connection, busy:()=>!!connection?.run || !!jobCapture,
+  touch:()=>{lastUse=Date.now();},recentlyUsed:()=>!!connection && Date.now()-lastUse>=0 && Date.now()-lastUse<30000,
   hasOwned:()=>!!owned.size,
   owns:id=>!!connection?.run && connection.source===id || owned.has(id) || viewed.has(id)};
 }
@@ -1524,6 +1536,10 @@ function connectSessions(sender) {
     for(const session of sessions.values()){
       const bound=session.binding();
       if(session.busy() && (bound?.tabId!==sender.tab?.id || bound?.documentId!==sender.documentId))throw sessionError('Finish the companion action in the other CV Studio tab first.');
+      // Multi-step work (loading ads one by one, pulling several clients) is
+      // idle between steps. A tab used moments ago keeps the companion; the
+      // toolbar icon still moves it at once.
+      if(bound && session.recentlyUsed() && bound.tabId!==sender.tab?.id)throw sessionError('Finish the companion action in the other CV Studio tab first.');
     }
     for(const session of sessions.values())await session.connectApp(sender);
     void appTabGroups.add(sender.tab.id,sender.tab.id);
@@ -1594,7 +1610,12 @@ async function dispatch(message,sender) {
     if(message.action==='reloadCompanion')reloading=result?.reloading===true;
     if(message.action==='jobStatus')return {...result,busy:message.scope===undefined?[...sessions.values()].some(s=>s.busy()):result.busy,other_busy:[...sessions].some(([name,s])=>name!==scope&&s.busy())};
     return result;
-  }finally{inFlight.set(scope,inFlight.get(scope)-1);releaseLeases(scope);if(message.action==='reloadCompanion' && !reloading)updatePending=false;}
+  }finally{
+    // A failed step (one ad that would not load) still counts as recent use.
+    const used=session.binding();
+    if(message.action!=='jobStatus' && used && used.tabId===sender.tab?.id && used.documentId===sender.documentId)session.touch();
+    inFlight.set(scope,inFlight.get(scope)-1);releaseLeases(scope);if(message.action==='reloadCompanion' && !reloading)updatePending=false;
+  }
 }
 nativeChrome.runtime.onMessage.addListener((message,sender,reply)=>{
   const errors=sessions.get('profiles').publicError;
@@ -1605,7 +1626,7 @@ nativeChrome.runtime.onMessage.addListener((message,sender,reply)=>{
       const bound=sessions.get(scope).binding();
       if([...sessions.values()].some(s=>s.busy() && (s.binding()?.tabId!==bound?.tabId || s.binding()?.documentId!==bound?.documentId)))throw sessionError('Open Job Leads in the CV Studio tab that is running the scan.');
       return sessions.get(scope).pickJob(message,sender);
-    }).then(result=>reply({result}),error=>reply(errors(error))).finally(()=>{inFlight.set(scope,inFlight.get(scope)-1);releaseLeases(scope);});return true;
+    }).then(result=>{sessions.get(scope).touch();reply({result});},error=>reply(errors(error))).finally(()=>{inFlight.set(scope,inFlight.get(scope)-1);releaseLeases(scope);});return true;
   }
   if(message?.kind!=='sourcer')return false;
   dispatch(message,sender).then(result=>reply({result}),error=>reply(errors(error)));return true;

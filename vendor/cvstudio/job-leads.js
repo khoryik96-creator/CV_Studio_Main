@@ -11,7 +11,7 @@
   let preferredFolder = null;
   try {
     const stored = localStorage.getItem(folderPreferenceKey);
-    if (stored !== null && stored.length <= 80 && !/[\x00-\x1f]/.test(stored) && !['*','!trash'].includes(stored)) preferredFolder = stored;
+    if (stored !== null && [...stored].length <= 80 && !/[\x00-\x1f]/.test(stored) && !['*','!trash'].includes(stored)) preferredFolder = stored;
   } catch {}
   function rememberFolder(value) {
     preferredFolder = value;
@@ -186,7 +186,7 @@
     el('Previous').disabled=value || page===0;el('Next').disabled=value || (page+1)*40>=filtered().length;
     el('PageNumbers').querySelectorAll('button').forEach(button => { button.disabled = value; });
     for (const name of ['Search','Filter','FolderFilter','ClientFilter','PostedFilter','Sort','FiltersReset']) el(name).disabled = value && hrRunning;
-    for (const id of ['Save', 'New', 'FormClose', 'AddManual', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage', 'SelectAll', 'UnselectAll']) el(id).disabled = value;
+    for (const id of ['Save', 'New', 'FormClose', 'AddManual', 'Read', 'Tabs', 'Refresh', 'Restore', 'AutoFill', 'BrowserFill', 'RefreshContent', 'Clear', 'ClearAll', 'EmptyTrash', 'FolderNew', 'FolderCreate', 'FolderCancel', 'FolderName', 'FolderDelete', 'Move', 'MoveFolder', 'SelectPage', 'SelectAll', 'UnselectAll']) el(id).disabled = value;
     for (const name of fields) el(name).disabled = value;
     el('List').querySelectorAll('button').forEach(button => { button.disabled = value; });
     el('List').querySelectorAll('input').forEach(input => { input.disabled = value; });
@@ -299,6 +299,23 @@
   function updateClear() {
     el('Clear').disabled = busy || el('FolderFilter').value === '!trash' || !filtered().length;
     el('ClearAll').disabled = busy || !rows.some(row => !row.deleted);
+    const trashed = rows.filter(row => row.deleted).length;
+    el('EmptyTrash').disabled = busy || !trashed;
+    el('EmptyTrash').textContent = trashed ? `Empty Trash (${trashed})` : 'Empty Trash';
+  }
+  async function emptyTrash() {
+    const trashed = rows.filter(row => row.deleted);
+    if (busy || !trashed.length) return false;
+    if (editing && trashed.some(row => row.id === editing.id) && !discard()) return false;
+    if (!window.confirm(`Permanently delete the ${trashed.length} ad${trashed.length === 1 ? '' : 's'} in Trash? This cannot be undone. Use "Back up saved ads" first if you may need them again.`)) return false;
+    lock(true);
+    try {
+      const result = await api({action:'purge', records:trashed.map(row => ({id:row.id, revision:row.revision}))});
+      if (editing && trashed.some(row => row.id === editing.id)) fill(null);
+      await load(); status(`Trash emptied. ${result.deleted} ad${result.deleted === 1 ? ' was' : 's were'} permanently deleted. ${result.deleted === 1 ? 'It no longer counts' : 'They no longer count'} toward the storage limit.`);
+      return true;
+    } catch (error) { status(error.message); return false; }
+    finally { lock(false); }
   }
   async function moveToTrash(selected, deleted, bulk = false) {
     if (busy || !selected.length) return false;
@@ -1067,7 +1084,7 @@
     hrRun='';
     try {
       notify('Checking the companion…');
-      const companion = await rpc('jobStatus',{},1500); checkHR();
+      const companion = await companionStatus(); checkHR();
       if (companion?.profile_browsing_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to keep browsing safely during scans.');
       if (companion?.concurrent_scans_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to run Job Leads and Sourcer together.');
       if (companion?.hr_apply_transition_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to use the corrected company-selection check.');
@@ -1378,8 +1395,8 @@
     const activity=beginScanActivity();let failed=false, prefetch=false;
     lock(true); searchStatus('Checking the browser companion…');
     try {
-      await stopBackgroundAds('Paused for a new search.');
-      const companion = await rpc('jobStatus',{},1000).catch(() => null);
+      cancelAdResume(); await stopBackgroundAds('Paused for a new search.');
+      const companion = await companionStatus().catch(() => null);
       checkDiscovery();
       if (!companion?.connected || companion.concurrent_scans_revision !== 1 || companion.job_search !== true || !Number.isInteger(companion.job_search_revision) || companion.job_search_revision < 1) { guideIssue='SearchSetupGuide';el('SearchPanel').open=true; }
       if (!companion?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled. It connects automatically. Use Set up companion once if needed. LinkedIn job search cannot run inside the Codex preview.');
@@ -1431,6 +1448,9 @@
       // Older companions omitted the code on this exact, fixed loading error.
       // Treat that known ad timeout consistently without guessing at other errors.
       if(!browserError.companionCode && browserError.message==='The LinkedIn ad did not finish loading. Open it in your browser, wait for the page to load, then try again.')browserError.companionCode='HR_AD_TIMEOUT';
+      // The page stopped waiting, but the companion may still be reading this
+      // ad. Release that exact read so the next action is not refused as busy.
+      if(browserError.companionTimeout && operation)sendRPC('jobReadCancel',{operation_id:operation}).catch(() => {});
       // A second, independent parser can read public ads even when LinkedIn's
       // signed-in layout is unknown. Never fall back around an access check or
       // a disconnected/busy companion, and never replay either read.
@@ -1470,6 +1490,7 @@
   }
   function startBackgroundAds() {
     if (busy || discovering || backgroundAds) return;
+    cancelAdResume();
     backgroundFailed=false;
     for(const row of discovered){if(!row.full){const saved=savedFullContent(row);if(saved)Object.assign(row,saved);}}
     drawDiscovery();backgroundAdStatus('');
@@ -1478,7 +1499,7 @@
     backgroundAdStatus('Checking the browser companion…');
     queue.done = Promise.resolve().then(async () => {
       try {
-        const status = await sendRPC('jobStatus',{},1500);
+        const status = await companionStatus(sendRPC);
         if (queue.stopped) return;
         if (!status?.connected || status.full_ad_background_revision !== 1) throw Error('Apply the companion update to load full ads in the background.');
         if (status.busy) throw Error('The companion is busy. Resume full ads after its current action finishes.');
@@ -1491,7 +1512,17 @@
           queue.operation = hex(); row.fullState = 'reading'; row.fullError = '';
           backgroundAdStatus('Loading descriptions in the background…'); drawDiscovery();
           try {
-            const data = await readFullContent(row,queue.operation,sendRPC,queue);
+            let data;
+            for (let attempt = 0;;attempt++) {
+              try { data = await readFullContent(row,queue.operation,sendRPC,queue); break; }
+              catch (error) {
+                // Another short companion action (Add to CV Studio on LinkedIn)
+                // took this turn. Wait and read the same ad; nothing is replayed.
+                if (error.companionCode !== 'HR_BUSY' || queue.stopped || attempt >= 30) throw error;
+                await new Promise(resolve => setTimeout(resolve,1000));
+                if (queue.stopped) throw error;
+              }
+            }
             if (!queue.stopped && discovered.includes(row)) {
               Object.assign(row,fullAd(row,data));
               if (previewCapture?.url === row.url) previewCapture = {...row};
@@ -1499,7 +1530,7 @@
           } catch (error) {
             if (!queue.stopped && discovered.includes(row)) {
               row.fullError = error.message.slice(0,500);
-              if (!['HR_AD_TIMEOUT','HR_AD_LAYOUT','HR_AD_UNAVAILABLE','HR_AD_EMPTY'].includes(error.companionCode)) {
+              if (!['HR_AD_TIMEOUT','HR_AD_LAYOUT','HR_AD_UNAVAILABLE','HR_AD_EMPTY','HR_AD_CHANGED'].includes(error.companionCode)) {
                 queue.stopped = true; queue.message = error.message;
               }
             }
@@ -1543,7 +1574,7 @@
     const selection = discovered.filter(row => (typeof onlyUrl === 'string' ? row.url === onlyUrl : discoveryPicked.has(row.url)) && !savedJob(row.url));
     if (!selection.length) return;
     if (selection.length > 100) { searchStatus('Add up to 100 selected ads at a time.'); return; }
-    const folder = el('SearchFolder').value; let added = 0, skipped = 0, failure = '';
+    const folder = el('SearchFolder').value; let added = 0, skipped = 0, trashed = 0, failure = '';
     lock(true); searchStatus('Adding selected ads to your list…');
     try {
       await load();
@@ -1554,25 +1585,49 @@
           description:row.description,description_rich:row.description_rich,description_truncated:row.description_truncated,
           folder,status:'new',contact:'',notes:'',follow_up:''};
         const result = await api({action:'save',record});
-        if (result.duplicate) skipped++; else added++;
+        if (result.duplicate) { skipped++; if (result.record?.deleted) trashed++; } else added++;
         discoveryPicked.delete(row.url);
       }
     } catch (error) { failure = error.message; }
     finally {
       try { await load(); } catch (error) { failure = failure || error.message; }
       lock(false); drawDiscovery();
-      searchStatus(`Added ${added} ads to ${folder || 'Unfiled'}.` + (skipped ? ` ${skipped} already saved; existing details were kept.` : '') + (failure ? ` ${failure} Refresh the saved list before trying remaining ads again.` : ''));
+      searchStatus(`Added ${added} ads to ${folder || 'Unfiled'}.` + (skipped ? ` ${skipped} already saved; existing details were kept.` : '') + (trashed ? ` ${trashed} of those ${trashed === 1 ? 'is' : 'are'} in Trash; restore ${trashed === 1 ? 'it' : 'them'} from the Trash folder.` : '') + (failure ? ` ${failure} Refresh the saved list before trying remaining ads again.` : ''));
     }
   }
+  let resumeAds = false, resumeTimer = null;
   async function rpc(action, args = {}, waitMs) {
     if (backgroundAds && action !== 'jobReadCancel') {
-      await stopBackgroundAds('Paused for your browser action. Resume loading when ready.');
+      resumeAds = true;
+      await stopBackgroundAds('Paused for your browser action. Loading resumes automatically when it finishes.');
+      scheduleAdResume();
     }
     return sendRPC(action,args,waitMs);
   }
+  // Resume only after the action that paused loading has fully finished: no
+  // lock, search, HR scan or companion request for a moment. Stop, a new
+  // search or clearing the results cancels it.
+  function scheduleAdResume() {
+    clearTimeout(resumeTimer); resumeTimer = null;
+    if (!resumeAds) return;
+    resumeTimer = setTimeout(() => {
+      resumeTimer = null;
+      if (!resumeAds) return;
+      if (busy || discovering || hrRunning || backgroundAds || pending.size) { scheduleAdResume(); return; }
+      resumeAds = false; startBackgroundAds();
+    }, 1500);
+  }
+  function cancelAdResume() { resumeAds = false; clearTimeout(resumeTimer); resumeTimer = null; }
+  // Chrome suspends an idle companion after about 30 seconds. Its first reply
+  // then includes a restart and re-verification, so allow for that and ask
+  // once more before reporting it as missing. Status is read-only.
+  async function companionStatus(send = rpc) {
+    try { return await send('jobStatus',{},5000); }
+    catch { return send('jobStatus',{},5000); }
+  }
   function sendRPC(action,args = {},waitMs) {
     return new Promise((resolve, reject) => {
-      const id = hex(), timer = setTimeout(() => { pending.delete(id); reject(Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.')); }, waitMs ?? (action === 'jobFromLink' ? 55000 : 12000));
+      const id = hex(), timer = setTimeout(() => { pending.delete(id); const error=Error('The companion did not respond. Refresh this CV Studio tab after reloading the companion. Use Chrome or Brave, and click the companion toolbar icon once if this installation has not been connected. Saved ads remain available below.'); error.companionTimeout=true; reject(error); }, waitMs ?? (action === 'jobFromLink' ? 55000 : 12000));
       pending.set(id, {resolve, reject, timer});
       window.postMessage({type:'CVSTUDIO_LINKEDIN_REQUEST', id, channel, scope:'leads', action, args}, location.origin);
     });
@@ -1601,7 +1656,7 @@
     if (!request || typeof request !== 'object' || Array.isArray(request)) return {error:'Choose a valid job-ad action.'};
     const action = request.action === undefined ? 'add' : request.action;
     if (!['add','remove','folders','create_folder'].includes(action) || request.folder !== undefined &&
-        (typeof request.folder !== 'string' || request.folder.length > 80 || /[\x00-\x1f]/.test(request.folder))) return {error:'Choose a valid job-ad action and folder.'};
+        (typeof request.folder !== 'string' || [...request.folder].length > 80 || /[\x00-\x1f]/.test(request.folder))) return {error:'Choose a valid job-ad action and folder.'};
     if (!ready || busy && action !== 'folders') return {error:'Wait for the current CV Studio action to finish, then add this ad again.'};
     const url = typeof raw?.url === 'string' ? jobLink(raw.url) : '';
     if (!url || raw.url !== url || action !== 'folders' && (typeof raw.company !== 'string' || !raw.company.trim() || raw.company.length > 200 ||
@@ -1754,7 +1809,7 @@
     el('PreviewRemove').addEventListener('click',managePreview);
     el('SearchStart').addEventListener('click',startDiscovery);
     el('BackgroundStart').addEventListener('click',startBackgroundAds);
-    el('BackgroundStop').addEventListener('click',() => stopBackgroundAds());
+    el('BackgroundStop').addEventListener('click',() => { cancelAdResume(); return stopBackgroundAds(); });
     el('SearchStop').addEventListener('click',async () => {
       if (!discovering) return;
       discoveryStopped = true; discoveryControls(); searchStatus('Stopping after the current browser read. Found ads will be kept.');
@@ -1777,7 +1832,7 @@
       if (busy) return;
       lock(true);
       try {
-        await stopBackgroundAds(); discoveryFailed=false; backgroundFailed=false; hrFailedUrl=''; discovered = []; discoveryPicked.clear(); discoveryPage = 0;
+        cancelAdResume(); await stopBackgroundAds(); discoveryFailed=false; backgroundFailed=false; hrFailedUrl=''; discovered = []; discoveryPicked.clear(); discoveryPage = 0;
         previewUrl = ''; previewCapture = null; previewDismissed = true;
         backgroundAdStatus(''); searchStatus('Search results cleared. Your saved ads are kept.');
         if(typeof clearTabActivityNotifications==='function')clearTabActivityNotifications('jobleads');
@@ -1793,7 +1848,7 @@
       drawDiscovery();
     });
     window.addEventListener('pagehide',() => {
-      discoveryStopped = true; hrStopped = true;
+      discoveryStopped = true; hrStopped = true; cancelAdResume();
       stopBackgroundAds().catch(() => {});
       if(hrCapture)rpc('jobReadCancel',{operation_id:hrCapture}).catch(()=>{});
       if (discoveryRun) rpc('end',{run_id:discoveryRun}).catch(() => {});
@@ -1911,6 +1966,7 @@
     });
     el('Clear').addEventListener('click', () => moveToTrash(filtered(), true, true));
     el('ClearAll').addEventListener('click', () => moveToTrash(rows.filter(row => !row.deleted), true, true));
+    el('EmptyTrash').addEventListener('click', () => emptyTrash());
     el('Previous').addEventListener('click', () => { page--; render(); });
     el('Next').addEventListener('click', () => { page++; render(); });
     el('Tabs').addEventListener('click', async () => {
@@ -1989,6 +2045,6 @@
     if (live.length > chosen.length) status(`${live.length - chosen.length} more new ads can be scanned afterwards: select them in ${folder} and click Scan selected ads.`);
     return chosen.length ? startBulkHR(chosen) : false;
   }
-  window.cvStudioJobLeads={composeEmail,refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,scanSavedAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,activityStart:beginScanActivity,activityEnd:finishScanActivity};
+  window.cvStudioJobLeads={composeEmail,refresh:load,redraw:()=>{if(ready){syncClients();render();}},showClientAds,scanSavedAds,lock:value=>lock(value),isBusy:()=>busy,stopHR,hrRunning:()=>hrRunning,employment:hrEmploymentLabel,statusLabels:Object.freeze({...labels}),rpc,companionStatus:()=>companionStatus(),activityStart:beginScanActivity,activityEnd:finishScanActivity};
   document.addEventListener('DOMContentLoaded', () => { if (new URLSearchParams(location.search).get('module') === 'jobleads') switchTab('jobleads'); });
 })();

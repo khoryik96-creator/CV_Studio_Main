@@ -641,7 +641,7 @@
     state.pulling = true; state.stopped = false; app.lock(true); controls();
     try {
       progress('Checking the browser companion…');
-      const status = await app.rpc('jobStatus', {}, 1500).catch(() => null);
+      const status = await (app.companionStatus ? app.companionStatus() : app.rpc('jobStatus', {}, 5000)).catch(() => null);
       check(token);
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
       if (status.concurrent_scans_revision !== 1 || status.job_search !== true || status.job_search_company_revision !== 1)
@@ -740,7 +740,7 @@
     state.pulling = true; state.stopped = false; state.linkedinSearch = ''; app.lock(true); draw();
     try {
       progress('Checking the browser companion…');
-      const status = await app.rpc('jobStatus', {}, 1500).catch(() => null);
+      const status = await (app.companionStatus ? app.companionStatus() : app.rpc('jobStatus', {}, 5000)).catch(() => null);
       check(token);
       if (!status?.connected) throw Error('Open this CV Studio address in Chrome or Brave with the companion enabled, then try again.');
       if (status.job_search_company_link_revision !== 1 || status.company_jobs_action_revision !== 1 || status.company_jobs_group_revision !== 1) throw Error('Apply the latest companion update, then refresh CV Studio and LinkedIn to read company numbers using See all jobs.');

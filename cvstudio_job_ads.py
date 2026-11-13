@@ -115,6 +115,11 @@ def _location(value):
     return '; '.join(dict.fromkeys(result))[:240]
 
 
+def _rich(words, markup):
+    """Formatting for the retained text; oversized markup keeps plain text."""
+    return format_description(words, markup) if isinstance(markup, str) and len(markup) <= 80000 else []
+
+
 class _PublicLayoutUnavailable(JobLeadsError):
     """An ordinary public document lacked supported ad markup."""
 
@@ -172,7 +177,7 @@ def parse_public_job(html, expected_url, *, _trusted_guest=False):
                                **({'company_url':employer_page} if employer_page else {}),
                                'location':_location(posting.get('jobLocation')),
                                'date_posted':_posted_date(posting.get('datePosted')),
-                               'description':words[:20000], 'description_rich':format_description(words[:20000], posting.get('description', '')),
+                               'description':words[:20000], 'description_rich':_rich(words[:20000], posting.get('description', '')),
                                'description_truncated':len(words) > 20000})
     if candidates:
         if len({(row['company'], row['role']) for row in candidates}) != 1:
@@ -209,7 +214,7 @@ def parse_public_job(html, expected_url, *, _trusted_guest=False):
                         **({'company_url':employer_page} if employer_page else {}),
                         'location':_text(str(location),240) if location else '',
                         'date_posted':_posted_date(posted.get('datetime') or posted.get('content')) if posted else '',
-                        'description':words[:20000], 'description_rich':format_description(words[:20000], str(description)) if description else [],
+                        'description':words[:20000], 'description_rich':_rich(words[:20000], str(description)) if description else [],
                         'description_truncated':len(words)>20000}
     headings = {_text(str(node), 160).lower() for node in soup.select('h1, h2')}
     if headings & {'sign in', 'sign in to linkedin', 'security verification', 'verify your identity', 'temporarily restricted'}:

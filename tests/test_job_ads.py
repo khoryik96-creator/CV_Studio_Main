@@ -311,3 +311,11 @@ def test_explicit_job_url_or_urn_identifier_cannot_be_overridden_by_canonical(id
 @pytest.mark.parametrize('identity', [URL, 'urn:li:jobPosting:1234567890'])
 def test_matching_job_url_or_urn_identifiers_are_read(identity):
     assert parse_public_job(html({**POSTING, 'identifier':{'value':identity}}), URL)['role'] == POSTING['title']
+
+
+def test_oversized_description_markup_keeps_plain_text_instead_of_failing():
+    from cvstudio_job_ads import _rich
+    words = 'Lead the finance team'
+    assert _rich(words, '<p>' + words + '</p>') == [{'tag': 'p', 'children': [{'text': words}]}]
+    assert _rich(words, '<p>' + words + '</p>' + '<span></span>' * 7000) == []
+    assert _rich(words, None) == []

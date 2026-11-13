@@ -577,6 +577,19 @@ function leadPeopleMergeKey(p) {
   return ['person', String(p.name || '').trim().toLowerCase(), String(p.company || '').trim().toLowerCase(), String(p.title || '').trim().toLowerCase()].join('|');
 }
 
+// Every identity one person can be recognised by. A row found first by its
+// profile link and later given an email is still the same person.
+function leadPeopleMergeKeys(p) {
+  p = p || {};
+  var keys = [];
+  var email = String(p.email || '').trim().toLowerCase();
+  if (email) keys.push('email:' + email);
+  var profile = String(p.profile_url || p.source_url || '').trim().toLowerCase().replace(/\/$/, '');
+  if (profile) keys.push('url:' + profile);
+  if (!keys.length) keys.push(leadPeopleMergeKey(p));
+  return keys;
+}
+
 function leadMergePeople(existing, incoming) {
   var out = [];
   var byKey = {};
@@ -584,12 +597,15 @@ function leadMergePeople(existing, incoming) {
     p = p || {};
     var key = leadPeopleMergeKey(p);
     if (!key || key === 'person|||') return;
-    if (byKey[key] === undefined) {
-      byKey[key] = out.length;
+    var keys = leadPeopleMergeKeys(p);
+    var found = keys.filter(function(k){ return byKey[k] !== undefined; });
+    if (!found.length) {
+      keys.forEach(function(k){ byKey[k] = out.length; });
       out.push(Object.assign({}, p));
       return;
     }
-    var cur = out[byKey[key]];
+    var cur = out[byKey[found[0]]];
+    keys.forEach(function(k){ if (byKey[k] === undefined) byKey[k] = byKey[found[0]]; });
     Object.keys(p).forEach(function(k){
       if ((cur[k] === undefined || cur[k] === null || cur[k] === '') && p[k] !== undefined && p[k] !== null && p[k] !== '') cur[k] = p[k];
     });
@@ -712,14 +728,16 @@ async function runLeadEmailSearch() {
     var n = normalizeLeadData({ people: d.people || _leadPeople, companies: _leadCompanies, summary: _leadSummary, warning: d.warning || '' });
     _leadPeople = n.people;
     _leadLastWarning = d.warning || _leadLastWarning;
-    _leadCosts.email_usd = leadCostFromResponse(d);
-    _leadCosts.email_tokens = d.cost_details ? (Number(d.cost_details.total_tokens) || 0) : leadUsageTokens(d.usage);
+    var emailRunCost = leadCostFromResponse(d);
+    var emailRunTokens = d.cost_details ? (Number(d.cost_details.total_tokens) || 0) : leadUsageTokens(d.usage);
+    _leadCosts.email_usd = (Number(_leadCosts.email_usd) || 0) + emailRunCost;
+    _leadCosts.email_tokens = (Number(_leadCosts.email_tokens) || 0) + emailRunTokens;
     _leadCosts.model = d.model || _leadCosts.model || route.model;
     leadRefreshTotalCost();
     renderLeadFinder();
     status.className = 'lead-status ok';
-    status.textContent = 'Email search done. ' + _leadPeople.filter(function(p){ return !!p.email; }).length + ' public business-domain emails recorded. Additional cost: ' + leadCostLabel(_leadCosts.email_usd) + ' / ' + leadMyrLabel(_leadCosts.email_usd) + '. Total Lead Finder cost: ' + leadCostLabel(_leadCosts.total_usd) + ' / ' + leadMyrLabel(_leadCosts.total_usd) + (d.warning ? '\nNote: ' + d.warning : '');
-    statsRecord('Lead Finder Email Search', 'lead', _leadCosts.email_usd || 0, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
+    status.textContent = 'Email search done. ' + _leadPeople.filter(function(p){ return !!p.email; }).length + ' public business-domain emails recorded. Additional cost: ' + leadCostLabel(emailRunCost) + ' / ' + leadMyrLabel(emailRunCost) + '. Total Lead Finder cost: ' + leadCostLabel(_leadCosts.total_usd) + ' / ' + leadMyrLabel(_leadCosts.total_usd) + (d.warning ? '\nNote: ' + d.warning : '');
+    statsRecord('Lead Finder Email Search', 'lead', emailRunCost || 0, d.model || route.model, '', d.provider || route.provider, statsMetaFromResponse(d, route.model, route.provider));
     showToast('Email search completed', 'ok');
     markTabDone('leadfinder', _tabRun);
   } catch(e) {

@@ -1,5 +1,36 @@
 # Current validation record
 
+## v24.6.586 — scans survive work in other tabs
+
+From merged585/298d346, branch `claude/cv-studio-release-270-3byobv`.
+
+Causes reproduced before the change, then re-run after it:
+- Real Chromium, the real `server-heartbeat.js` and a healthy stub server with
+  six 75-second requests in flight: before, "Server connection lost" at53 s and
+  an automatic reload at77 s; after, the banner clears at77 s with no reload.
+- Companion worker in the existing synthetic harness: a queued ad adopted the
+  user's Jobs search tab and failed with an uncoded error when another ad was
+  clicked; a second CV Studio tab took the connection between two ads; fixed
+  messages were replaced by the generic reconnect line. All three now pass as
+  regressions in `tests/test_companion_tab_resilience.js`.
+- Job Leads store: Trash counted toward capacity with no permanent delete; a
+  lone surrogate raised `UnicodeEncodeError`.
+
+Validation in a Linux container with fictional data only (not native Windows
+or macOS; no live LinkedIn, JobAdder, Outlook, Apollo or paid request):
+- Full Python:2553 passed,23 skipped,8398 subtests. The same three tests fail
+  before and after on this platform (Windows start-up registry, DNS resolver,
+  Antiword); none touches this change. Baseline was2549 passed.
+- All111 root JavaScript fixtures pass (107 before, four new).
+- Real Chromium against the isolated app: Empty Trash label, Cancel keeps all
+  ads, OK deletes only the trashed ad, no page errors; `/heartbeat` returns204
+  with the boot header.
+
+Not verified: signed-in LinkedIn behaviour, the wake-up time of a suspended
+companion on a real machine, and which feature combinations reach six
+simultaneous requests. Routes, guards, schemas and stores are unchanged; `purge`
+is a new action on the existing `/job-leads` route.
+
 ## v24.6.585 — LinkedIn Jobs page readiness
 
 From merged584/ea64e5e, local branch `codex/job-search-page-readiness`.

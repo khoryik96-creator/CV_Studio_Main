@@ -1,5 +1,54 @@
 # Job Leads module
 
+## Working while scans run (v24.6.586)
+
+Scans no longer stop because the user keeps working elsewhere.
+
+- **No needless page reload.** `/heartbeat` returns `X-CV-Studio-Boot`, one
+  random value per server process. After a connection gap the page reloads only
+  when that value changed (a real restart) or was never seen. The same value
+  means requests were queued, the machine slept or the server was busy: the
+  banner is removed and running scans and unsaved results are kept.
+- **Queued ad links use their own tab.** `jobFromLink` reuses only a dedicated
+  `/jobs/view/…` page. A Jobs search names its selected ad in `currentJobId` and
+  changes it on every click, so it is never adopted. `jobRead` of a tab the user
+  chose is unchanged.
+- **One changed ad is skipped.** A read whose page moved to another ad returns
+  `HR_AD_CHANGED`; background loading records it on that ad and continues.
+- **Busy is retried, not fatal.** A read refused because another short
+  companion action holds the turn returns `HR_BUSY`; the queue waits one second
+  and reads the same ad, up to 30 times. **Add to CV Studio** on LinkedIn waits
+  up to 45 seconds for a running ad read instead of failing at once; a running
+  search still refuses immediately.
+- **Loading resumes by itself.** A companion action in Job Leads still pauses
+  background loading first. It restarts once no lock, search, HR scan or
+  companion request has been active for 1.5 seconds. Stop, a new search,
+  clearing results and leaving the page cancel the resume.
+- **A second CV Studio tab cannot take the companion mid-work.** Automatic
+  connection from another tab is refused for 30 seconds after the bound tab
+  last used the companion (failed steps count; status checks do not). The
+  toolbar icon still moves it at once. Applies to both companion sessions.
+- **Real messages are shown.** The companion's own fixed messages are returned
+  as written. Unknown browser errors are still replaced by the generic line.
+- **Companion checks allow for a suspended worker.** Search, HR scan, client
+  pulls and background loading wait five seconds and ask once more. The
+  optional probe after a failed public read stays at one second by design.
+- **A timed-out ad read is released** with `jobReadCancel` for that exact read.
+- **Empty Trash.** `POST /job-leads` action `purge` permanently deletes exact,
+  unchanged ads that are already in Trash (409 otherwise). Trash still counts
+  toward 5,000 ads / 8 MB, and the full message now says so. The button is in
+  More options and asks for confirmation.
+- **Smaller fixes.** A lone surrogate (half an emoji) is a structured 400, not a
+  server error. Markup over 80,000 characters keeps plain text instead of
+  failing the public read. Folder names are limited by characters in the
+  page and companion, as the server counts them. Bulk add reports ads that are
+  already in Trash.
+
+Deliberately unchanged: a companion tab the user clicks into is never closed or
+driven afterwards; the reader is re-injected before each passive read; the app
+is re-verified on every worker start; Retry-After longer than a day is honoured.
+Update both app and companion.
+
 ## Job-search readiness (v24.6.585)
 
 Job search and client pulls share a bounded45-second observation window (up to

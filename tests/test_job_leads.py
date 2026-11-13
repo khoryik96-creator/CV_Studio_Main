@@ -375,3 +375,50 @@ def test_email_template_routes_preserve_request_guards(module):
         assert service.email_templates.call_args.args==('save',)
         browser.post('/job-leads',json={'action':'email_template_delete'},headers={'X-CV-Studio-Request':'1'})
         assert service.email_templates.call_args.args==('delete',)
+
+
+def test_purge_permanently_deletes_only_unchanged_trashed_ads_and_frees_capacity(store):
+    kept = store.save(dict(RECORD))['record']
+    gone = store.save(dict(RECORD, url='https://www.linkedin.com/jobs/view/222'))['record']
+    with pytest.raises(JobLeadsError) as live:
+        store.purge([{'id': gone['id'], 'revision': gone['revision']}])
+    assert live.value.status == 409 and len(store.list()) == 2
+    store.set_deleted([{'id': gone['id'], 'revision': gone['revision']}], True)
+    with pytest.raises(JobLeadsError) as stale:
+        store.purge([{'id': gone['id'], 'revision': gone['revision']}])
+    assert stale.value.status == 409 and len(store.list()) == 2
+    trashed = next(row for row in store.list() if row['id'] == gone['id'])
+    # One live ad in the selection rejects the whole request; nothing is removed.
+    with pytest.raises(JobLeadsError):
+        store.purge([{'id': trashed['id'], 'revision': trashed['revision']}, {'id': kept['id'], 'revision': kept['revision']}])
+    assert len(store.list()) == 2
+    for invalid in [None, [], [{'id': 'x', 'revision': 1}], [{'id': trashed['id'], 'revision': '2'}]]:
+        with pytest.raises(JobLeadsError):
+            store.purge(invalid)
+    assert store.purge([{'id': trashed['id'], 'revision': trashed['revision']}]) == {'deleted': 1}
+    assert [row['id'] for row in store.list()] == [kept['id']]
+    # The freed link can be saved again as a new ad.
+    assert store.save(dict(RECORD, url='https://www.linkedin.com/jobs/view/222'))['duplicate'] is False
+
+
+def test_broken_half_emoji_is_a_structured_error_and_writes_nothing(store):
+    with pytest.raises(JobLeadsError) as failure:
+        store.save(dict(RECORD, notes='broken \ud83d note'))
+    assert failure.value.status == 400 and 'broken character' in str(failure.value)
+    assert store.list() == []
+    assert store.save(dict(RECORD, notes='whole \U0001F600 emoji'))['record']['notes'].endswith('emoji')
+
+
+def test_purge_route_keeps_guards_and_reports_conflicts(module):
+    client = module.app.test_client()
+    headers = {'X-CV-Studio-Request': '1'}
+    saved = client.post('/job-leads', json={'action': 'save', 'record': dict(RECORD)}, headers=headers).get_json()['record']
+    selection = [{'id': saved['id'], 'revision': saved['revision']}]
+    assert client.post('/job-leads', json={'action': 'purge', 'records': selection}, headers={'Origin': 'https://example.invalid'}).status_code == 403
+    live = client.post('/job-leads', json={'action': 'purge', 'records': selection}, headers=headers)
+    assert live.status_code == 409 and live.get_json()['code'] == 'JOB_LEADS_CONFLICT'
+    client.post('/job-leads', json={'action': 'trash', 'records': selection}, headers=headers)
+    trashed = client.get('/job-leads').get_json()['records'][0]
+    done = client.post('/job-leads', json={'action': 'purge', 'records': [{'id': trashed['id'], 'revision': trashed['revision']}]}, headers=headers)
+    assert done.status_code == 200 and done.get_json() == {'ok': True, 'deleted': 1}
+    assert client.get('/job-leads').get_json()['records'] == []

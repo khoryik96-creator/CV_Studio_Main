@@ -4,6 +4,17 @@
 
 ## Release state
 
+- v24.6.586 is unmerged on `claude/cv-studio-release-270-3byobv`, from585.
+  The page reloads after a connection gap only when the server process really
+  restarted. Queued ad reads use their own tab, skip one changed ad, retry a
+  busy companion and resume after the user's own companion action. Another CV
+  Studio tab cannot take the companion within30 seconds of use. Fixed companion
+  messages are shown as written. Job Leads gains Empty Trash (`purge` action on
+  the existing route) and structured errors for broken characters; Lead Finder
+  no longer duplicates people or understates email cost.124 routes, five guards
+  and all schemas are unchanged.2553 Python and111 JS pass on Linux; live
+  LinkedIn acceptance is unverified. App+companion update is needed after merge.
+
 - v24.6.585 is local/unmerged on `codex/job-search-page-readiness`, from584.
   Shared Jobs walks tolerate slower hydration, prefer the visible sequential
   page marker over repeated-card signatures, honor aria-busy and reject false
